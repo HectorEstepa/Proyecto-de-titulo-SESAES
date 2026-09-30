@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewEncapsulation, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -9,17 +9,20 @@ import { PhotoViewerComponent } from '../shared/photo-viewer/photo-viewer';
 import { obtenerFeriado } from '../shared/feriados-chile';
 import { obtenerDiasInternacionales } from '../shared/dias-internacionales';
 import { ToastService } from '../shared/toast/toast.service';
-import { evaluarPassword, ChecklistPassword } from '../shared/password-validation';
+import { ProfessionalAyudaComponent } from './ayuda/professional-ayuda';
+import { AdminHorarioComponent } from '../dashboard-admin/horario/admin-horario';
+import { evaluarPassword, type PasswordChecklist } from '../shared/password-validation';
+import { coincideBusqueda } from '../shared/text-normalization';
+import { AuthService } from '../auth.service';
 
 const API = environment.apiUrl;
 
 @Component({
   selector: 'app-dashboard-profesional',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, PhotoCropperComponent, PhotoViewerComponent],
+  imports: [CommonModule, FormsModule, DatePipe, PhotoCropperComponent, PhotoViewerComponent, ProfessionalAyudaComponent, AdminHorarioComponent],
   templateUrl: './dashboard-profesional.html',
-  styleUrl: './dashboard-profesional.css',
-  encapsulation: ViewEncapsulation.None
+  styleUrl: './dashboard-profesional.css'
 })
 export class DashboardProfesionalComponent implements OnInit {
 
@@ -39,9 +42,12 @@ toggleSidebarMovil(): void {
   set mensajeError(valor: string) { this._mensajeError = valor; if (valor) this.toast.error(valor); }
   get mensajeError(): string { return this._mensajeError; }
 
-  // prof_db_id: id en tabla profesional (guardado en localStorage al hacer login)
+  // Profesional.id se resuelve desde la identidad Usuario de la sesión.
+  // Nunca se persiste en localStorage: evita mezclar identidades entre pestañas.
+  private profesionalId = 0;
+
   get profDbId(): number {
-    return Number(localStorage.getItem('prof_db_id')) || 0;
+    return this.profesionalId;
   }
 
   perfil: any = {
@@ -75,14 +81,54 @@ toggleSidebarMovil(): void {
     private router: Router,
     private http: HttpClient,
     private cdr: ChangeDetectorRef,
-    private toast: ToastService
+    private toast: ToastService,
+    private auth: AuthService
   ) {}
 
   ngOnInit(): void {
     const temaGuardado = localStorage.getItem('prof_tema_oscuro');
     if (temaGuardado === 'true') this.temaOscuro = true;
-    this.cargarDatos();
-    this.cargarCitasSinCerrar();
+
+    this.resolverIdentidadProfesional();
+  }
+
+  private resolverIdentidadProfesional(): void {
+    const usuarioId = this.auth.getUsuarioId();
+
+    if (
+      this.auth.getRol() !== 'profesional' ||
+      usuarioId === null
+    ) {
+      this.mensajeError = 'No se pudo validar la sesión profesional.';
+      this.auth.logout();
+      void this.router.navigate(['/login']);
+      return;
+    }
+
+    this.http.get<{ id: number }>(
+      `${API}/profesional/buscar-por-usuario/${usuarioId}`
+    ).subscribe({
+      next: (profesional) => {
+        const profesionalId = Number(profesional?.id);
+
+        if (
+          !Number.isInteger(profesionalId) ||
+          profesionalId <= 0
+        ) {
+          this.mensajeError = 'La cuenta profesional no tiene un perfil válido asociado.';
+          return;
+        }
+
+        this.profesionalId = profesionalId;
+        this.cargarDatos();
+        this.cargarCitasSinCerrar();
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.mensajeError = 'Tu cuenta de profesional no está vinculada correctamente. Contacta al administrador.';
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   // ══════════════════════════════════════
@@ -129,7 +175,10 @@ toggleSidebarMovil(): void {
     this.cargarSolicitudesHorario();
   }
 }
-  cerrarSesion(): void { localStorage.clear(); window.location.href = '/login'; }
+  cerrarSesion(): void {
+    this.auth.logout();
+    void this.router.navigate(['/login']);
+  }
 
   toggleTema(): void {
     this.temaOscuro = !this.temaOscuro;
@@ -141,7 +190,7 @@ toggleSidebarMovil(): void {
   // HELPERS DE FECHA (español, sin DatePipe)
   // ══════════════════════════════════════
 
-  hoyStr(): string {
+  private hoyStr(): string {
     const hoy = new Date();
     return `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
   }
@@ -277,7 +326,7 @@ eliminarSeleccionadas(): void {
         this.configPerfil.descripcion = data.descripcion || '';
         this.charCount = (data.descripcion || '').length;
         this.generarHorasGrilla();
-        this.precargarBloquesAprobados(data.bloques_semanales || []);
+        this.precargarBloquesAprobados(data.bloques_semanales);
         this.cdr.detectChanges();
       },
       error: (err) => { console.error('[cargarPerfil] Error al cargar el perfil del profesional:', err); }
@@ -298,17 +347,12 @@ eliminarSeleccionadas(): void {
         || !!this.configPerfil.contrasena_conf;
   }
 
-  // Checklist de complejidad en vivo — mismo patrón que Estudiante
-  // (Documento Maestro §7.4: "adoptar el mismo patrón funcional del
-  // Estudiante... checklist... con estilos propios del Profesional").
-  get checklistPasswordProf(): ChecklistPassword {
+  get passwordChecklist(): PasswordChecklist {
     return evaluarPassword(this.configPerfil.contrasena_nueva);
   }
 
-  get passwordProfListaParaGuardar(): boolean {
-    return !!this.configPerfil.contrasena_actual
-        && this.checklistPasswordProf.valida
-        && this.configPerfil.contrasena_nueva === this.configPerfil.contrasena_conf;
+  get passwordCumpleReglas(): boolean {
+    return this.passwordChecklist.valida;
   }
 
   // ══════════════════════════════════════
@@ -452,27 +496,6 @@ eliminarSeleccionadas(): void {
     this.filtroEstadoHistorial = 'por_revisar';
   }
 
-  // Botón "+ Nueva atención": intenta completar la próxima cita pendiente que ya
-  // corresponde atender; si no hay ninguna disponible, lleva a Solicitudes.
-  accionNuevaAtencion(): void {
-    const pendienteHoy = this.citasHoy.find(c => c.estado === 'pendiente' && this.puedeGestionarCita(c));
-    if (pendienteHoy) { this.abrirModalCompletar(pendienteHoy); return; }
-    const pendienteGeneral = this.citasPendientes.find(c => this.puedeGestionarCita(c));
-    if (pendienteGeneral) { this.abrirModalCompletar(pendienteGeneral); return; }
-    this.navegarA('solicitudes');
-  }
-
-  // Etiqueta honesta del botón de arriba: antes decía siempre "+ Nueva
-  // atención" aunque en realidad te mandara a Solicitudes cuando no había
-  // ninguna cita lista — el Documento Maestro señala esto explícitamente
-  // como una acción mal nombrada a corregir. Ahora el texto dice lo que
-  // realmente va a pasar al hacer clic.
-  get etiquetaAccionAtencion(): string {
-    const hayPendiente = this.citasHoy.some(c => c.estado === 'pendiente' && this.puedeGestionarCita(c))
-      || this.citasPendientes.some(c => this.puedeGestionarCita(c));
-    return hayPendiente ? '✓ Registrar atención' : '📋 Ver solicitudes';
-  }
-
   // ══ Donut chart de composición del día (reemplaza al "pulso del día") ══
   // Tres getters puros que devuelven los ángulos de corte del conic-gradient,
   // calculados a partir de estadisticasDia. El color de cada tramo se define
@@ -601,90 +624,6 @@ eliminarSeleccionadas(): void {
   }
 
   // ══════════════════════════════════════
-  // MODAL AUSENCIA / REPORTAR AUSENCIA
-  // ══════════════════════════════════════
-
-  modalAusenciaAbierto = false;
-  ausenciaMotivo       = '';
-  ausenciaTipo: 'temporal' | 'dia_completo' | 'licencia' = 'temporal';
-  ausenciaHoraInicio   = '';
-  ausenciaHoraFin      = '';
-  ausenciaFechaInicio  = this.hoyStr();
-  ausenciaFechaFin     = this.hoyStr();
-  // Fecha exacta para tipo "dia_completo": antes se forzaba siempre a "hoy",
-  // ahora el profesional puede marcar cualquier fecha futura en el calendario.
-  ausenciaFechaDiaCompleto = this.hoyStr();
-
-  abrirModalAusencia(): void {
-    this.ausenciaMotivo      = '';
-    this.ausenciaTipo        = 'temporal';
-    this.ausenciaHoraInicio  = '';
-    this.ausenciaHoraFin     = '';
-    this.ausenciaFechaInicio = this.hoyStr();
-    this.ausenciaFechaFin    = this.hoyStr();
-    this.ausenciaFechaDiaCompleto = this.hoyStr();
-    this.modalAusenciaAbierto = true;
-  }
-
-  cerrarModalAusencia(): void { this.modalAusenciaAbierto = false; }
-ausenciaTipos: { valor: 'temporal' | 'dia_completo' | 'licencia'; icono: string; label: string; desc: string }[] = [
-  { valor: 'temporal',     icono: '⏱️', label: 'Temporal',        desc: 'Sales unas horas y vuelves el mismo día' },
-  { valor: 'dia_completo', icono: '📅', label: 'Todo el día',     desc: 'No podrás atender ninguna cita ese día' },
-  { valor: 'licencia',     icono: '🏥', label: 'Licencia médica', desc: 'Un rango de días, semanas o hasta un mes' }
-];
-get ausenciaTipoActual() {
-  return this.ausenciaTipos.find(t => t.valor === this.ausenciaTipo);
-}
-
-
-  get ausenciaFormularioValido(): boolean {
-    if (this.ausenciaTipo === 'temporal') return !!this.ausenciaHoraInicio && !!this.ausenciaHoraFin;
-    if (this.ausenciaTipo === 'licencia')  return !!this.ausenciaFechaInicio && !!this.ausenciaFechaFin;
-    return !!this.ausenciaFechaDiaCompleto; // dia_completo: solo requiere la fecha exacta
-  }
-
-  enviandoAusencia = false;
-
-  reportarAusencia(): void {
-    if (!this.ausenciaFormularioValido || this.enviandoAusencia) return;
-    this.enviandoAusencia = true;
-    const body: any = {
-      tipo:   this.ausenciaTipo,
-      motivo: this.ausenciaMotivo
-    };
-    if (this.ausenciaTipo === 'temporal') {
-      body.fecha        = this.hoyStr();
-      body.hora_inicio   = this.ausenciaHoraInicio;
-      body.hora_fin      = this.ausenciaHoraFin;
-    } else if (this.ausenciaTipo === 'dia_completo') {
-      body.fecha = this.ausenciaFechaDiaCompleto;
-    } else {
-      body.fecha_inicio = this.ausenciaFechaInicio;
-      body.fecha_fin    = this.ausenciaFechaFin;
-    }
-
-    this.http.post(`${API}/profesional/${this.profDbId}/reportar-ausencia`, body).subscribe({
-      next: () => {
-        this.cerrarModalAusencia();
-        this.cargarPerfil();
-        this.cargarCitasHoy();
-        this.cargarEstadisticasDia();
-        if (this.seccionActiva === 'horario' && this.horarioTab === 'agenda') this.cargarCitasSemana();
-        this.mensajeExito = 'Ausencia reportada. Se notificó a los estudiantes afectados.';
-        this.enviandoAusencia = false;
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeExito = ''; this.cdr.detectChanges(); }, 4000);
-      },
-      error: (err) => {
-        this.mensajeError = err?.error?.detail || 'No se pudo reportar la ausencia.';
-        this.enviandoAusencia = false;
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
-      }
-    });
-  }
-
-  // ══════════════════════════════════════
   // MI AGENDA
   // ══════════════════════════════════════
 
@@ -694,38 +633,28 @@ get ausenciaTipoActual() {
   citasSemana: any[]  = [];
   horasGrilla: string[] = [];
 
-  // Genera la grilla de horas según la duración de atención configurada por el profesional
-  // (antes estaba fijo a pasos de 60 min, por lo que las citas de 45 min no calzaban con ninguna fila)
-  private horaAMinutos(hora: string, fallback: number): number {
-    if (!hora) return fallback;
-    const [h, m] = hora.split(':').map(Number);
-    return h * 60 + m;
-  }
+  // {día de semana (0=Lunes...6=Domingo): [inicio, fin] | null}. Mismo
+  // rango que app.reglas_horario.RANGO_INSTITUCIONAL en el backend —
+  // si alguno cambia, deben cambiar juntos (igual que en dashboard-admin.ts).
+  private readonly RANGO_INSTITUCIONAL_DIA: Record<number, [string, string] | null> = {
+    0: ['09:00', '17:30'], 1: ['09:00', '17:30'], 2: ['09:00', '17:30'],
+    3: ['09:00', '17:30'], 4: ['09:00', '16:30'], 5: null, 6: null,
+  };
 
-  // Posición horizontal (%) de una cita dentro de la línea "Pulso de hoy",
-  // según la jornada laboral aprobada del profesional (horario_inicio–horario_fin).
-  // NO puede ser private: el template la llama directamente con
-  // [style.left.%]="horaAPosicionPct(cita.hora)".
-  horaAPosicionPct(hora: string): number {
-    const inicioMin = this.horaAMinutos(this.perfil.horario_inicio, 9 * 60);
-    const finMin    = this.horaAMinutos(this.perfil.horario_fin, 17 * 60 + 30);
-    const horaMin   = this.horaAMinutos(hora, inicioMin);
+  // A.2B — misma idea que dashboard-admin.ts: el backend
+  // (listar_disponibilidad_rango, ya consciente de bloques semanales,
+  // rango institucional por día y ausencias) es la ÚNICA fuente de
+  // verdad de qué slot está disponible/ocupado/en colación/fuera de
+  // jornada — la grilla del propio profesional dejó de calcularlo por
+  // su cuenta con una lógica simplificada que no distinguía casi nada.
+  private disponibilidadPorFecha: Record<string, Record<string, any>> = {};
+  disponibilidadCargando = false;
 
-    const rango = finMin - inicioMin;
-    if (rango <= 0) return 0;
-
-    const pct = ((horaMin - inicioMin) / rango) * 100;
-    return Math.min(100, Math.max(0, pct)); // clamp 0–100
-  }
-
+  // Genera la grilla de horas: rango institucional más ancho de la
+  // semana (Lunes-Jueves, que cierra más tarde que el Viernes), en
+  // pasos de la duración de atención configurada por el profesional.
   generarHorasGrilla(): void {
-    const pasoMin = this.perfil.duracion_min || 45;
-    // La grilla SIEMPRE cubre el rango institucional completo (09:00-17:30),
-    // sin importar el horario propio del profesional — así las horas que él
-    // no atiende se ven en gris ("fuera de horario") en vez de simplemente
-    // no aparecer. Antes usaba horario_inicio/horario_fin como base, que
-    // quedan vacíos para un profesional en modo "agenda por bloques", y por
-    // eso la grilla caía al respaldo fijo 08:00-18:00.
+    const pasoMin   = this.perfil.duracion_min || 60;
     const inicioMin = 9 * 60;
     const finMin    = 17 * 60 + 30;
     const horas: string[] = [];
@@ -746,12 +675,9 @@ get ausenciaTipoActual() {
   }
 
   private buildSemana(lunes: Date): void {
-    const nombres = ['Lun','Mar','Mié','Jue','Vie'];
+    const nombres = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
     const hoyStr  = this.toDateStr(new Date());
-    // Solo Lunes a Viernes: el centro nunca atiende sábado ni domingo
-    // (regla institucional — ver backend/app/reglas_horario.py), así que no
-    // tiene sentido mostrar esas dos columnas en la grilla.
-    this.semanaActual = Array.from({ length: 5 }, (_, i) => {
+    this.semanaActual = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(lunes); d.setDate(lunes.getDate() + i);
       const f = this.toDateStr(d);
       return { nombre: nombres[i], num: d.getDate(), fecha: f, esHoy: f === hoyStr };
@@ -763,11 +689,6 @@ get ausenciaTipoActual() {
 
   private toDateStr(d: Date): string {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  }
-
-  /** true si la fecha (YYYY-MM-DD) ya pasó (estrictamente antes de hoy). Solo uso visual: esta grilla no permite tomar horas. */
-  esFechaPasada(fecha: string): boolean {
-    return fecha < this.hoyStr();
   }
 
   // Convierte "YYYY-MM-DD" a Date usando la zona horaria LOCAL, no UTC.
@@ -783,8 +704,9 @@ get ausenciaTipoActual() {
   irAHoy(): void { this.generarSemanaActual(); this.cargarCitasSemana(); }
 
   cargarCitasSemana(): void {
+    if (!this.profDbId) return; // identidad aún no resuelta (ver resolverIdentidadProfesional)
     const fechaInicio = this.semanaActual[0]?.fecha;
-    const fechaFin    = this.semanaActual[this.semanaActual.length - 1]?.fecha;
+    const fechaFin    = this.semanaActual[6]?.fecha;
     if (!fechaInicio) return;
     this.http.get<any[]>(`${API}/profesional/${this.profDbId}/citas`).subscribe({
       next: (data) => {
@@ -796,16 +718,48 @@ get ausenciaTipoActual() {
         this.cdr.detectChanges();
       }
     });
+
+    this.disponibilidadCargando = true;
+    const url = `${API}/agenda/profesional/${this.profDbId}/disponibilidad`
+      + `?fecha_inicio=${encodeURIComponent(fechaInicio)}`
+      + `&fecha_fin=${encodeURIComponent(fechaFin)}`;
+    this.http.get<any>(url).subscribe({
+      next: (respuesta) => {
+        const mapa: Record<string, Record<string, any>> = {};
+        for (const dia of respuesta?.dias ?? []) {
+          const fecha = String(dia?.fecha ?? '');
+          if (!fecha || !Array.isArray(dia?.slots)) continue;
+          const slots: Record<string, any> = {};
+          for (const slot of dia.slots) {
+            const hora = String(slot?.hora ?? '').substring(0, 5);
+            if (hora) slots[hora] = slot;
+          }
+          mapa[fecha] = slots;
+        }
+        this.disponibilidadPorFecha = mapa;
+        this.disponibilidadCargando = false;
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.disponibilidadPorFecha = {};
+        this.disponibilidadCargando = false;
+        this.cdr.detectChanges();
+      }
+    });
   }
 
-private esHoraDeColacion(hora: string): boolean {
-    const inicio = this.perfil.hora_almuerzo_inicio;
-    const fin    = this.perfil.hora_almuerzo_fin;
-    if (!inicio || !fin) return false;
-    const h = hora.substring(0, 5);
-    return h >= inicio && h < fin;
+  private diaSemanaDeFecha(fecha: string): number {
+    return (this.parseDateStrLocal(fecha).getDay() + 6) % 7;
   }
-convertirA24h(hora: string): string {
+
+  private fueraDeRangoInstitucional(fecha: string, hora: string): boolean {
+    const rango = this.RANGO_INSTITUCIONAL_DIA[this.diaSemanaDeFecha(fecha)];
+    if (!rango) return true;
+    const h = hora.substring(0, 5);
+    return h < rango[0] || h >= rango[1];
+  }
+
+  convertirA24h(hora: string): string {
     if (!hora) return '';
     if (!hora.includes('AM') && !hora.includes('PM')) return hora.substring(0,5);
     const [time, period] = hora.trim().split(' ');
@@ -823,72 +777,81 @@ convertirA24h(hora: string): string {
   }
   esDiaCerrado(fecha: string): boolean { return this.diasCerrados.some(d => d.fecha === fecha); }
 
-  /** true si el profesional ya migró a agenda semanal por bloques (tiene al menos un bloque cargado, en cualquier día). */
-  private get profesionalUsaBloques(): boolean {
-    return !!(this.perfil?.bloques_semanales?.length);
-  }
-
-  /** Convierte una fecha (YYYY-MM-DD) al día de semana en convención backend: 0=Lunes...4=Viernes. */
-  private diaSemanaBackend(fecha: string): number {
-    const jsDay = this.parseDateStrLocal(fecha).getDay(); // 0=Dom...6=Sáb
-    return (jsDay + 6) % 7;
-  }
-
-  private bloquesDelDia(fecha: string): any[] {
-    const bloques = this.perfil?.bloques_semanales;
-    if (!bloques?.length) return [];
-    const dia = this.diaSemanaBackend(fecha);
-    return bloques.filter((b: any) => b.dia_semana === dia);
+  // Mismo mapeo de motivo→clase visual que dashboard-admin.ts
+  // (claseVisualParaMotivo), para que "Mi Agenda" del profesional y la
+  // agenda que ve el admin de este mismo profesional NUNCA se vean
+  // distinto ante los mismos datos.
+  private claseVisualParaMotivo(slot: any): string {
+    if (slot?.disponible) return 'disponible';
+    switch (slot?.motivo) {
+      case 'en_colacion':        return 'colacion';
+      case 'fuera_de_jornada':   return 'fuera-horario';
+      case 'dia_cerrado':
+      case 'ausencia_profesional':
+      case 'profesional_inactivo': return 'cerrado-centro';
+      default:                   return 'bloqueado';
+    }
   }
 
   getBloqueEstado(fecha: string, hora: string): string {
-    if (this.esDiaCerrado(fecha)) return 'cerrado-centro';
-    const h = hora.substring(0, 5);
+    const cita = this.citasSemana.find(c => c.fecha === fecha && c.estado !== 'cancelada' && this.convertirA24h(c.hora) === hora.substring(0,5));
+    if (cita) return cita.urgente ? 'urgente' : (cita.sobrecupo ? 'sobrecupo' : 'ocupado');
 
-    const cita = this.citasSemana.find(c => c.fecha === fecha && this.convertirA24h(c.hora) === h);
-    if (cita) return cita.urgente ? 'urgente' : 'ocupado';
-
-    if (this.profesionalUsaBloques) {
-      // Modo agenda por bloques: si no tiene NINGÚN bloque para este día de
-      // semana, simplemente no trabaja ese día (todo gris), sin caer al
-      // horario simple de respaldo — mismo criterio que el backend
-      // (ver reglas_horario.py / horarios.py get_disponibilidad).
-      const bloquesDia = this.bloquesDelDia(fecha);
-      if (!bloquesDia.length) return 'fuera-horario';
-      if (bloquesDia.some(b => b.tipo === 'colacion' && h >= b.hora_inicio && h < b.hora_fin)) return 'bloqueado';
-      const disponible = bloquesDia.some(b => b.tipo === 'disponible' && h >= b.hora_inicio && h < b.hora_fin);
-      return disponible ? 'libre' : 'fuera-horario';
-    }
-
-    // Jornada simple (legado)
-    if (this.esHoraDeColacion(hora)) return 'bloqueado';
-    if (this.perfil.horario_inicio && this.perfil.horario_fin) {
-      return (h >= this.perfil.horario_inicio && h < this.perfil.horario_fin) ? 'libre' : 'fuera-horario';
-    }
-    // Sin ningún horario configurado todavía: no hay suficiente información
-    // para diferenciar, así que no se marca nada como "fuera de horario" de más.
-    return 'libre';
+    const slot = this.disponibilidadPorFecha[fecha]?.[hora.substring(0,5)];
+    if (!slot) return this.fueraDeRangoInstitucional(fecha, hora) ? 'cerrado-centro' : 'sin-datos';
+    return this.claseVisualParaMotivo(slot);
   }
 
   getBloqueInfo(fecha: string, hora: string): string {
-    if (this.esDiaCerrado(fecha)) return '';
-    const h = hora.substring(0, 5);
-
-    const cita = this.citasSemana.find(c => c.fecha === fecha && this.convertirA24h(c.hora) === h);
+    const cita = this.citasSemana.find(c => c.fecha === fecha && c.estado !== 'cancelada' && this.convertirA24h(c.hora) === hora.substring(0,5));
     if (cita) return cita.estudiante;
-
-    if (this.profesionalUsaBloques) {
-      const bloquesDia = this.bloquesDelDia(fecha);
-      if (bloquesDia.some(b => b.tipo === 'colacion' && h >= b.hora_inicio && h < b.hora_fin)) return 'Colación';
-      return '';
-    }
-    if (this.esHoraDeColacion(hora)) return 'Colación';
+    const estado = this.getBloqueEstado(fecha, hora);
+    if (estado === 'colacion') return 'Colación';
     return '';
+  }
+
+  getBloqueCitas(fecha: string, hora: string): any[] {
+    const cita = this.citasSemana.find(c => c.fecha === fecha && c.estado !== 'cancelada' && this.convertirA24h(c.hora) === hora.substring(0,5));
+    return cita ? [cita] : [];
   }
 
   get citasDiaSeleccionado(): any[] {
     if (!this.diaSeleccionado) return [];
-    return this.citasSemana.filter(c => c.fecha === this.diaSeleccionado);
+    return this.citasSemana.filter(c => c.fecha === this.diaSeleccionado && c.estado !== 'cancelada');
+  }
+
+  // No hay sobrecupo desde "Mi Agenda" del profesional (eso sigue
+  // siendo exclusivo del admin, con permiso agenda.sobrecupo) — se pasa
+  // como función fija en false a <app-admin-horario> en vez de omitir
+  // el input, para que el ícono/affordance de sobrecupo nunca aparezca
+  // acá aunque el slot sea técnicamente "overridable_con_sobrecupo".
+  readonly sinSobrecupoFn = (_fecha: string, _hora: string): boolean => false;
+
+  // Wrappers de flecha para preservar el `this` al pasar estos métodos
+  // como @Input de función a <app-admin-horario> (igual que
+  // dashboard-admin.ts con horarioBloqueEstadoFn y compañía).
+  readonly agendaBloqueEstadoFn  = (fecha: string, hora: string): string => this.getBloqueEstado(fecha, hora);
+  readonly agendaBloqueInfoFn    = (fecha: string, hora: string): string => this.getBloqueInfo(fecha, hora);
+  readonly agendaBloqueCitasFn   = (fecha: string, hora: string): any[]  => this.getBloqueCitas(fecha, hora);
+  readonly agendaFormatearFechaFn = (fecha: string): string => this.formatearDiaSeleccionado(fecha);
+  readonly agendaEsFeriadoFn      = (fecha: string | undefined): boolean => this.esFeriado(fecha);
+  readonly agendaNombreFeriadoFn  = (fecha: string | undefined): string => this.nombreFeriado(fecha);
+
+  aceptarCitaPropia(cita: any): void {
+    this.http.patch(`${API}/profesional/${this.profDbId}/citas/${cita.id}/aceptar`, {}).subscribe({
+      next: () => { this.mensajeExito = 'Cita aceptada'; this.cargarCitasSemana(); },
+      error: (err) => { this.mensajeError = err?.error?.detail || 'No se pudo aceptar la cita'; }
+    });
+  }
+
+  rechazarCitaPropia(cita: any): void {
+    const motivo = prompt('Motivo del rechazo:');
+    if (motivo === null) return; // canceló el prompt
+    if (!motivo.trim()) { this.mensajeError = 'Debes indicar un motivo de rechazo'; return; }
+    this.http.patch(`${API}/profesional/${this.profDbId}/citas/${cita.id}/rechazar`, { motivo }).subscribe({
+      next: () => { this.mensajeExito = 'Cita rechazada'; this.cargarCitasSemana(); },
+      error: (err) => { this.mensajeError = err?.error?.detail || 'No se pudo rechazar la cita'; }
+    });
   }
 
   clickBloque(fecha: string, hora: string): void { this.diaSeleccionado = fecha; }
@@ -901,6 +864,10 @@ convertirA24h(hora: string): string {
     this.seccionActiva = 'historial-clinico';
     this.cargarPacientesHistorial();
     this.abrirFichaPaciente({ estudiante_id: cita.estudiante_id, nombre: cita.estudiante });
+  }
+
+  imprimirAgenda(): void {
+    window.print();
   }
 
   // Desde "Mis Pacientes": ir directo al Historial Clínico de ese paciente
@@ -918,6 +885,7 @@ convertirA24h(hora: string): string {
   citasPendientes: any[] = [];
 
   cargarCitasPendientes(): void {
+    if (!this.profDbId) return; // identidad aún no resuelta (ver resolverIdentidadProfesional)
     this.http.get<any[]>(`${API}/profesional/${this.profDbId}/citas?estado=pendiente`).subscribe({
       next: (data) => { this.citasPendientes = data ?? []; this.cdr.detectChanges(); },
       error: () => { this.citasPendientes = []; this.cdr.detectChanges(); }
@@ -942,6 +910,7 @@ convertirA24h(hora: string): string {
   formCompletar = { medicamento: '', observaciones_atencion: '' };
 
   cargarAtenciones(): void {
+    if (!this.profDbId) return; // identidad aún no resuelta (ver resolverIdentidadProfesional)
     let url = `${API}/profesional/${this.profDbId}/citas`;
     if (this.filtroEstadoAt) url += `?estado=${this.filtroEstadoAt}`;
     this.http.get<any[]>(url).subscribe({
@@ -959,11 +928,13 @@ limpiarFiltrosAtenciones(): void {
   this.cargarAtenciones();
 }
   get atencionesFiltradas(): any[] {
-    const q = this.filtroBusquedaAt.toLowerCase();
-    return !q ? this.atenciones : this.atenciones.filter(a =>
-      a.estudiante.toLowerCase().includes(q) ||
-      (a.rut || '').toLowerCase().includes(q) ||
-      (a.carrera || '').toLowerCase().includes(q)
+    return this.atenciones.filter(a =>
+      coincideBusqueda(
+        this.filtroBusquedaAt,
+        a.estudiante,
+        a.rut,
+        a.carrera,
+      )
     );
   }
 
@@ -1023,68 +994,6 @@ limpiarFiltrosAtenciones(): void {
       },
       error: () => {
         this.mensajeError = 'No se pudo registrar.';
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
-      }
-    });
-  }
-
-  // ══════════════════════════════════════
-  // ACEPTAR / RECHAZAR CITA PENDIENTE
-  // ══════════════════════════════════════
-  // A diferencia de completar/inasistencia, esto SÍ aplica a citas futuras
-  // (el profesional revisa la solicitud del estudiante antes de que ocurra),
-  // por eso no pasa por puedeGestionarCita() (que exige que la fecha ya pasó).
-
-  aceptarCita(cita: any): void {
-    this.http.patch(`${API}/profesional/${this.profDbId}/citas/${cita.id}/aceptar`, {}).subscribe({
-      next: () => {
-        this.cargarCitasSemana();
-        this.cargarCitasHoy();
-        this.mensajeExito = 'Cita aceptada y confirmada.';
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeExito = ''; this.cdr.detectChanges(); }, 3000);
-      },
-      error: (err) => {
-        this.mensajeError = err?.error?.detail || 'No se pudo aceptar la cita.';
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
-      }
-    });
-  }
-
-  modalRechazarCitaAbierto = false;
-  citaARechazar: any = null;
-  motivoRechazoCita = '';
-  enviandoRechazoCita = false;
-
-  abrirModalRechazarCita(cita: any): void {
-    this.citaARechazar = cita;
-    this.motivoRechazoCita = '';
-    this.modalRechazarCitaAbierto = true;
-  }
-
-  cerrarModalRechazarCita(): void {
-    this.modalRechazarCitaAbierto = false;
-    this.citaARechazar = null;
-  }
-
-  confirmarRechazoCita(): void {
-    if (!this.citaARechazar || !this.motivoRechazoCita || this.enviandoRechazoCita) return;
-    this.enviandoRechazoCita = true;
-    this.http.patch(`${API}/profesional/${this.profDbId}/citas/${this.citaARechazar.id}/rechazar`, { motivo: this.motivoRechazoCita }).subscribe({
-      next: () => {
-        this.enviandoRechazoCita = false;
-        this.cerrarModalRechazarCita();
-        this.cargarCitasSemana();
-        this.cargarCitasHoy();
-        this.mensajeExito = 'Cita rechazada. Se notificó al estudiante y al administrador.';
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeExito = ''; this.cdr.detectChanges(); }, 3000);
-      },
-      error: (err) => {
-        this.enviandoRechazoCita = false;
-        this.mensajeError = err?.error?.detail || 'No se pudo rechazar la cita.';
         this.cdr.detectChanges();
         setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
       }
@@ -1230,7 +1139,8 @@ guardarHorarioAlmuerzo(): void {
     if (!this.passwordModificada) return;
     if (!this.configPerfil.contrasena_actual) { this.mensajeError = 'Ingresa tu contraseña actual.'; setTimeout(() => this.mensajeError = '', 3000); return; }
     if (!this.configPerfil.contrasena_nueva)  { this.mensajeError = 'Ingresa la nueva contraseña.'; setTimeout(() => this.mensajeError = '', 3000); return; }
-    if (!this.checklistPasswordProf.valida) { this.mensajeError = 'La nueva contraseña no cumple todos los requisitos.'; setTimeout(() => this.mensajeError = '', 3000); return; }
+    if (!this.passwordCumpleReglas) { this.mensajeError = 'La nueva contraseña no cumple todos los requisitos de seguridad.'; setTimeout(() => this.mensajeError = '', 3000); return; }
+    if (this.configPerfil.contrasena_nueva === this.configPerfil.contrasena_actual) { this.mensajeError = 'La nueva contraseña debe ser diferente a la contraseña actual.'; setTimeout(() => this.mensajeError = '', 3000); return; }
     if (this.configPerfil.contrasena_nueva !== this.configPerfil.contrasena_conf) { this.mensajeError = 'Las contraseñas no coinciden.'; setTimeout(() => this.mensajeError = '', 3000); return; }
     this.http.patch(`${API}/profesional/${this.profDbId}/cambiar-password`, {
       contrasena_actual: this.configPerfil.contrasena_actual, contrasena_nueva: this.configPerfil.contrasena_nueva
@@ -1250,112 +1160,25 @@ guardarHorarioAlmuerzo(): void {
     });
   }
   // ══════════════════════════════════════
-  // MI HORARIO — solicitud de jornada laboral
+  // MI HORARIO — solicitudes de horario
   // ══════════════════════════════════════
 
-  jornadaHoraInicio = '';
-  jornadaHoraFin    = '';
   solicitudesHorario: any[] = [];
-
-  get solicitudJornadaPendiente(): any {
-    return this.solicitudesHorario.find(s => s.tipo === 'jornada' && s.estado === 'pendiente');
-  }
 
   get solicitudColacionPendiente(): any {
     return this.solicitudesHorario.find(s => s.tipo === 'colacion' && s.estado === 'pendiente');
   }
 
-  cargarSolicitudesHorario(): void {
-    this.http.get<any[]>(`${API}/profesional/${this.profDbId}/solicitudes-horario`).subscribe({
-      next: (data) => {
-        this.solicitudesHorario = data ?? [];
-        this.cdr.detectChanges();
-      },
-      error: () => {}
-    });
-  }
-
-  get jornadaFormularioValido(): boolean {
-    return !!this.jornadaHoraInicio && !!this.jornadaHoraFin && this.jornadaHoraInicio < this.jornadaHoraFin;
-  }
-  solicitudesSeleccionadas = new Set<number>();
-
-get solicitudesHaySeleccionadas(): boolean {
-  return this.solicitudesSeleccionadas.size > 0;
-}
-
-get solicitudesTodasSeleccionadas(): boolean {
-  return this.solicitudesHorario.length > 0 && this.solicitudesSeleccionadas.size === this.solicitudesHorario.length;
-}
-
-toggleSeleccionSolicitud(s: any): void {
-  if (this.solicitudesSeleccionadas.has(s.id)) this.solicitudesSeleccionadas.delete(s.id);
-  else this.solicitudesSeleccionadas.add(s.id);
-}
-
-toggleSeleccionarTodasSolicitudes(): void {
-  if (this.solicitudesTodasSeleccionadas) {
-    this.solicitudesSeleccionadas.clear();
-  } else {
-    this.solicitudesHorario.forEach(s => this.solicitudesSeleccionadas.add(s.id));
-  }
-}
-
-eliminarSolicitud(s: any): void {
-  this.http.delete(`${API}/solicitudes-horario/${s.id}`).subscribe({
-    next: () => {
-      this.solicitudesHorario = this.solicitudesHorario.filter(x => x.id !== s.id);
-      this.solicitudesSeleccionadas.delete(s.id);
-      this.cdr.detectChanges();
-    },
-    error: () => {
-      this.mensajeError = 'No se pudo eliminar la solicitud.';
-      setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
-    }
-  });
-}
-
-eliminarSolicitudesSeleccionadas(): void {
-  const ids = Array.from(this.solicitudesSeleccionadas);
-  ids.forEach(id => {
-    this.http.delete(`${API}/solicitudes-horario/${id}`).subscribe({
-      next: () => {
-        this.solicitudesHorario = this.solicitudesHorario.filter(x => x.id !== id);
-        this.cdr.detectChanges();
-      }
-    });
-  });
-  this.solicitudesSeleccionadas.clear();
-}
-  solicitarJornada(): void {
-    if (!this.jornadaFormularioValido) return;
-    this.http.post<any>(`${API}/profesional/${this.profDbId}/solicitar-jornada`, {
-      horario_inicio: this.jornadaHoraInicio,
-      horario_fin: this.jornadaHoraFin
-    }).subscribe({
-      next: (resp) => {
-        this.mensajeExito = `Solicitud enviada: jornada ${resp.hora_inicio} - ${resp.hora_fin}. Queda pendiente de aprobación del administrador.`;
-        this.jornadaHoraInicio = '';
-        this.jornadaHoraFin = '';
-        this.cargarSolicitudesHorario();
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeExito = ''; this.cdr.detectChanges(); }, 4000);
-      },
-      error: (err) => {
-        this.mensajeError = err?.error?.detail || 'No se pudo enviar la solicitud de jornada.';
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
-      }
-    });
+  get solicitudBloquesPendiente(): any {
+    return this.solicitudesHorario.find(s => s.tipo === 'bloques' && s.estado === 'pendiente');
   }
 
   // ══════════════════════════════════════
   // MI HORARIO — solicitud de agenda semanal por bloques
+  // (grilla pintable, igual que la del admin en concepto: clic para
+  // marcar disponible/colación, celda gris = fuera del rango
+  // institucional de ese día — ver app.reglas_horario en el backend)
   // ══════════════════════════════════════
-  // Rango institucional (debe coincidir con backend/app/reglas_horario.py):
-  //   Lunes a Jueves 09:00-17:30, Viernes 09:00-16:30.
-  // El profesional hace clic en las celdas para marcar "disponible" (verde)
-  // o "colación" (naranja); un tercer clic vuelve a dejarla vacía.
 
   readonly DIAS_BLOQUES = [
     { valor: 0, nombre: 'Lunes' },
@@ -1397,17 +1220,11 @@ eliminarSolicitudesSeleccionadas(): void {
     if (this.solicitudBloquesPendiente) return; // no editable mientras hay una solicitud esperando aprobación
     const clave = this.claveBloque(dia, hora);
     const actual = this.bloquesSeleccion[clave];
-    if (!actual) {
+    if (!actual || actual !== this.bloquesModoPincel) {
       this.bloquesSeleccion[clave] = this.bloquesModoPincel;
-    } else if (actual === this.bloquesModoPincel) {
-      delete this.bloquesSeleccion[clave];
     } else {
-      this.bloquesSeleccion[clave] = this.bloquesModoPincel;
+      delete this.bloquesSeleccion[clave];
     }
-  }
-
-  get solicitudBloquesPendiente(): any {
-    return this.solicitudesHorario.find(s => s.tipo === 'bloques' && s.estado === 'pendiente');
   }
 
   get bloquesSeleccionVacia(): boolean {
@@ -1459,6 +1276,45 @@ eliminarSolicitudesSeleccionadas(): void {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
+  /** Marca "disponible" el mismo rango en los 5 días a la vez — el
+   *  equivalente por bloques de la vieja "Jornada Laboral" simple,
+   *  pero sin perder la posibilidad de ajustar un día puntual después
+   *  a mano (ej. salir antes el Viernes). Pensado para usarse ANTES
+   *  de aplicarColacionRapida(): si se usa después, vuelve a pintar
+   *  "disponible" encima de una colación ya marcada en ese rango. */
+  horarioRapidoInicio = '09:00';
+  horarioRapidoFin    = '17:00';
+
+  aplicarHorarioRapido(): void {
+    if (this.solicitudBloquesPendiente) return;
+    if (!this.horarioRapidoInicio || !this.horarioRapidoFin || this.horarioRapidoInicio >= this.horarioRapidoFin) return;
+    for (const dia of this.DIAS_BLOQUES) {
+      for (const hora of this.slotsDelDia(dia.valor)) {
+        if (hora >= this.horarioRapidoInicio && hora < this.horarioRapidoFin) {
+          this.bloquesSeleccion[this.claveBloque(dia.valor, hora)] = 'disponible';
+        }
+      }
+    }
+  }
+
+  /** Marca el mismo rango de colación en los 5 días a la vez (evita
+   *  tener que pintar celda por celda cuando el horario de almuerzo es
+   *  el mismo todos los días, el caso más común). */
+  colacionRapidaInicio = '13:00';
+  colacionRapidaFin    = '14:00';
+
+  aplicarColacionRapida(): void {
+    if (this.solicitudBloquesPendiente) return;
+    if (!this.colacionRapidaInicio || !this.colacionRapidaFin || this.colacionRapidaInicio >= this.colacionRapidaFin) return;
+    for (const dia of this.DIAS_BLOQUES) {
+      for (const hora of this.slotsDelDia(dia.valor)) {
+        if (hora >= this.colacionRapidaInicio && hora < this.colacionRapidaFin) {
+          this.bloquesSeleccion[this.claveBloque(dia.valor, hora)] = 'colacion';
+        }
+      }
+    }
+  }
+
   enviandoBloques = false;
 
   enviarSolicitudBloques(): void {
@@ -1466,7 +1322,6 @@ eliminarSolicitudesSeleccionadas(): void {
     const bloques = this.fusionarBloques();
     if (!bloques.some(b => b.tipo === 'disponible')) {
       this.mensajeError = 'Marca al menos un bloque como disponible.';
-      setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
       return;
     }
     this.enviandoBloques = true;
@@ -1475,19 +1330,93 @@ eliminarSolicitudesSeleccionadas(): void {
         this.mensajeExito = `Solicitud de agenda semanal enviada (${bloques.length} bloques). Queda pendiente de aprobación del administrador.`;
         this.enviandoBloques = false;
         this.cargarSolicitudesHorario();
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeExito = ''; this.cdr.detectChanges(); }, 4000);
       },
       error: (err) => {
         this.mensajeError = err?.error?.detail || 'No se pudo enviar la solicitud de agenda semanal.';
         this.enviandoBloques = false;
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
       }
     });
   }
 
+  cargarSolicitudesHorario(): void {
+    if (!this.profDbId) return; // identidad aún no resuelta (ver resolverIdentidadProfesional)
+    this.http.get<any[]>(`${API}/profesional/${this.profDbId}/solicitudes-horario`).subscribe({
+      next: (data) => {
+        this.solicitudesHorario = data ?? [];
+        this.cdr.detectChanges();
+      },
+      error: () => {}
+    });
+  }
 
+  /** Si `valor` cae fuera de [min, max], lo recorta al límite más
+   *  cercano en vez de solo avisar — así el input nunca se queda con
+   *  un valor que la solicitud igual va a rechazar. */
+  clampHora(valor: string, min: string, max: string): string {
+    if (!valor) return valor;
+    if (valor < min) return min;
+    if (valor > max) return max;
+    return valor;
+  }
+
+  onAlmuerzoHoraInicioChange(valor: string): void { this.almuerzoHoraInicio = this.clampHora(valor, '09:00', '15:30'); }
+  onHorarioRapidoInicioChange(valor: string): void { this.horarioRapidoInicio = this.clampHora(valor, '09:00', '17:00'); }
+  onHorarioRapidoFinChange(valor: string): void { this.horarioRapidoFin = this.clampHora(valor, '09:30', '17:30'); }
+  onColacionRapidaInicioChange(valor: string): void { this.colacionRapidaInicio = this.clampHora(valor, '09:00', '16:00'); }
+  onColacionRapidaFinChange(valor: string): void { this.colacionRapidaFin = this.clampHora(valor, '09:30', '16:30'); }
+
+  solicitudesSeleccionadas = new Set<number>();
+
+get solicitudesHaySeleccionadas(): boolean {
+  return this.solicitudesSeleccionadas.size > 0;
+}
+
+get solicitudesTodasSeleccionadas(): boolean {
+  return this.solicitudesHorario.length > 0 && this.solicitudesSeleccionadas.size === this.solicitudesHorario.length;
+}
+
+toggleSeleccionSolicitud(s: any): void {
+  if (this.solicitudesSeleccionadas.has(s.id)) this.solicitudesSeleccionadas.delete(s.id);
+  else this.solicitudesSeleccionadas.add(s.id);
+}
+
+toggleSeleccionarTodasSolicitudes(): void {
+  if (this.solicitudesTodasSeleccionadas) {
+    this.solicitudesSeleccionadas.clear();
+  } else {
+    this.solicitudesHorario.forEach(s => this.solicitudesSeleccionadas.add(s.id));
+  }
+}
+
+eliminarSolicitud(s: any): void {
+  this.http.delete(`${API}/solicitudes-horario/${s.id}`).subscribe({
+    next: () => {
+      this.solicitudesHorario = this.solicitudesHorario.filter(x => x.id !== s.id);
+      this.solicitudesSeleccionadas.delete(s.id);
+      this.cdr.detectChanges();
+    },
+    error: () => {
+      this.mensajeError = 'No se pudo eliminar la solicitud.';
+      setTimeout(() => { this.mensajeError = ''; this.cdr.detectChanges(); }, 3000);
+    }
+  });
+}
+
+eliminarSolicitudesSeleccionadas(): void {
+  const ids = Array.from(this.solicitudesSeleccionadas);
+  ids.forEach(id => {
+    this.http.delete(`${API}/solicitudes-horario/${id}`).subscribe({
+      next: () => {
+        this.solicitudesHorario = this.solicitudesHorario.filter(x => x.id !== id);
+        this.cdr.detectChanges();
+      }
+    });
+  });
+  this.solicitudesSeleccionadas.clear();
+}
+  // ══════════════════════════════════════
+  // HISTORIAL CLÍNICO
+  // ══════════════════════════════════════
 
   pacientesHistorial: any[] = [];
   busquedaPaciente = '';
@@ -1520,7 +1449,6 @@ eliminarSolicitudesSeleccionadas(): void {
   fichaTab: 'timeline' | 'resumen' | 'ficha' | 'citas' = 'timeline';
 
   gestionarPlantillaAbierto = false;
-  ayudaBannerCerrado = false;
   plantillaPreguntasEdit: any[] = [];
   guardandoPlantilla = false;
 
@@ -1530,13 +1458,15 @@ eliminarSolicitudesSeleccionadas(): void {
   }
 
   get pacientesHistorialFiltrados(): any[] {
-    const q = this.busquedaPaciente.trim().toLowerCase();
     let lista = this.pacientesHistorial;
-    if (q) {
+    if (this.busquedaPaciente.trim()) {
       lista = lista.filter(p =>
-        (p.nombre || '').toLowerCase().includes(q) ||
-        (p.rut || '').toLowerCase().includes(q) ||
-        (p.correo || '').toLowerCase().includes(q)
+        coincideBusqueda(
+          this.busquedaPaciente,
+          p.nombre,
+          p.rut,
+          p.correo,
+        )
       );
     }
     if (this.filtroEstadoHistorial === 'completa')      lista = lista.filter(p => p.tiene_ficha);
@@ -1568,6 +1498,7 @@ eliminarSolicitudesSeleccionadas(): void {
   }
 
   cargarPacientesHistorial(): void {
+    if (!this.profDbId) return; // identidad aún no resuelta (ver resolverIdentidadProfesional)
     this.cargandoPacientesHistorial = true;
     let params = new HttpParams();
     if (this.filtroAnioHistorial)   params = params.set('anio', this.filtroAnioHistorial);

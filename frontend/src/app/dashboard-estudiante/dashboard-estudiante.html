@@ -1,4 +1,4 @@
-<div class="dashboard" [class.sidebar-movil-abierto]="sidebarMovilAbierto">
+<div class="dashboard estudiante-shell" [class.sidebar-movil-abierto]="sidebarMovilAbierto">
 
   <!-- SIDEBAR -->
   <div class="sidebar-backdrop" *ngIf="sidebarMovilAbierto" (click)="toggleSidebarMovil()"></div>
@@ -24,12 +24,6 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
         Mis Citas
-      </button>
-      <button class="nav-item" [class.active]="seccionActiva === 'documentos'" (click)="navegarA('documentos')">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        Mis Documentos
       </button>
       <button class="nav-item" [class.active]="seccionActiva === 'configuracion'" (click)="navegarA('configuracion')">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -61,7 +55,7 @@
   </aside>
 
   <!-- CONTENIDO PRINCIPAL -->
-  <div class="main-wrapper">    
+  <div class="main-wrapper">
   <main class="main-content">
 
     <div class="blob blob-green"></div>
@@ -232,8 +226,6 @@
           <div class="quick-col">
             <button class="quick-btn quick-btn-primary" (click)="navegarA('citas','solicitar')">➕ Solicitar cita</button>
             <button class="quick-btn" (click)="navegarA('citas','proximas')">📅 Mis citas</button>
-            <button class="quick-btn" (click)="navegarA('citas','solicitar')">🏥 Servicios</button>
-            <button class="quick-btn" (click)="navegarA('documentos')">📄 Documentos</button>
             <button class="quick-btn" (click)="navegarA('ayuda')">❓ Ayuda</button>
           </div>
         </div>
@@ -263,47 +255,13 @@
         </div>
       </div>
 
-      <!-- ¿Cómo te sientes hoy? -->
-      <div class="config-card" style="margin-top:20px;">
-        <h3 class="config-card-title">💚 ¿Cómo te sientes hoy?</h3>
-        <p class="mood-subtitulo">Podemos orientarte según cómo te sientes.</p>
-        <div class="mood-row-inline">
-          <button class="mood-chip" [class.selected]="animoHoy === 'bien'" (click)="registrarAnimo('bien')">😊 Bien</button>
-          <button class="mood-chip" [class.selected]="animoHoy === 'regular'" (click)="registrarAnimo('regular')">🙂 Regular</button>
-          <button class="mood-chip" [class.selected]="animoHoy === 'mal'" (click)="registrarAnimo('mal')">😟 No me siento bien</button>
-          <button class="mood-chip" [class.selected]="animoHoy === 'orientacion'" (click)="registrarAnimo('orientacion')">🧭 Necesito orientación</button>
-        </div>
-      </div>
-
-      <!-- Recursos para ti -->
-      <h2 class="inicio-subtitulo" id="recursos-para-ti">Recursos para ti</h2>
-      <div class="recursos-grid">
-        <button class="recurso-card" (click)="mostrarProximamente('Próximamente: contenido sobre salud mental.')">
-          <span class="recurso-icono">🧠</span>
-          <span class="recurso-titulo">Salud mental</span>
-          <span class="recurso-sub">Consejos y orientación</span>
-        </button>
-        <button class="recurso-card" (click)="mostrarProximamente('Próximamente: consejos de nutrición.')">
-          <span class="recurso-icono">🥗</span>
-          <span class="recurso-titulo">Nutrición</span>
-          <span class="recurso-sub">Hábitos saludables</span>
-        </button>
-        <button class="recurso-card" (click)="mostrarProximamente('Próximamente: calendario de talleres y actividades.')">
-          <span class="recurso-icono">📰</span>
-          <span class="recurso-titulo">Talleres</span>
-          <span class="recurso-sub">Actividades de Salud Estudiantil</span>
-        </button>
-      </div>
-
       <!-- Tu actividad — al final, ya que es informativa, no una acción inmediata -->
       <div class="tu-actividad-row" style="margin-top:22px;margin-bottom:0;">
         <span class="tu-actividad-titulo">Tu actividad</span>
         <div class="tu-actividad-inline">
           <span><strong>{{ citasCompletadas }}</strong> atenciones realizadas</span>
           <span class="sep">·</span>
-          <span><strong>{{ cuestionariosPendientes.length }}</strong> solicitudes pendientes</span>
-          <span class="sep">·</span>
-          <span><strong>0</strong> documentos</span>
+          <span><strong>{{ cuestionariosPendientes.length }}</strong> cuestionarios pendientes</span>
         </div>
       </div>
     </div>
@@ -371,7 +329,7 @@
     <span class="profesional-nombre">{{ p.nombre }}</span>
     <span class="profesional-especialidad">{{ p.especialidad }}</span>
   </div>
-  <p class="profesional-desc">{{ p.descripcion || 'Atención médica especializada para estudiantes UTEM.' }}</p>
+  <p class="profesional-desc" *ngIf="p.descripcion">{{ p.descripcion }}</p>
   <button class="btn-agendar" (click)="seleccionarProfesional(p, $event)">Agendar Cita</button>
 </div>
 
@@ -434,8 +392,8 @@
                    [class.seleccionada]="dia?.fecha === fechaSeleccionada"
                    [class.feriado]="esFeriado(dia?.fecha)"
                    [class.cerrado]="dia?.esCerrado"
-                   [class.no-atiende]="dia?.profNoAtiendeEseDia"
-                   [title]="dia?.esCerrado ? ('El centro no atiende este día. ' + dia.motivoCerrado) : (dia?.profNoAtiendeEseDia ? 'Este profesional no atiende este día de la semana' : (dia?.fueraDeVentana ? 'Solo se puede agendar dentro de los próximos 7 días' : nombreFeriado(dia?.fecha)))"
+                   [class.no-atiende]="dia?.deshabilitado && !dia?.esCerrado && !dia?.esFinde && !dia?.esPasado"
+                   [title]="dia?.esCerrado ? ('El centro no atiende este día. ' + dia.motivoCerrado) : (dia?.deshabilitado && dia?.motivoCerrado ? dia.motivoCerrado : nombreFeriado(dia?.fecha))"
                    (click)="seleccionarDia(dia)">
                 <span *ngIf="dia">{{ dia.num }}</span>
               </div>
@@ -527,100 +485,30 @@
     </div>
 
     <div class="section" *ngIf="seccionActiva === 'citas' && citasTab === 'proximas'">
-      <h3 class="subsection-title">Próximas citas</h3>
-      <div class="citas-lista">
-        <div class="cita-card" [class.cita-card-vencida]="citaPendienteVencida(cita)" *ngFor="let cita of proximasCitas; let i = index">
-          <p class="cita-aviso-vencida" *ngIf="citaPendienteVencida(cita)">
-            ⏳ Esta hora ya pasó y tu profesional aún no la registra como atendida. No significa que no hayas asistido — puedes cancelarla mientras se actualiza.
-          </p>
-          <div class="cita-card-row">
-            <div class="cita-avatar">{{ cita.iniciales || cita.especialidad?.substring(0,2) }}</div>
-            <div class="cita-info">
-              <span class="cita-badge" [class.urgente]="cita.urgente">{{ cita.urgente ? '🔴 Urgente' : cita.especialidad }}</span>
-              <p class="cita-nombre">{{ cita.profesional }}</p>
-              <p class="cita-profesional">{{ cita.especialidad }}</p>
-            </div>
-            <div class="cita-fecha">
-              <span class="cita-label">FECHA</span>
-              <span class="cita-valor">{{ cita.fecha }}</span>
-              <span class="cita-label">HORA</span>
-              <span class="cita-valor">{{ cita.hora }}</span>
-            </div>
-            <div class="cita-acciones">
-              <button class="btn-cancelar" [disabled]="!puedeCancelar(cita)" (click)="cancelarCita(i, cita)">Cancelar</button>
-              <p class="cita-aviso-cancelacion" *ngIf="!puedeCancelar(cita)">{{ avisoCancelacion(cita) }}</p>
-            </div>
-          </div>
-        </div>
-        <div *ngIf="proximasCitas.length === 0" style="text-align:center;color:#94a3b8;padding:32px;font-size:14px;">
-          No tienes citas próximas. <button class="btn-reagendar" (click)="navegarA('citas','solicitar')">Agendar una hora</button>
-        </div>
-      </div>
+      <app-estudiante-citas-proximas
+        [citas]="proximasCitas"
+        (cancelar)="cancelarCita($event.index, $event.cita)"
+        (solicitarNueva)="navegarA('citas','solicitar')"
+      ></app-estudiante-citas-proximas>
     </div>
 
     <!-- ══ HISTORIAL (pestaña dentro de Mis Citas) ══ -->
     <div class="section" *ngIf="seccionActiva === 'citas' && citasTab === 'historial'">
-      
-      <div class="historial-stats">
-        <div class="stat-card"><span class="stat-label">Total citas</span><span class="stat-num">{{ totalCitas }}</span></div>
-        <div class="stat-card"><span class="stat-label">Completadas</span><span class="stat-num completadas">{{ citasCompletadas }}</span></div>
-        <div class="stat-card"><span class="stat-label">Canceladas</span><span class="stat-num canceladas">{{ citasCanceladas }}</span></div>
-      </div>
-
-      <div class="historial-filtros">
-        <input type="text" placeholder="Buscar profesional..." [(ngModel)]="filtroProfesional">
-        <select [(ngModel)]="filtroEspecialidad">
-          <option value="">Todas las especialidades</option>
-          <option *ngFor="let e of especialidadesDisponibles" [value]="e">{{ e }}</option>
-        </select>
-        <input type="date" [(ngModel)]="filtroFecha">
-        <button class="btn-filtrar" (click)="historialFiltrado()">Filtrar</button>
-        <button class="btn-volver" (click)="limpiarFiltros()">Limpiar</button>
-      </div>
-
-      <table class="historial-tabla">
-        <thead>
-          <tr><th>FECHA</th><th>PROFESIONAL</th><th>ESPECIALIDAD</th><th>ESTADO</th><th>ACCIONES</th></tr>
-        </thead>
-        <tbody>
-       <tr *ngFor="let h of historialMostrado">
-            <td><p>{{ h.fecha }}</p><small>{{ h.hora }}</small></td>
-            <td><div class="profesional-cell"><div class="mini-avatar">{{ h.iniciales }}</div><span>{{ h.profesional }}</span></div></td>
-            <td>{{ h.especialidad }}</td>
-            <td><span class="estado-badge" [ngClass]="h.estado">{{ h.estado }}</span></td>
-            <td>
-              <span class="doc-link" *ngIf="h.estado === 'cancelada'" (click)="reagendarCita(h)">↻ Reagendar</span>
-              <span class="doc-link" *ngIf="h.estado === 'completada'" (click)="verDetalleAtencion(h)">🩺 Ver detalle</span>
-              <span class="doc-link" *ngIf="h.estado === 'completada' && h.tiene_pdf" (click)="descargarPdf(h.id)">⬇ PDF</span>
-              <span *ngIf="h.estado !== 'cancelada' && h.estado !== 'completada'" style="color:#94a3b8;font-size:12px;">No aplica</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="paginacion">
-        <span>Mostrando {{ historialMostrado.length }} de {{ totalCitas }} registros</span>
-        <div>
-          <button class="btn-pag" disabled>Anterior</button>
-          <button class="btn-pag active" [disabled]="totalCitas <= 10">Siguiente</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ MIS DOCUMENTOS (placeholder — sección sin backend todavía) ══ -->
-    <div class="section" *ngIf="seccionActiva === 'documentos'">
-      <div class="config-card" style="text-align:center;padding:48px 24px;">
-        <div style="font-size:40px;margin-bottom:12px;">📄</div>
-        <h3 class="config-card-title" style="justify-content:center;">Próximamente</h3>
-        <p style="color:#5C6B60;font-size:13px;max-width:380px;margin:8px auto 0;line-height:1.5;">
-          Aquí podrás ver y descargar certificados, indicaciones médicas y documentos que tu profesional comparta contigo. Esta sección está en desarrollo.
-        </p>
-      </div>
+      <app-estudiante-historial
+        [historial]="historialCompleto"
+        [totalCitas]="totalCitas"
+        [citasCompletadas]="citasCompletadas"
+        [citasCanceladas]="citasCanceladas"
+        [especialidadesDisponibles]="especialidadesDisponibles"
+        (reagendar)="reagendarCita($event)"
+        (verDetalle)="verDetalleAtencion($event)"
+        (descargarPdf)="descargarPdf($event)"
+      ></app-estudiante-historial>
     </div>
 
     <!-- ══ CONFIGURACIÓN ══ -->
     <div class="section" *ngIf="seccionActiva === 'configuracion'">
-      
+
       <div class="config-grid">
 
         <!-- Perfil -->
@@ -676,96 +564,11 @@
           </div>
         </div>
 
-        <!-- Cambiar Contraseña -->
-        <div class="config-card">
-          <div class="card-header-perfil-est">
-            <h3 class="config-card-title">🔒 Cambiar Contraseña</h3>
-            <button class="btn-editar-perfil" *ngIf="!passwordCuentaEnEdicion" (click)="habilitarEdicionPasswordCuenta()">✎ Editar</button>
-          </div>
-
-          <ng-container *ngIf="passwordCuentaEnEdicion; else passwordCuentaResumen">
-            <div class="campo-grupo">
-              <label>Contraseña actual</label>
-              <div class="password-wrap-est">
-                <input [type]="mostrarPasswordCuentaActual ? 'text' : 'password'" [(ngModel)]="passwordCuenta.actual" placeholder="••••••" />
-                <button class="btn-ojo-est" type="button" (click)="mostrarPasswordCuentaActual = !mostrarPasswordCuentaActual">
-                  <svg *ngIf="!mostrarPasswordCuentaActual" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg *ngIf="mostrarPasswordCuentaActual" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="campo-grupo">
-              <label>Nueva contraseña</label>
-              <div class="password-wrap-est">
-                <input [type]="mostrarPasswordCuentaNueva ? 'text' : 'password'" [(ngModel)]="passwordCuenta.nueva" placeholder="••••••" />
-                <button class="btn-ojo-est" type="button" (click)="mostrarPasswordCuentaNueva = !mostrarPasswordCuentaNueva">
-                  <svg *ngIf="!mostrarPasswordCuentaNueva" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg *ngIf="mostrarPasswordCuentaNueva" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                </button>
-              </div>
-              <!-- Checklist de complejidad en vivo -->
-              <ul class="password-checklist">
-                <li [class.ok]="checklistPasswordCuenta.longitud">Al menos 8 caracteres</li>
-                <li [class.ok]="checklistPasswordCuenta.mayuscula">Una letra mayúscula</li>
-                <li [class.ok]="checklistPasswordCuenta.numero">Un número</li>
-                <li [class.ok]="checklistPasswordCuenta.especial">Un carácter especial</li>
-              </ul>
-            </div>
-
-            <div class="campo-grupo">
-              <label>Confirmar nueva contraseña</label>
-              <div class="password-wrap-est">
-                <input [type]="mostrarPasswordCuentaConf ? 'text' : 'password'" [(ngModel)]="passwordCuenta.confirmar" placeholder="••••••" />
-                <button class="btn-ojo-est" type="button" (click)="mostrarPasswordCuentaConf = !mostrarPasswordCuentaConf">
-                  <svg *ngIf="!mostrarPasswordCuentaConf" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                  <svg *ngIf="mostrarPasswordCuentaConf" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                </button>
-              </div>
-              <p class="password-no-coincide" *ngIf="passwordCuenta.confirmar && passwordCuenta.nueva !== passwordCuenta.confirmar">
-                Las contraseñas no coinciden.
-              </p>
-            </div>
-
-            <p class="error-msg" *ngIf="errorPasswordCuenta">{{ errorPasswordCuenta }}</p>
-
-            <div class="perfil-acciones-edicion">
-              <button class="btn-descartar" [disabled]="guardandoPasswordCuenta" (click)="cancelarEdicionPasswordCuenta()">Cancelar</button>
-              <button class="btn-guardar" [disabled]="!passwordCuentaListaParaGuardar || guardandoPasswordCuenta" (click)="guardarPasswordCuenta()">
-                {{ guardandoPasswordCuenta ? 'Guardando...' : 'Cambiar contraseña' }}
-              </button>
-            </div>
-          </ng-container>
-
-          <ng-template #passwordCuentaResumen>
-            <p class="password-resumen-texto">••••••••••• — última vez que la cambiaste queda registrado en tu cuenta.</p>
-          </ng-template>
-        </div>
-
         <!-- Datos Institucionales -->
         <div class="config-card datos-institucionales">
           <h3 class="config-card-title">📋 Datos Institucionales</h3>
           <p class="dato-inst"><span>Carrera</span><strong>{{ estudianteData?.carrera || 'No registrada' }}</strong></p>
           <p class="dato-inst"><span>RUT</span><strong>{{ estudianteData?.rut || 'No registrado' }}</strong></p>
-          <p class="dato-inst"><span>Estado</span><strong>Alumno Regular</strong></p>
-        </div>
-
-        <!-- Preferencias -->
-        <div class="config-card">
-          <h3 class="config-card-title">🔔 Preferencias</h3>
-          <div class="setting-row">
-            <span>Modo oscuro</span>
-            <button class="toggle-switch" [class.on]="temaOscuro" (click)="toggleTemaRapido()" [attr.aria-pressed]="temaOscuro"></button>
-          </div>
-          <div class="setting-row">
-            <span>Recordatorios de citas</span>
-            <button class="toggle-switch on" disabled title="Próximamente configurable"></button>
-          </div>
-          <div class="setting-row">
-            <span>Notificaciones por correo</span>
-            <button class="toggle-switch on" disabled title="Próximamente configurable"></button>
-          </div>
-          <p style="font-size:11px;color:#94a3b8;margin-top:10px;">Modo oscuro ya se guarda en tu cuenta. Los recordatorios y correos son fijos por ahora — pronto podrás desactivarlos.</p>
         </div>
 
         <!-- Seguridad -->
@@ -773,11 +576,7 @@
           <h3 class="config-card-title">🔒 Seguridad</h3>
           <div class="setting-row">
             <span>Contraseña</span>
-            <button class="btn-cambiar" (click)="mostrarProximamente('Próximamente podrás cambiar tu contraseña desde aquí.')">Cambiar</button>
-          </div>
-          <div class="setting-row">
-            <span>Sesiones activas</span>
-            <button class="btn-cambiar" (click)="mostrarProximamente('Próximamente podrás ver y cerrar tus sesiones activas en otros dispositivos.')">Ver</button>
+            <button class="btn-cambiar" (click)="abrirModalCambiarPassword()">Cambiar</button>
           </div>
         </div>
 
@@ -790,7 +589,6 @@
         <button class="tab-ayuda" [class.active]="tabAyuda === 'faq'" (click)="tabAyuda = 'faq'">Preguntas frecuentes</button>
         <button class="tab-ayuda" [class.active]="tabAyuda === 'mapa'" (click)="tabAyuda = 'mapa'">Mapa de SESAES</button>
         <button class="tab-ayuda" [class.active]="tabAyuda === 'contacto'" (click)="tabAyuda = 'contacto'">Contacto</button>
-        <button class="tab-ayuda" [class.active]="tabAyuda === 'soporte'" (click)="tabAyuda = 'soporte'">Soporte</button>
       </div>
 
       <!-- Preguntas Frecuentes -->
@@ -814,15 +612,16 @@
       <!-- Mapa de SESAES — datos dinámicos del backend -->
       <div class="config-card" *ngIf="tabAyuda === 'mapa'">
         <h3 class="config-card-title">📍 Ubicación SESAES</h3>
-        <div class="mapa-wrap">
+        <div class="mapa-wrap" *ngIf="infoCentro.direccion">
           <iframe [src]="getMapaUrl()"
                   width="100%" height="220" style="border:0;" loading="lazy"></iframe>
         </div>
-        <p class="ubicacion-direccion">{{ infoCentro.direccion }}</p>
+        <p class="ubicacion-direccion" *ngIf="infoCentro.direccion">{{ infoCentro.direccion }}</p>
+        <p class="ubicacion-direccion" *ngIf="!infoCentro.direccion">Ubicación no configurada actualmente.</p>
         <p class="ubicacion-direccion" *ngIf="infoCentro.telefono" style="font-size:12px;">📞 {{ infoCentro.telefono }}</p>
         <p class="ubicacion-direccion" *ngIf="infoCentro.correo_contacto" style="font-size:12px;">✉️ {{ infoCentro.correo_contacto }}</p>
         <p class="ubicacion-direccion" *ngIf="infoCentro.horario_atencion" style="font-size:12px;">🕐 {{ infoCentro.horario_atencion }}</p>
-        <button class="btn-cambiar" (click)="abrirComoLlegar()">Cómo llegar</button>
+        <button class="btn-cambiar" *ngIf="infoCentro.direccion" (click)="abrirComoLlegar()">Cómo llegar</button>
       </div>
 
       <!-- Contacto — reutiliza los mismos datos reales del backend -->
@@ -834,15 +633,6 @@
         <a class="btn-cambiar" style="display:inline-block;text-decoration:none;margin-top:8px;" *ngIf="infoCentro.correo_contacto" [href]="'mailto:' + infoCentro.correo_contacto">Escribir un correo</a>
       </div>
 
-      <!-- Soporte / Guías — placeholder, sin backend todavía -->
-      <div class="config-card" *ngIf="tabAyuda === 'soporte'" style="text-align:center;padding:40px 24px;">
-        <div style="font-size:36px;margin-bottom:10px;">🛟</div>
-        <h3 class="config-card-title" style="justify-content:center;">Soporte y guías</h3>
-        <p style="color:#5C6B60;font-size:13px;max-width:380px;margin:8px auto 0;line-height:1.5;">
-          Próximamente encontrarás guías paso a paso sobre cómo usar SESAES. Mientras tanto, si tienes un problema con la plataforma, escríbenos
-          <span *ngIf="infoCentro.correo_contacto">a <strong>{{ infoCentro.correo_contacto }}</strong></span> y te ayudamos.
-        </p>
-      </div>
     </div>
 
     <!-- ══ MODAL: DETALLE DE ATENCIÓN (medicamento, observaciones, motivo) ══ -->
@@ -874,7 +664,7 @@
             <span class="detalle-atencion-valor">{{ h.medicamento || 'No se suministró medicamento.' }}</span>
           </div>
           <div class="detalle-atencion-fila">
-            <span class="detalle-atencion-label">Observaciones e indicaciones</span>
+            <span class="detalle-atencion-label">Observaciones de la atención</span>
             <span class="detalle-atencion-valor">{{ h.observaciones_atencion || 'Sin observaciones adicionales.' }}</span>
           </div>
         </div>
@@ -923,6 +713,136 @@
       (cerrar)="verFotoAmpliada = false">
     </app-photo-viewer>
 
+    <!-- ══ MODAL: CAMBIAR CONTRASEÑA ══ -->
+    <div class="modal-overlay-est" *ngIf="modalCambiarPasswordAbierto" (click)="cerrarModalCambiarPassword()">
+      <div class="modal-est" (click)="$event.stopPropagation()">
+        <div class="modal-header-est">
+          <h3>🔒 Cambiar contraseña</h3>
+          <button class="modal-cerrar-est" [disabled]="guardandoCambioPassword" (click)="cerrarModalCambiarPassword()">✕</button>
+        </div>
+        <div class="cuestionario-form-est">
+          <div class="cuestionario-campo-est">
+            <label>Contraseña actual</label>
+            <div class="password-control-est">
+              <input [type]="mostrarPasswordActual ? 'text' : 'password'"
+                     autocomplete="current-password"
+                     [(ngModel)]="passwordActual"
+                     placeholder="Ingresa tu contraseña actual">
+              <button type="button"
+                      class="btn-ojo-password-est"
+                      (click)="mostrarPasswordActual = !mostrarPasswordActual"
+                      [attr.aria-label]="mostrarPasswordActual ? 'Ocultar contraseña actual' : 'Mostrar contraseña actual'"
+                      [title]="mostrarPasswordActual ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+                <span class="material-symbols-outlined" aria-hidden="true">{{ mostrarPasswordActual ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="cuestionario-campo-est">
+            <label>Nueva contraseña</label>
+            <div class="password-control-est">
+              <input [type]="mostrarPasswordNueva ? 'text' : 'password'"
+                     autocomplete="new-password"
+                     [(ngModel)]="passwordNueva"
+                     placeholder="Crea una contraseña segura">
+              <button type="button"
+                      class="btn-ojo-password-est"
+                      (click)="mostrarPasswordNueva = !mostrarPasswordNueva"
+                      [attr.aria-label]="mostrarPasswordNueva ? 'Ocultar nueva contraseña' : 'Mostrar nueva contraseña'"
+                      [title]="mostrarPasswordNueva ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+                <span class="material-symbols-outlined" aria-hidden="true">{{ mostrarPasswordNueva ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+            <div class="password-reglas-est" aria-live="polite">
+              <span class="regla-password-est" [class.cumple]="passwordMinimo8">
+                {{ passwordMinimo8 ? '✓' : '○' }} Mínimo 8 caracteres
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordTieneMayuscula">
+                {{ passwordTieneMayuscula ? '✓' : '○' }} Una letra mayúscula
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordTieneMinuscula">
+                {{ passwordTieneMinuscula ? '✓' : '○' }} Una letra minúscula
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordTieneNumero">
+                {{ passwordTieneNumero ? '✓' : '○' }} Un número
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordTieneEspecial">
+                {{ passwordTieneEspecial ? '✓' : '○' }} Un carácter especial
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordSinEspacios">
+                {{ passwordSinEspacios ? '✓' : '○' }} Sin espacios
+              </span>
+            </div>
+          </div>
+          <div class="cuestionario-campo-est">
+            <label>Confirmar nueva contraseña</label>
+            <div class="password-control-est">
+              <input [type]="mostrarPasswordConfirmacion ? 'text' : 'password'"
+                     autocomplete="new-password"
+                     [(ngModel)]="passwordConfirmacion"
+                     placeholder="Repite la nueva contraseña">
+              <button type="button"
+                      class="btn-ojo-password-est"
+                      (click)="mostrarPasswordConfirmacion = !mostrarPasswordConfirmacion"
+                      [attr.aria-label]="mostrarPasswordConfirmacion ? 'Ocultar confirmación' : 'Mostrar confirmación'"
+                      [title]="mostrarPasswordConfirmacion ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+                <span class="material-symbols-outlined" aria-hidden="true">{{ mostrarPasswordConfirmacion ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <p class="cuestionario-error-est" *ngIf="errorCambioPassword">{{ errorCambioPassword }}</p>
+        <div class="modal-footer-est">
+          <button class="btn-cerrar-modal-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="cerrarModalCambiarPassword()">Cancelar</button>
+          <button class="btn-descargar-modal-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="guardarCambioPassword()">
+            {{ guardandoCambioPassword ? 'Guardando...' : 'Cambiar contraseña' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CONFIRMACIÓN: CAMBIO DE CONTRASEÑA ══ -->
+    <div class="modal-overlay-est modal-confirmacion-password-overlay-est"
+         *ngIf="modalConfirmarCambioPasswordAbierto"
+         (click)="cancelarConfirmacionCambioPassword()">
+      <div class="modal-est modal-confirmacion-password-est"
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="titulo-confirmar-password"
+           (click)="$event.stopPropagation()">
+        <div class="modal-header-est">
+          <h3 id="titulo-confirmar-password">Confirmar cambio de contraseña</h3>
+          <button class="modal-cerrar-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="cancelarConfirmacionCambioPassword()">✕</button>
+        </div>
+
+        <p class="confirmacion-password-texto-est">
+          ¿Seguro que quieres cambiar tu contraseña?
+        </p>
+        <p class="confirmacion-password-ayuda-est">
+          Al continuar, deberás usar la nueva contraseña la próxima vez que inicies sesión.
+          SESAES enviará un aviso de seguridad a tu correo institucional.
+        </p>
+
+        <div class="modal-footer-est">
+          <button class="btn-cerrar-modal-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="cancelarConfirmacionCambioPassword()">
+            Cancelar
+          </button>
+          <button class="btn-descargar-modal-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="confirmarCambioPassword()">
+            {{ guardandoCambioPassword ? 'Cambiando...' : 'Sí, cambiar contraseña' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ MODAL BLOQUEANTE: PRIMER ACCESO (contraseña temporal) ══ -->
     <div class="modal-overlay-est modal-overlay-bloqueante-est" *ngIf="modalPrimerAccesoAbierto">
       <div class="modal-est">
@@ -937,7 +857,7 @@
         <div class="cuestionario-form-est">
           <div class="cuestionario-campo-est">
             <label>Nueva contraseña (opcional)</label>
-            <input type="password" [(ngModel)]="nuevaPasswordPrimerAcceso" placeholder="Mínimo 6 caracteres" />
+            <input type="password" [(ngModel)]="nuevaPasswordPrimerAcceso" placeholder="Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo" />
           </div>
           <div class="cuestionario-campo-est" *ngIf="nuevaPasswordPrimerAcceso">
             <label>Confirma la nueva contraseña</label>

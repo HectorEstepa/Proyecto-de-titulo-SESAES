@@ -8,7 +8,9 @@ class Auditoria(Base):
 
     id          = Column(Integer, primary_key=True, index=True)
     usuario_id  = Column(Integer, ForeignKey("usuario.id"))
+    actor_rol   = Column(String, nullable=True)   # SA-2: nullable por compatibilidad histórica
     accion      = Column(String)
+    resultado   = Column(String, nullable=False, server_default="exito")  # SA-2: "exito" | "denegado" | "error"
     detalle     = Column(String)
     entidad     = Column(String)    # 'cita', 'profesional', 'configuracion', etc.
     entidad_id  = Column(Integer)   # id del registro afectado

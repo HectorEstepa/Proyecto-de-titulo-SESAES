@@ -1,29 +1,65 @@
-import { Component, OnInit, AfterViewInit, OnDestroy, ViewChild, ElementRef, ViewEncapsulation, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ViewChild, ViewEncapsulation, ChangeDetectorRef } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { Chart, registerables } from 'chart.js';
 import { environment } from '../config';
-import { PhotoCropperComponent } from '../shared/photo-cropper/photo-cropper';
-import { PhotoViewerComponent } from '../shared/photo-viewer/photo-viewer';
 import { obtenerFeriado } from '../shared/feriados-chile';
-import { obtenerDiasInternacionales } from '../shared/dias-internacionales';
 import { ToastService } from '../shared/toast/toast.service';
-Chart.register(...registerables);
+import { AuthService } from '../auth.service';
+import { Permission } from '../shared/auth/permission.model';
+import { AdminCitasComponent } from './citas/admin-citas';
+import { AdminProfesionalesComponent } from './profesionales/admin-profesionales';
+import { AdminPerfilComponent } from './perfil/admin-perfil';
+import { AdminHistorialComponent } from './historial/admin-historial';
+import { AdminReportesComponent } from './reportes/admin-reportes';
+import { AdminEstudiantesComponent } from './estudiantes/admin-estudiantes';
+import { AdminInicioComponent } from './inicio/admin-inicio';
+import { AdminHorarioComponent } from './horario/admin-horario';
+import { AdminConfiguracionComponent, ConfigTab } from './configuracion/admin-configuracion';
+import { AdminAdministradoresComponent } from './administradores/admin-administradores';
+import * as XLSX from 'xlsx';
 
+
+interface SlotDisponibilidadBackend {
+  hora: string;
+  disponible: boolean;
+  motivo: string | null;
+  overridable_con_sobrecupo: boolean;
+}
+
+interface DiaDisponibilidadBackend {
+  fecha: string;
+  slots: SlotDisponibilidadBackend[];
+}
+
+interface RespuestaDisponibilidadRango {
+  profesional_id: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  duracion_min: number;
+  dias: DiaDisponibilidadBackend[];
+}
 
 const API = environment.apiUrl;
 
 @Component({
   selector: 'app-dashboard-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, PhotoCropperComponent, PhotoViewerComponent],
+  imports: [CommonModule, FormsModule, DatePipe, AdminCitasComponent, AdminProfesionalesComponent, AdminPerfilComponent, AdminHistorialComponent, AdminReportesComponent, AdminEstudiantesComponent, AdminInicioComponent, AdminHorarioComponent, AdminConfiguracionComponent, AdminAdministradoresComponent],
   templateUrl: './dashboard-admin.html',
   styleUrl: './dashboard-admin.css',
   encapsulation: ViewEncapsulation.None
 })
-export class DashboardAdminComponent implements OnInit, AfterViewInit, OnDestroy {
+export class DashboardAdminComponent implements OnInit {
+// Referencia al hijo para cerrar sus modales tras una operación CRUD exitosa
+// (el estado de los modales vive en el hijo; el shell sigue ejecutando el HTTP).
+@ViewChild(AdminProfesionalesComponent) adminProfesionalesRef?: AdminProfesionalesComponent;
+// Referencia al hijo Mi Perfil: el shell la usa (Fase 3.4D) para restablecer
+// el estado de edición del hijo tras un guardado exitoso, ya que ese estado
+// (adminPerfilEnEdicion, fotoAdminCambiada, contraseñas) ahora vive allí.
+@ViewChild(AdminPerfilComponent) adminPerfilRef?: AdminPerfilComponent;
+
 sidebarMovilAbierta = false;
 
 toggleSidebarMovil(): void {
@@ -46,11 +82,11 @@ toggleSidebarMovil(): void {
 
   get tituloSeccion(): string {
     const map: Record<string, string> = {
-      inicio: 'Panel Administrativo SESAES', horario: 'Agenda',
+      inicio: 'Panel Administrativo SESAES', horario: 'Agenda / Calendario clínico',
       citas: 'Gestión de Citas', profesional: 'Gestión de Profesionales',
       estudiantes: 'Estudiantes', historial: 'Historial de Atenciones',
       reportes: 'Reportes', configuracion: 'Configuración del Sistema',
-      miperfil: 'Mi Perfil'
+      miperfil: 'Mi Perfil', administradores: 'Administradores'
     };
     return map[this.seccionActiva] ?? 'SESAES';
   }
@@ -58,14 +94,15 @@ toggleSidebarMovil(): void {
   get subtituloSeccion(): string {
     const map: Record<string, string> = {
       inicio: 'Gestiona profesionales, horarios y reservas de bienestar estudiantil.',
-      horario: 'Controla cuándo puede atender cada profesional: disponibilidad, bloqueos y sobrecupos.',
+      horario: 'Visualización de citas, disponibilidad y resumen operativo.',
       citas: 'Revisa, prioriza y cancela las citas agendadas en el centro.',
       profesional: 'Administra el personal médico, psicólogos y especialistas del centro de salud.',
       estudiantes: 'Consulta estudiantes por nombre, RUT o carrera y revisa su ficha.',
       historial: 'Consulta las atenciones que ya ocurrieron y exporta reportes para la CGR.',
       reportes: 'Analiza el funcionamiento del servicio: demanda, cancelaciones y prioridades.',
       configuracion: 'Reglas generales del sistema: citas, horarios, usuarios y seguridad.',
-      miperfil: 'Tu información personal y credenciales de acceso.'
+      miperfil: 'Tu información personal y credenciales de acceso.',
+      administradores: 'Gestiona las cuentas ADMIN y SUPERADMIN del sistema.'
     };
     return map[this.seccionActiva] ?? '';
   }
@@ -74,33 +111,297 @@ toggleSidebarMovil(): void {
     private router: Router,
     private http: HttpClient,
     private cdr: ChangeDetectorRef,
-    private toast: ToastService
+    private toast: ToastService,
+    private auth: AuthService
   ) {}
 
+  hasPermission(permission: Permission): boolean {
+    return this.auth.hasPermission(permission);
+  }
+
+  // ── Identidad real del shell/topbar (SA-1.1) ──────────────────
+  // Fuente de verdad: AuthService / datos de sesión (nombre, foto_url,
+  // rol). NUNCA ConfiguracionCentro.nombre_admin / foto_admin_url.
+  // Desde SA-1.2, Mi Perfil (ver AdminPerfilComponent) también usa
+  // Usuario como fuente de identidad (vía GET/PATCH /usuarios/me) y,
+  // tras guardar, sincroniza esta misma sesión mediante
+  // AuthService.actualizarIdentidadSesion() — por eso ambos quedan
+  // consistentes sin exigir logout/login.
+
+  get nombreUsuario(): string {
+    return this.auth.getNombre() || 'Administrador/a';
+  }
+
+  get fotoUsuarioUrl(): string | null {
+    return this.auth.getFotoUrl();
+  }
+
+  // Mapeo visual del rol real de la sesión. Nunca infiere el rol desde
+  // permisos ni muestra el string técnico "superadmin" tal cual.
+  get rolVisual(): string {
+    return this.auth.getRol() === 'superadmin' ? 'Superadministrador' : 'Administrador';
+  }
+
+  // Iniciales derivadas del nombre real de la sesión.
+  get inicialesUsuario(): string {
+    const nombre = this.auth.getNombre();
+    if (!nombre) return 'AD';
+
+    const palabras = nombre.trim().split(/\s+/).filter(Boolean);
+    if (palabras.length === 0) return 'AD';
+
+    const primera = palabras[0][0] ?? '';
+    const segunda = palabras.length > 1
+      ? (palabras[1][0] ?? '')
+      : (palabras[0][1] ?? '');
+
+    const iniciales = (primera + segunda).toUpperCase();
+    return iniciales || 'AD';
+  }
+  get puedeExportarCgr(): boolean {
+    return this.hasPermission('reportes.cgr.exportar');
+  }
+
+  get puedeConfigGeneral(): boolean {
+    return this.hasPermission('configuracion.gestionar');
+  }
+
+  get puedeConfigCitas(): boolean {
+    return this.hasPermission('configuracion.gestionar');
+  }
+
+  get puedeConfigHorarios(): boolean {
+    return this.hasPermission('agenda.gestionar');
+  }
+
+  get puedeConfigUsuarios(): boolean {
+    return this.hasPermission('usuarios.gestionar');
+  }
+
+  get puedeVerAuditoria(): boolean {
+    return this.hasPermission('auditoria.ver');
+  }
+
+  puedeAccederSeccion(seccion: string): boolean {
+    switch (seccion) {
+      case 'inicio':
+      case 'miperfil':
+        return true;
+      case 'horario':
+      case 'citas':
+        return this.hasPermission('agenda.ver');
+      case 'profesional':
+        return this.hasPermission('profesionales.ver');
+      case 'estudiantes':
+        return this.hasPermission('usuarios.ver');
+      case 'historial':
+      case 'reportes':
+        return this.hasPermission('reportes.ver');
+      case 'configuracion':
+        return (
+          this.puedeConfigGeneral ||
+          this.puedeConfigHorarios ||
+          this.puedeConfigUsuarios ||
+          this.puedeVerAuditoria
+        );
+      // SA-4 — Administradores: gobernanza de cuentas ADMIN/SUPERADMIN.
+      // Único permiso que abre esta sección; hoy solo SUPERADMIN lo
+      // tiene por defecto (ver ROLE_DEFAULT_PERMISSIONS). No hay ruta
+      // nueva ni dashboard nuevo: ADMIN y SUPERADMIN siguen compartiendo
+      // /dashboard/admin y la diferencia es puramente de permiso.
+      case 'administradores':
+        return this.hasPermission('roles.gestionar');
+      default:
+        return false;
+    }
+  }
+
+  puedeAccederTabConfig(tab: ConfigTab): boolean {
+    switch (tab) {
+      case 'general':
+      case 'citas':
+        return this.hasPermission('configuracion.gestionar');
+      case 'horarios':
+        return this.hasPermission('agenda.gestionar');
+      case 'usuarios':
+        return this.hasPermission('usuarios.gestionar');
+      case 'seguridad':
+        return this.hasPermission('auditoria.ver');
+      default:
+        return false;
+    }
+  }
+
+  private asegurarTabConfigPermitida(): void {
+    if (this.puedeAccederTabConfig(this.configTabActiva)) return;
+
+    const primeraPermitida: ConfigTab | undefined = (
+      ['general', 'citas', 'horarios', 'usuarios', 'seguridad'] as ConfigTab[]
+    ).find(tab => this.puedeAccederTabConfig(tab));
+
+    if (primeraPermitida) this.configTabActiva = primeraPermitida;
+  }
+
+  contextoAdministrativoCargando = true;
+  contextoAdministrativoListo = false;
+
+  private limpiarDatosVisiblesDeAccesoAnterior(): void {
+    // Si cambia el rol/perfil durante una sesion, no dejamos datos
+    // privilegiados anteriores visibles mientras llega el nuevo contexto.
+    this.estadisticas = {
+      reservas_hoy: 0,
+      profesionales_activos: 0,
+      horas_disponibles: 0,
+      urgentes: 0
+    };
+
+    this.resumenDia = [];
+    this.actividadReciente = [];
+    this.proximasCitas = [];
+    this.graficoEspecialidad = [];
+    this.graficoSemana = [];
+
+    this.profesionales = [];
+
+    this.notificaciones = [];
+    this.notifNoLeidas = 0;
+    this.notifPanelAbierto = false;
+
+    this.busquedaGlobal = '';
+    this.resultadosBusquedaGlobal = {
+      profesionales: [],
+      estudiantes: []
+    };
+    this.buscandoGlobal = false;
+
+    this.estudiantesAdmin = [];
+    this.estudiantesTotal = 0;
+    this.estudiantesCargando = false;
+    this.fichaEstudianteSeleccionado = null;
+    this.modalPerfilEstudianteAbierto = false;
+
+    this.historialAdmin = [];
+    this.estadisticasEstudiante = null;
+
+    // Si el contexto efectivo cambia mientras había una acción de Agenda
+    // abierta, cerramos cualquier superficie de mutación antes de volver a
+    // evaluar permisos. Así un modal antiguo no sobrevive a una degradación
+    // de permisos durante la misma sesión.
+    this.modalCitaAbierto = false;
+    this.sobrecupoConfirmAbierto = false;
+    this.sobrecupoPendiente = null;
+
+    // A.2B.2: cualquier cambio de contexto invalida también la agenda
+    // operacional que pudo haberse cargado con permisos/scope anteriores.
+    this.citasHorario = [];
+    this.invalidarDisponibilidadRango();
+  }
+
+  private cargarContextoAdministrativoEfectivo(): void {
+    this.contextoAdministrativoCargando = true;
+    this.contextoAdministrativoListo = false;
+
+    this.limpiarDatosVisiblesDeAccesoAnterior();
+
+    this.auth.cargarAccesoAdministrativo().subscribe({
+      next: () => {
+        this.contextoAdministrativoCargando = false;
+        this.contextoAdministrativoListo = true;
+
+        // El backend acaba de confirmar rol, perfil, permisos y alcance.
+        // Si una degradacion deja la seccion actual fuera de alcance,
+        // volvemos a Inicio sin intentar cargarla.
+        if (!this.puedeAccederSeccion(this.seccionActiva)) {
+          this.seccionActiva = 'inicio';
+        }
+
+        if (this.seccionActiva === 'configuracion') {
+          this.asegurarTabConfigPermitida();
+        }
+
+        // Solo ahora se permiten requests administrativos derivados
+        // de permisos.
+        this.cargarDatos();
+        this.cdr.detectChanges();
+      },
+
+      error: () => {
+        // AuthService ya borro su snapshot antes de la request y tambien
+        // ante error. Por tanto hasPermission() permanece fail-closed.
+        this.contextoAdministrativoCargando = false;
+        this.contextoAdministrativoListo = false;
+
+        this.mensajeError =
+          'No se pudo cargar el acceso administrativo actual.';
+
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
   ngOnInit(): void {
-    const temaGuardado = localStorage.getItem('admin_tema_oscuro');
-    if (temaGuardado === 'true') this.temaOscuro = true;
-    this.cargarDatos();
+    const temaGuardado =
+      localStorage.getItem('admin_tema_oscuro');
+
+    if (temaGuardado === 'true') {
+      this.temaOscuro = true;
+    }
+
+    // Esta preparacion no consulta informacion protegida.
     this.generarSemanaActual();
-    this.generarCalendarioInicio();
+
+    // SA-10: no ejecutar cargarDatos() antes de conocer el contexto
+    // efectivo actual del backend.
+    this.cargarContextoAdministrativoEfectivo();
   }
 
   cargarDatos(): void {
-    this.cargarEstadisticas();
-    this.cargarProximasCitas();
-    this.cargarGraficoEspecialidad();
-    this.cargarGraficoSemana();
-    this.cargarProfesionales();
-    this.cargarHistorial();
-    this.cargarNotificaciones();
-    this.cargarResumenDia();
-    this.cargarActividadReciente();
+    if (this.hasPermission('reportes.ver')) {
+      this.cargarEstadisticas();
+      this.cargarGraficoEspecialidad();
+      this.cargarGraficoSemana();
+      this.cargarHistorial();
+    }
+
+    if (this.hasPermission('agenda.ver')) {
+      this.cargarProximasCitas();
+      this.cargarResumenDia();
+      this.cargarDiasCerrados();
+    }
+
+    if (this.hasPermission('agenda.gestionar')) {
+      this.cargarSolicitudesHorarioAdmin();
+    }
+
+    if (this.hasPermission('profesionales.ver')) {
+      this.cargarProfesionales();
+    } else if (this.hasPermission('agenda.ver')) {
+      this.cargarProfesionalesAgenda();
+    }
+
+    if (this.hasPermission('usuarios.gestionar')) {
+      this.cargarNotificaciones();
+    }
+
+    if (this.hasPermission('auditoria.ver')) {
+      this.cargarActividadReciente();
+    }
+
     this.cargarConfiguracionCentro();
-    this.cargarSolicitudesHorarioAdmin();
-    this.cargarDiasCerrados();
+  }
+
+  onSesionAdministrativaActualizada(): void {
+    // actualizarRolSesion() invalida el snapshot anterior en AuthService.
+    // Volvemos a consultar backend antes de habilitar cualquier capacidad.
+    this.cargarContextoAdministrativoEfectivo();
   }
 
   navegarA(seccion: string): void {
+  if (!this.puedeAccederSeccion(seccion)) {
+    this.toast.error('No tienes permisos para acceder a esta sección.');
+    return;
+  }
+
   this.seccionActiva = seccion;
   this.mensajeExito  = '';
   this.mensajeError  = '';
@@ -108,20 +409,27 @@ toggleSidebarMovil(): void {
   this.sidebarMovilAbierta = false;
   this.busquedaGlobal = '';
   this.resultadosBusquedaGlobal = { profesionales: [], estudiantes: [] };
+
   if (seccion === 'configuracion') {
-    this.cargarAuditoria(); this.cargarConfiguracionCentro(); this.cargarDiasCerrados();
-    this.cargarConfiguracionCitas();
+    this.asegurarTabConfigPermitida();
+    if (this.puedeConfigGeneral) this.cargarConfiguracionCentro();
+    if (this.puedeConfigCitas) this.cargarConfiguracionCitas();
+    if (this.puedeConfigHorarios) this.cargarDiasCerrados();
+    if (this.puedeVerAuditoria) this.cargarAuditoria();
   }
-  if (seccion === 'citas') { this.cargarCitas(); }
-  if (seccion === 'estudiantes') { this.cargarEstudiantes(); }
-  if (seccion === 'reportes') {
-    this.cargarEstadisticas(); this.cargarGraficoEspecialidad(); this.cargarGraficoSemana();
+
+  if (seccion === 'estudiantes' && this.hasPermission('usuarios.ver')) {
+    this.cargarEstudiantes();
+  }
+
+  if (seccion === 'reportes' && this.hasPermission('reportes.ver')) {
+    this.cargarEstadisticas();
+    this.cargarGraficoEspecialidad();
+    this.cargarGraficoSemana();
     this.cargarHistorial();
   }
-  if (seccion === 'miperfil') { this.cargarConfiguracionCentro(); }
-  if (seccion === 'inicio') {
-    setTimeout(() => this.crearGraficos(), 0);
-  }
+
+  if (seccion === 'miperfil') this.cargarMiPerfil();
 }
 
   // ══════════════════════════════════════
@@ -138,10 +446,19 @@ toggleSidebarMovil(): void {
   buscarGlobal(): void {
     const q = this.busquedaGlobal.trim().toLowerCase();
     if (q.length < 2) { this.resultadosBusquedaGlobal = { profesionales: [], estudiantes: [] }; return; }
-    const profs = this.profesionales.filter(p =>
-      p.nombre?.toLowerCase().includes(q) || p.especialidad?.toLowerCase().includes(q)
-    ).slice(0, 5);
+    const profs = this.hasPermission('profesionales.ver')
+      ? this.profesionales.filter(p =>
+          p.nombre?.toLowerCase().includes(q) || p.especialidad?.toLowerCase().includes(q)
+        ).slice(0, 5)
+      : [];
+
     this.resultadosBusquedaGlobal = { profesionales: profs, estudiantes: [] };
+
+    if (!this.hasPermission('usuarios.ver')) {
+      this.buscandoGlobal = false;
+      return;
+    }
+
     this.buscandoGlobal = true;
     this.http.get<any[]>(`${API}/admin/estudiantes?q=${encodeURIComponent(q)}`).subscribe({
       next: (data) => {
@@ -154,20 +471,26 @@ toggleSidebarMovil(): void {
   }
 
   irAProfesionalDesdeBusqueda(p: any): void {
+    if (!this.hasPermission('profesionales.ver')) return;
     this.busquedaGlobal = '';
     this.resultadosBusquedaGlobal = { profesionales: [], estudiantes: [] };
     this.navegarA('profesional');
-    this.busquedaProfesional = p.nombre;
+    // La búsqueda local de la tabla ahora vive en AdminProfesionalesComponent;
+    // se espera al próximo tick para que el *ngIf del hijo ya lo haya creado.
+    setTimeout(() => {
+      if (this.adminProfesionalesRef) this.adminProfesionalesRef.busquedaProfesional = p.nombre;
+    }, 0);
   }
 
   irAEstudianteDesdeBusqueda(e: any): void {
+    if (!this.hasPermission('usuarios.ver')) return;
     this.busquedaGlobal = '';
     this.resultadosBusquedaGlobal = { profesionales: [], estudiantes: [] };
     this.navegarA('estudiantes');
     setTimeout(() => this.verPerfilEstudianteAdmin(e), 0);
   }
 
-  cerrarSesion(): void { localStorage.clear(); window.location.href = '/login'; }
+  cerrarSesion(): void { this.auth.logout(); this.router.navigate(['/login']); }
 
   toggleTema(): void {
     this.temaOscuro = !this.temaOscuro;
@@ -228,8 +551,10 @@ toggleSidebarMovil(): void {
   }
 
   marcarTodasLeidas(): void {
-    const adminId = Number(localStorage.getItem('usuario_id')) || 11;
-    this.http.patch(`${API}/notificaciones/leer-todas/${adminId}`, {}).subscribe({
+    const usuarioId = this.auth.getUsuarioId();
+    if (usuarioId === null) return;
+
+    this.http.patch(`${API}/notificaciones/leer-todas/${usuarioId}`, {}).subscribe({
       next: () => {
         this.notificaciones.forEach(n => n.leida = true);
         this.notifNoLeidas = 0;
@@ -310,23 +635,28 @@ toggleSidebarMovil(): void {
   // ══════════════════════════════════════
 
   resumenDia: any[] = [];
+  actualizandoDisponibilidad = false;
 
   cargarResumenDia(): void {
+    if (!this.hasPermission('agenda.ver')) {
+      this.resumenDia = [];
+      this.actualizandoDisponibilidad = false;
+      return;
+    }
+    this.actualizandoDisponibilidad = true;
     this.http.get<any[]>(`${API}/admin/resumen-dia`).subscribe({
       next: (data) => {
         this.resumenDia = data ?? [];
+        this.actualizandoDisponibilidad = false;
         this.cdr.detectChanges();
       },
-      error: () => {}
+      error: () => {
+        this.actualizandoDisponibilidad = false;
+        this.cdr.detectChanges();
+      }
     });
   }
 
-  getIconoEstadoProf(estado: string): string {
-    if (estado === 'activo') return '✅';
-    if (estado === 'licencia') return '🔴';
-    if (estado === 'inasistencia') return '⚠️';
-    return '⚪';
-  }
 
   // ══════════════════════════════════════
   // ACTIVIDAD RECIENTE
@@ -335,6 +665,11 @@ toggleSidebarMovil(): void {
   actividadReciente: any[] = [];
 
   cargarActividadReciente(): void {
+    if (!this.hasPermission('auditoria.ver')) {
+      this.actividadReciente = [];
+      return;
+    }
+
     this.http.get<any[]>(`${API}/admin/auditoria`).subscribe({
       next: (data) => {
         this.actividadReciente = (data ?? []).slice(0,5).map(a => ({
@@ -374,6 +709,10 @@ toggleSidebarMovil(): void {
   proximasCitas: any[] = [];
 
   cargarProximasCitas(): void {
+    if (!this.hasPermission('agenda.ver')) {
+      this.proximasCitas = [];
+      return;
+    }
     this.http.get<any[]>(`${API}/admin/proximas-citas`).subscribe({
       next: (data) => {
         this.proximasCitas = data ?? [];
@@ -384,6 +723,7 @@ toggleSidebarMovil(): void {
   }
 
   marcarInasistencia(cita: any): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
     if (!confirm(`¿Marcar inasistencia del estudiante ${cita.estudiante}?`)) return;
     this.http.patch(`${API}/admin/citas/${cita.id}/cancelar`, { motivo: 'inasistencia' }).subscribe({
       next: () => {
@@ -399,6 +739,7 @@ toggleSidebarMovil(): void {
   }
 
   cancelarCitaAdmin(cita: any): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
     if (!confirm(`¿Cancelar la cita de ${cita.estudiante}?`)) return;
     this.http.patch(`${API}/admin/citas/${cita.id}/cancelar`, { motivo: 'Cancelada por administrador' }).subscribe({
       next: () => {
@@ -417,89 +758,28 @@ toggleSidebarMovil(): void {
 
   // ══════════════════════════════════════
   // GRÁFICOS
+  // El shell conserva datos/HTTP/exportación porque graficoEspecialidad
+  // también alimenta Reportes. La renderización Chart.js vive en Inicio.
   // ══════════════════════════════════════
 
-  @ViewChild('chartEspecialidad') chartEspecialidadRef!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('chartSemana') chartSemanaRef!: ElementRef<HTMLCanvasElement>;
-  private chartEspecialidad?: Chart;
-  private chartSemana?: Chart;
-
-  readonly coloresGrafico = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#8b5cf6', '#64748b'];
-
   graficoEspecialidad: any[] = [];
-  graficoSemana:       any[] = [];
-  filtroGraficoMes          = '';
-  filtroGraficoAnio         = new Date().getFullYear();
-  filtroGraficoCarrera      = '';
-
-  readonly meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
-                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-  get aniosDisponiblesGrafico(): number[] {
-    const actual = new Date().getFullYear();
-    const anios: number[] = [];
-    for (let a = actual + 1; a >= actual - 3; a--) anios.push(a);
-    return anios;
-  }
-
-  ngAfterViewInit(): void {
-    this.crearGraficos();
-  }
-
-  ngOnDestroy(): void {
-    this.chartEspecialidad?.destroy();
-    this.chartSemana?.destroy();
-  }
-
-private crearGraficos(): void {
-    this.chartEspecialidad?.destroy();
-    this.chartSemana?.destroy();
-
-    if (this.chartEspecialidadRef) {
-      this.chartEspecialidad = new Chart(this.chartEspecialidadRef.nativeElement, {
-        type: 'doughnut',
-        data: { labels: [], datasets: [{ data: [], backgroundColor: this.coloresGrafico, borderWidth: 2 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-      });
-    }
-    if (this.chartSemanaRef) {
-      this.chartSemana = new Chart(this.chartSemanaRef.nativeElement, {
-        type: 'line',
-        data: { labels: [], datasets: [{ data: [], borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.1)', fill: true, tension: 0.3, pointRadius: 3 }] },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-        }
-      });
-    }
-
-    this.actualizarGraficoEspecialidad();
-    this.actualizarGraficoSemana();
-}
-
-  private actualizarGraficoEspecialidad(): void {
-    if (!this.chartEspecialidad) return;
-    this.chartEspecialidad.data.labels = this.graficoEspecialidad.map(d => d.especialidad);
-    this.chartEspecialidad.data.datasets[0].data = this.graficoEspecialidad.map(d => d.cantidad);
-    this.chartEspecialidad.update();
-  }
-
-  private actualizarGraficoSemana(): void {
-    if (!this.chartSemana) return;
-    this.chartSemana.data.labels = this.graficoSemana.map(d => d.dia);
-    this.chartSemana.data.datasets[0].data = this.graficoSemana.map(d => d.cantidad);
-    this.chartSemana.update();
-  }
+  graficoSemana: any[] = [];
+  filtroGraficoMes = '';
+  filtroGraficoAnio = new Date().getFullYear();
+  filtroGraficoCarrera = '';
 
   cargarGraficoEspecialidad(): void {
     let url = `${API}/admin/graficos/especialidad?anio=${this.filtroGraficoAnio}`;
-    if (this.filtroGraficoMes)     url += `&mes=${this.filtroGraficoMes}`;
-    if (this.filtroGraficoCarrera) url += `&carrera=${encodeURIComponent(this.filtroGraficoCarrera)}`;
+    if (this.filtroGraficoMes) {
+      url += `&mes=${this.filtroGraficoMes}`;
+    }
+    if (this.filtroGraficoCarrera) {
+      url += `&carrera=${encodeURIComponent(this.filtroGraficoCarrera)}`;
+    }
+
     this.http.get<any[]>(url).subscribe({
       next: (data) => {
         this.graficoEspecialidad = data ?? [];
-        this.actualizarGraficoEspecialidad();
         this.cdr.detectChanges();
       },
       error: () => {}
@@ -510,7 +790,6 @@ private crearGraficos(): void {
     this.http.get<any[]>(`${API}/admin/graficos/semana`).subscribe({
       next: (data) => {
         this.graficoSemana = data ?? [];
-        this.actualizarGraficoSemana();
         this.cdr.detectChanges();
       },
       error: () => {}
@@ -518,23 +797,41 @@ private crearGraficos(): void {
   }
 
   exportarEspecialidadExcel(): void {
-    this.exportarComoExcel(this.graficoEspecialidad.map(d => ({
-      Especialidad: d.especialidad, Cantidad: d.cantidad, Porcentaje: d.porcentaje + '%'
-    })), 'citas_por_especialidad');
+    this.exportarComoXlsx(
+      this.graficoEspecialidad.map(d => ({
+        Especialidad: d.especialidad,
+        Cantidad: d.cantidad,
+        Porcentaje: d.porcentaje + '%'
+      })),
+      'citas_por_especialidad',
+      'Citas por especialidad'
+    );
   }
 
   exportarSemanaExcel(): void {
-    this.exportarComoExcel(this.graficoSemana.map(d => ({
-      Día: d.dia, Fecha: d.fecha, Cantidad: d.cantidad
-    })), 'citas_por_semana');
+    this.exportarComoXlsx(
+      this.graficoSemana.map(d => ({
+        Día: d.dia,
+        Fecha: d.fecha,
+        Cantidad: d.cantidad
+      })),
+      'citas_por_semana',
+      'Citas por semana'
+    );
   }
-
   // ══════════════════════════════════════
   // EXPORTACIÓN CGR
   // ══════════════════════════════════════
 
-  exportarCGR2025(): void { window.open(`${API}/admin/exportar/cgr?anio=2025`, '_blank'); }
-  exportarCGR2026(): void { window.open(`${API}/admin/exportar/cgr?anio=2026&fecha_fin=2026-05-31`, '_blank'); }
+  exportarCGR2025(): void {
+    if (!this.puedeExportarCgr) return;
+    window.open(`${API}/admin/exportar/cgr?anio=2025`, '_blank');
+  }
+
+  exportarCGR2026(): void {
+    if (!this.puedeExportarCgr) return;
+    window.open(`${API}/admin/exportar/cgr?anio=2026&fecha_fin=2026-05-31`, '_blank');
+  }
 
   // Selector de año dinámico para CGR (reemplaza los botones fijos 2025/2026)
   cgrAnio     = new Date().getFullYear();
@@ -548,15 +845,45 @@ private crearGraficos(): void {
   }
 
   exportarCGR(): void {
+    if (!this.puedeExportarCgr) return;
+
     let url = `${API}/admin/exportar/cgr?anio=${this.cgrAnio}`;
     if (this.cgrFechaFin) url += `&fecha_fin=${this.cgrFechaFin}`;
     window.open(url, '_blank');
   }
-  exportarListadoAlumnos(): void { window.open(`${API}/admin/exportar/alumnos`, '_blank'); }
+  exportarListadoAlumnos(): void {
+    if (!this.puedeExportarCgr) return;
+    window.open(`${API}/admin/exportar/alumnos`, '_blank');
+  }
 
   // ══════════════════════════════════════
   // HORARIO
   // ══════════════════════════════════════
+  readonly horarioBloqueEstadoFn = (fecha: string, hora: string): string =>
+    this.getBloqueEstado(fecha, hora);
+
+  readonly horarioBloqueInfoFn = (fecha: string, hora: string): string =>
+    this.getBloqueInfo(fecha, hora);
+
+  // A.4.7A.1 — la grilla ahora consume esto en vez de horarioBloqueInfoFn
+  // para poder renderizar más de una cita por celda.
+  readonly horarioBloqueCitasFn = (fecha: string, hora: string): any[] =>
+    this.getBloqueCitas(fecha, hora);
+
+  // A.4.7A — affordance visual: el dominio sigue diciendo 'ocupado'
+  // (getBloqueEstado no cambia), esta función solo informa si ADEMÁS
+  // existe la posibilidad de un sobrecupo real sobre ese slot ocupado.
+  readonly horarioBloqueSobrecupoDisponibleFn = (fecha: string, hora: string): boolean =>
+    this.puedeSolicitarSobrecupo(fecha, hora);
+
+  readonly horarioFormatearFechaFn = (fecha: string): string =>
+    this.formatearFecha(fecha);
+
+  readonly horarioEsFeriadoFn = (fecha: string | undefined): boolean =>
+    this.esFeriado(fecha);
+
+  readonly horarioNombreFeriadoFn = (fecha: string | undefined): string =>
+    this.nombreFeriado(fecha);
 
   semanaActual:    any[]         = [];
   diaSeleccionado: string | null = null;
@@ -565,15 +892,46 @@ private crearGraficos(): void {
   semanaLabel                    = '';
   modalCitaAbierto               = false;
 
-  // Horario general de atención del centro — regla institucional real
-  // (debe coincidir con backend/app/reglas_horario.py): Lunes a Jueves
-  // 09:00-17:30, Viernes 09:00-16:30. La grilla usa el rango más largo
-  // (Lun-Jue) para las filas, y las celdas de Viernes después de las 16:30
-  // se muestran como "fuera del horario institucional" (no agendables,
-  // ni siquiera como sobrecupo — ver esFueraDeRangoInstitucional).
+  // Horario general de atención del centro. Antes esto era un rango
+  // plano 08:00-18:00 igual para todos los días; ahora refleja el
+  // rango institucional real (Lunes-Jueves 09:00-17:30, Viernes
+  // 09:00-16:30 — igual que app.reglas_horario en el backend, ver
+  // RANGO_INSTITUCIONAL_DIA más abajo), para que el Viernes la grilla
+  // no muestre horas "fantasma" después del cierre real. La grilla
+  // sigue mostrando una sola tabla de horas para toda la semana (todas
+  // las columnas comparten filas), así que horasGrilla usa el rango
+  // MÁS ANCHO de la semana (Lunes-Jueves, que cierra más tarde); las
+  // celdas de un día que cierra antes (Viernes) se marcan
+  // 'cerrado-centro' vía RANGO_INSTITUCIONAL_DIA en getBloqueEstado.
   private readonly CENTRO_HORA_INICIO = '09:00';
   private readonly CENTRO_HORA_FIN    = '17:30';
-  private readonly VIERNES_HORA_FIN   = '16:30';
+
+  // {día de semana (0=Lunes...6=Domingo): [inicio, fin] | null}. Mismo
+  // rango que app.reglas_horario.RANGO_INSTITUCIONAL en el backend —
+  // si alguno cambia, deben cambiar juntos.
+  private readonly RANGO_INSTITUCIONAL_DIA: Record<number, [string, string] | null> = {
+    0: ['09:00', '17:30'], 1: ['09:00', '17:30'], 2: ['09:00', '17:30'],
+    3: ['09:00', '17:30'], 4: ['09:00', '16:30'], 5: null, 6: null,
+  };
+
+  // Día de semana (0=Lunes...6=Domingo) de una fecha "YYYY-MM-DD",
+  // calculado en hora LOCAL (ver parseDateStrLocal: nunca usar
+  // new Date("YYYY-MM-DD") directo, se corre un día en UTC-).
+  private diaSemanaDeFecha(fecha: string): number {
+    return (this.parseDateStrLocal(fecha).getDay() + 6) % 7;
+  }
+
+  // ¿Esta fecha+hora cae fuera del rango institucional del CENTRO para
+  // ese día de semana? (fin de semana, o después del cierre de ese día
+  // puntual — p. ej. Viernes después de las 16:30). Distinto de
+  // esFueraDeHorarioProfesional(), que es sobre la jornada de ESE
+  // profesional en particular.
+  private fueraDeRangoInstitucional(fecha: string, hora: string): boolean {
+    const rango = this.RANGO_INSTITUCIONAL_DIA[this.diaSemanaDeFecha(fecha)];
+    if (!rango) return true; // fin de semana
+    const h = hora.substring(0, 5);
+    return h < rango[0] || h >= rango[1];
+  }
 
   get horasGrilla(): string[] {
     const prof = this.profesionales.find(p => String(p.id) === String(this.filtroProfesionalId));
@@ -603,7 +961,19 @@ private crearGraficos(): void {
     return !!p && p.estado && p.estado !== 'activo';
   }
 
+  get citasHorarioAgenda(): any[] {
+    return this.citasHorario;
+  }
+
   private citasHorario: any[] = [];
+
+  // A.2B.2 — disponibilidad de Semana. El backend es la única fuente de
+  // verdad para decidir si un slot sin cita está disponible o bloqueado.
+  // Se indexa por fecha+hora para lookup O(1) desde la grilla.
+  private disponibilidadPorFecha: Record<string, Record<string, SlotDisponibilidadBackend>> = {};
+  disponibilidadCargando = false;
+  disponibilidadError = false;
+  private disponibilidadRequestId = 0;
 
   busquedaEstudiante          = '';
   resultadosEstudiante: any[] = [];
@@ -616,71 +986,118 @@ private crearGraficos(): void {
       : this.profesionales;
   }
 
-  filtrarProfesionales(): void { this.filtroProfesionalId = ''; this.diaSeleccionado = null; }
+  filtrarProfesionales(): void {
+    this.filtroProfesionalId = '';
+    this.diaSeleccionado = null;
+    this.citasHorario = [];
+    this.invalidarDisponibilidadRango();
+  }
+
+  private invalidarDisponibilidadRango(): number {
+    this.disponibilidadRequestId += 1;
+    this.disponibilidadPorFecha = {};
+    this.disponibilidadCargando = false;
+    this.disponibilidadError = false;
+    return this.disponibilidadRequestId;
+  }
+
+  private indexarDisponibilidadRango(
+    respuesta: RespuestaDisponibilidadRango
+  ): Record<string, Record<string, SlotDisponibilidadBackend>> {
+    const mapa: Record<string, Record<string, SlotDisponibilidadBackend>> = {};
+
+    for (const dia of respuesta.dias ?? []) {
+      const fecha = String(dia?.fecha ?? '');
+      if (!fecha || !Array.isArray(dia?.slots)) continue;
+
+      const slots: Record<string, SlotDisponibilidadBackend> = {};
+      for (const slot of dia.slots) {
+        const hora = String(slot?.hora ?? '').substring(0, 5);
+        if (!hora) continue;
+        slots[hora] = slot;
+      }
+      mapa[fecha] = slots;
+    }
+
+    return mapa;
+  }
+
+  private respuestaDisponibilidadCorresponde(
+    respuesta: RespuestaDisponibilidadRango | null | undefined,
+    profesionalId: number,
+    fechaInicio: string,
+    fechaFin: string
+  ): respuesta is RespuestaDisponibilidadRango {
+    return !!respuesta
+      && Number(respuesta.profesional_id) === profesionalId
+      && respuesta.fecha_inicio === fechaInicio
+      && respuesta.fecha_fin === fechaFin
+      && Array.isArray(respuesta.dias);
+  }
 
   cargarHorarioProfesional(): void {
-    if (!this.filtroProfesionalId) return;
-    this.http.get<any[]>(`${API}/profesional/${this.filtroProfesionalId}/citas`).subscribe({
+    const requestId = this.invalidarDisponibilidadRango();
+    this.citasHorario = [];
+
+    if (!this.hasPermission('agenda.ver')) return;
+
+    const profesionalId = Number(this.filtroProfesionalId);
+    const fechaInicio = String(this.semanaActual[0]?.fecha ?? '');
+    const fechaFin = String(this.semanaActual[this.semanaActual.length - 1]?.fecha ?? '');
+
+    if (!Number.isInteger(profesionalId) || profesionalId <= 0 || !fechaInicio || !fechaFin) return;
+
+    // Citas reales y disponibilidad se consultan una vez por selección/rango.
+    // El mismo token evita que respuestas de un profesional/semana anterior
+    // vuelvan a pintar la grilla después de una navegación rápida.
+    this.http.get<any[]>(`${API}/agenda/profesional/${profesionalId}/citas`).subscribe({
       next: (data) => {
+        if (requestId !== this.disponibilidadRequestId) return;
         this.citasHorario = data ?? [];
         this.cdr.detectChanges();
       },
-      error: () => { this.citasHorario = []; }
+      error: () => {
+        if (requestId !== this.disponibilidadRequestId) return;
+        this.citasHorario = [];
+        this.cdr.detectChanges();
+      }
     });
-  }
 
-  // ══════════════════════════════════════
-  // CALENDARIO DE INICIO (solo visual — mes completo, sin seleccion de dia)
-  // ══════════════════════════════════════
+    this.disponibilidadCargando = true;
+    const url = `${API}/agenda/profesional/${profesionalId}/disponibilidad`
+      + `?fecha_inicio=${encodeURIComponent(fechaInicio)}`
+      + `&fecha_fin=${encodeURIComponent(fechaFin)}`;
 
-  calMesVisible  = new Date().getMonth();
-  calAnioVisible = new Date().getFullYear();
-  calDiasMes: any[] = [];
+    this.http.get<RespuestaDisponibilidadRango>(url).subscribe({
+      next: (respuesta) => {
+        if (requestId !== this.disponibilidadRequestId) return;
 
-  get calNombreMesVisible(): string {
-    return `${this.meses[this.calMesVisible]} ${this.calAnioVisible}`;
-  }
+        if (!this.respuestaDisponibilidadCorresponde(
+          respuesta,
+          profesionalId,
+          fechaInicio,
+          fechaFin
+        )) {
+          this.disponibilidadPorFecha = {};
+          this.disponibilidadCargando = false;
+          this.disponibilidadError = true;
+          this.cdr.detectChanges();
+          return;
+        }
 
-  generarCalendarioInicio(): void {
-    const primerDia = new Date(this.calAnioVisible, this.calMesVisible, 1);
-    const ultimoDia = new Date(this.calAnioVisible, this.calMesVisible + 1, 0);
-    const hoy       = this.toDateStr(new Date());
-    const offset    = (primerDia.getDay() + 6) % 7;
-    const celdas: any[] = [];
-    for (let i = 0; i < offset; i++) celdas.push(null);
-    for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
-      const fechaStr = `${this.calAnioVisible}-${String(this.calMesVisible+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-      celdas.push({ num: dia, fecha: fechaStr, esHoy: fechaStr === hoy });
-    }
-    this.calDiasMes = celdas;
-  }
-
-  calMesAnterior(): void {
-    this.calMesVisible--;
-    if (this.calMesVisible < 0) { this.calMesVisible = 11; this.calAnioVisible--; }
-    this.generarCalendarioInicio();
-  }
-
-  calMesSiguiente(): void {
-    this.calMesVisible++;
-    if (this.calMesVisible > 11) { this.calMesVisible = 0; this.calAnioVisible++; }
-    this.generarCalendarioInicio();
-  }
-
-  // Info del día al hacer clic en el mini-calendario (feriado chileno +
-  // días internacionales ONU) — puramente informativo, no bloquea nada.
-  diaSeleccionadoInfo: string | null = null;
-  seleccionarDiaInfo(dia: any): void {
-    if (!dia) return;
-    this.diaSeleccionadoInfo = this.diaSeleccionadoInfo === dia.fecha ? null : dia.fecha;
-  }
-  infoDelDia(fecha: string | undefined): string[] {
-    if (!fecha) return [];
-    const info: string[] = [];
-    const feriado = obtenerFeriado(fecha);
-    if (feriado) info.push(`🇨🇱 Feriado: ${feriado.nombre}`);
-    for (const d of obtenerDiasInternacionales(fecha)) info.push(`🌍 ${d.nombre}`);
-    return info;
+        this.disponibilidadPorFecha = this.indexarDisponibilidadRango(respuesta);
+        this.disponibilidadCargando = false;
+        this.disponibilidadError = false;
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        if (requestId !== this.disponibilidadRequestId) return;
+        this.disponibilidadPorFecha = {};
+        this.disponibilidadCargando = false;
+        this.disponibilidadError = true;
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   generarSemanaActual(): void {
@@ -691,17 +1108,35 @@ private crearGraficos(): void {
   }
 
   private buildSemana(lunes: Date): void {
-    const nombres = ['Lun','Mar','Mié','Jue','Vie'];
+    const nombres = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
     const hoyStr  = this.toDateStr(new Date());
-    // Solo Lunes a Viernes: el centro nunca atiende sábado ni domingo.
-    this.semanaActual = Array.from({ length: 5 }, (_, i) => {
+    this.semanaActual = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(lunes); d.setDate(lunes.getDate() + i);
       const f = this.toDateStr(d);
       return { nombre: nombres[i], num: d.getDate(), fecha: f, esHoy: f === hoyStr };
     });
+
+    // Corrección A.2B v2, punto 1: si el día previamente seleccionado ya no
+    // pertenece a la semana recién construida (navegación de semana), se
+    // limpia — de lo contrario el panel contextual seguía mostrando un día
+    // de la semana anterior aunque ya no fuera visible en la grilla.
+    if (this.diaSeleccionado && !this.semanaActual.some(d => d.fecha === this.diaSeleccionado)) {
+      this.diaSeleccionado = null;
+    }
+
     const mesesN = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    const [anio, mes] = this.semanaActual[0].fecha.split('-').map(Number);
-    this.semanaLabel  = `${mesesN[mes-1]} ${anio}`;
+    const inicio = this.parseDateStrLocal(this.semanaActual[0].fecha);
+    const fin = this.parseDateStrLocal(this.semanaActual[6].fecha);
+    const mesInicio = mesesN[inicio.getMonth()];
+    const mesFin = mesesN[fin.getMonth()];
+
+    if (inicio.getFullYear() === fin.getFullYear() && inicio.getMonth() === fin.getMonth()) {
+      this.semanaLabel = `Semana ${inicio.getDate()} – ${fin.getDate()} ${mesInicio} ${inicio.getFullYear()}`;
+    } else if (inicio.getFullYear() === fin.getFullYear()) {
+      this.semanaLabel = `Semana ${inicio.getDate()} ${mesInicio} – ${fin.getDate()} ${mesFin} ${inicio.getFullYear()}`;
+    } else {
+      this.semanaLabel = `Semana ${inicio.getDate()} ${mesInicio} ${inicio.getFullYear()} – ${fin.getDate()} ${mesFin} ${fin.getFullYear()}`;
+    }
   }
 
   private toDateStr(d: Date): string {
@@ -728,133 +1163,176 @@ private crearGraficos(): void {
 
   irAHoy(): void { this.generarSemanaActual(); if (this.filtroProfesionalId) this.cargarHorarioProfesional(); }
 
-// Convierte el día de semana de una fecha (YYYY-MM-DD) a la convención del
-  // backend: 0=Lunes ... 4=Viernes (JS Date.getDay() usa 0=Domingo).
-  private diaSemanaBackend(fecha: string): number {
-    const jsDay = this.parseDateStrLocal(fecha).getDay(); // 0=Dom ... 6=Sáb
-    return (jsDay + 6) % 7; // 0=Lun ... 6=Dom
-  }
-
-  /** Bloques semanales aprobados del profesional actual, para el día de esa fecha. */
-  private bloquesDelDia(fecha: string): any[] {
+// ¿La hora indicada cae dentro del horario de almuerzo del profesional actual?
+  private esHoraDeAlmuerzo(hora: string): boolean {
     const prof = this.profesionalActual;
-    if (!prof?.bloques_semanales?.length) return [];
-    const dia = this.diaSemanaBackend(fecha);
-    return prof.bloques_semanales.filter((b: any) => b.dia_semana === dia);
-  }
-
-  // ¿La hora indicada cae dentro del horario de almuerzo del profesional actual?
-  // Si el profesional ya tiene agenda semanal por bloques, se usan ESOS
-  // bloques tipo "colacion" para ese día en particular (permite colación
-  // distinta cada día); si no, se usa el horario simple de siempre.
-  private esHoraDeAlmuerzo(hora: string, fecha?: string): boolean {
-    const prof = this.profesionalActual;
-    if (!prof) return false;
+    if (!prof || !prof.hora_almuerzo_inicio || !prof.hora_almuerzo_fin) return false;
     const h = hora.substring(0, 5);
-    if (fecha) {
-      const bloques = this.bloquesDelDia(fecha);
-      if (bloques.length) {
-        return bloques.some(b => b.tipo === 'colacion' && h >= b.hora_inicio && h < b.hora_fin);
-      }
-    }
-    if (!prof.hora_almuerzo_inicio || !prof.hora_almuerzo_fin) return false;
     return h >= prof.hora_almuerzo_inicio && h < prof.hora_almuerzo_fin;
   }
 
   // ¿La hora indicada cae fuera del horario declarado por el profesional?
   // (pero SÍ dentro del horario general del centro, por eso igual aparece
   // en la grilla — solo que en gris, y solo agendable por el admin como sobrecupo)
-  // Si el profesional ya migró a agenda por bloques, se usa la cobertura de
-  // bloques "disponible" de ESE día en particular en vez del rango único.
-  private esFueraDeHorarioProfesional(hora: string, fecha?: string): boolean {
+  private esFueraDeHorarioProfesional(hora: string): boolean {
     const prof = this.profesionalActual;
     if (!prof) return false;
-    const h = hora.substring(0, 5);
-
-    if (fecha) {
-      const bloques = this.bloquesDelDia(fecha);
-      if (bloques.length) {
-        const disponibles = bloques.filter(b => b.tipo === 'disponible');
-        // Fuera de horario si NO cae dentro de ningún bloque "disponible" de ese día.
-        return !disponibles.some(b => h >= b.hora_inicio && h < b.hora_fin);
-      }
-    }
-
     const inicio = prof.horario_inicio || this.CENTRO_HORA_INICIO;
     const fin    = prof.horario_fin    || this.CENTRO_HORA_FIN;
+    const h = hora.substring(0, 5);
     return h < inicio || h >= fin;
   }
 
-  private buscarCitaEnBloque(fecha: string, hora: string): any {
-    return this.citasHorario.find(c => {
-      if (c.fecha !== fecha) return false;
-      if (c.estado === 'cancelada' || c.estado === 'inasistencia') return false;
-      return this.convertirA24h(c.hora) === hora.substring(0,5);
-    });
+  // A.4.7A.1 — orden determinista de presentación dentro de un mismo
+  // bloque (no depende del orden en que backend entregue el arreglo).
+  // Regla explícita, documentada, y aplicada SIEMPRE — nunca inferida
+  // de la posición de llegada:
+  //   1) urgente primero — es la prioridad clínica más alta; ya era el
+  //      estado de mayor prioridad visual en getBloqueEstado() para un
+  //      único slot (ver arriba), y se mantiene consistente al listar
+  //      varias citas del mismo bloque.
+  //   2) normal (ni urgente ni sobrecupo) a continuación.
+  //   3) sobrecupo al final — es la cita añadida POR SOBRE la capacidad
+  //      normal del slot, por eso se lista después de lo que ya ocupaba
+  //      el cupo original.
+  // urgente y sobrecupo son mutuamente excluyentes por regla de negocio
+  // ya existente (mostrarToggleUrgente / crearCitaDesdeHorario), así
+  // que 1) y 3) nunca compiten por la misma cita.
+  // Desempate (dos citas del mismo rango, p. ej. dos normales en el
+  // mismo slot — caso ya soportado por backend): por id ascendente: es
+  // un valor estable e independiente del orden de llegada del arreglo.
+  // Si faltara id, por nombre de estudiante — nunca por posición.
+  private rangoOrdenCita(c: any): number {
+    if (c?.urgente)   return 0;
+    if (c?.sobrecupo) return 2;
+    return 1;
   }
 
-  /** Igual que buscarCitaEnBloque pero pública, para que el template arme la tarjeta (nombre, RUT, badges). */
-  citaEnBloque(fecha: string, hora: string): any {
-    return this.buscarCitaEnBloque(fecha, hora);
+  private compararCitasBloque(a: any, b: any): number {
+    const diffRango = this.rangoOrdenCita(a) - this.rangoOrdenCita(b);
+    if (diffRango !== 0) return diffRango;
+
+    const idA = Number(a?.id);
+    const idB = Number(b?.id);
+    if (Number.isFinite(idA) && Number.isFinite(idB) && idA !== idB) {
+      return idA - idB;
+    }
+    return String(a?.estudiante ?? '').localeCompare(String(b?.estudiante ?? ''));
+  }
+
+  // A.4.7A.1 — antes este helper usaba Array.find() y devolvía solo la
+  // PRIMERA cita que calzara con fecha+hora. Con soporte de sobrecupo
+  // real (A.4.4), un mismo slot puede tener legítimamente más de una
+  // cita operativa (p. ej. una normal + una sobrecupo forzada encima).
+  // find() descartaba silenciosamente todo lo que no fuera la primera,
+  // por lo que la grilla semanal solo pintaba una de las dos aunque el
+  // panel contextual (que sí usa filter() sobre citasHorario) mostrara
+  // ambas correctamente. filter() es ahora la única fuente de verdad
+  // para "qué hay en este bloque", igual que ya lo era para el panel;
+  // el .sort() aplica el orden determinista de arriba, así que el
+  // resultado NUNCA depende del orden en que backend entregó el
+  // arreglo original.
+  private buscarCitasEnBloque(fecha: string, hora: string): any[] {
+    return this.citasHorario
+      .filter(c => {
+        if (c.fecha !== fecha) return false;
+        if (c.estado === 'cancelada' || c.estado === 'inasistencia') return false;
+        return this.convertirA24h(c.hora) === hora.substring(0,5);
+      })
+      .sort((a, b) => this.compararCitasBloque(a, b));
   }
 
   esDiaCerrado(fecha: string): boolean {
     return this.diasCerrados.some(d => d.fecha === fecha);
   }
 
-  // ¿La fecha ya pasó, o (si es hoy) la hora ya pasó? Puramente informativo
-  // para la grilla — el backend ya rechaza esto de todas formas en /citas,
-  // pero no tiene sentido dejar que el admin haga clic para intentarlo.
-  private esFechaHoraPasada(fecha: string, hora: string): boolean {
-    const hoy = this.toDateStr(new Date());
-    if (fecha < hoy) return true;
-    if (fecha > hoy) return false;
-    const ahora = new Date();
-    const ahoraStr = `${String(ahora.getHours()).padStart(2,'0')}:${String(ahora.getMinutes()).padStart(2,'0')}`;
-    return hora.substring(0, 5) <= ahoraStr;
+  private buscarDisponibilidadEnBloque(
+    fecha: string,
+    hora: string
+  ): SlotDisponibilidadBackend | null {
+    return this.disponibilidadPorFecha[fecha]?.[hora.substring(0, 5)] ?? null;
   }
 
-  // ¿La hora queda fuera del rango institucional para ese día de la semana?
-  // Distinto de esFueraDeHorarioProfesional: esto es el horario que tiene
-  // habilitado TODA la universidad, no el horario personal del profesional
-  // — por eso nunca es agendable ni siquiera como sobrecupo (ver clickBloque).
-  private esFueraDeRangoInstitucional(fecha: string, hora: string): boolean {
-    const h = hora.substring(0, 5);
-    if (h < this.CENTRO_HORA_INICIO || h >= this.CENTRO_HORA_FIN) return true;
-    const diaSemana = this.parseDateStrLocal(fecha).getDay(); // 0=Dom ... 6=Sáb
-    if (diaSemana === 5 /* Viernes */ && h >= this.VIERNES_HORA_FIN) return true;
-    return false;
+  private claseVisualParaMotivo(slot: SlotDisponibilidadBackend): string {
+    if (slot.disponible) return 'disponible';
+
+    switch (slot.motivo) {
+      case 'dia_cerrado':
+      case 'fin_de_semana':
+        return 'cerrado-centro';
+      case 'en_colacion':
+        return 'colacion';
+      case 'fuera_de_jornada':
+        return 'fuera-horario';
+      case 'slot_ocupado':
+        return 'ocupado';
+      case 'profesional_inactivo':
+      case 'fecha_pasada':
+      case 'hora_pasada':
+      case 'hora_fuera_de_grilla':
+        return 'bloqueado';
+      default:
+        // Motivo desconocido o respuesta incompleta: no inferir disponibilidad.
+        return 'sin-datos';
+    }
   }
 
   getBloqueEstado(fecha: string, hora: string): string {
-    if (this.profesionalActualBloqueado) return 'bloqueado';
-    if (this.esDiaCerrado(fecha)) return 'cerrado-centro';
-
-    const cita = this.buscarCitaEnBloque(fecha, hora);
-    if (cita) {
-      if (cita.urgente)   return 'urgente';
-      if (cita.sobrecupo) return 'sobrecupo';
+    // Una cita operacional real tiene prioridad visual. Así, si las dos
+    // lecturas llegan en distinto orden, nunca se oculta una reserva real
+    // detrás de un estado de disponibilidad.
+    //
+    // A.4.7A.1 — con más de una cita en el mismo bloque, la prioridad
+    // (urgente > sobrecupo > ocupado) se evalúa sobre TODAS las citas,
+    // no solo sobre la primera: si cualquiera de ellas es urgente o
+    // sobrecupo, el bloque debe reflejarlo aunque la otra cita sea una
+    // reserva normal.
+    const citas = this.buscarCitasEnBloque(fecha, hora);
+    if (citas.length > 0) {
+      if (citas.some(c => c.urgente))   return 'urgente';
+      if (citas.some(c => c.sobrecupo)) return 'sobrecupo';
       return 'ocupado';
     }
 
-    // Un bloque VACÍO ya no se puede tomar si la fecha/hora ya pasó, o si
-    // cae fuera del horario que la universidad tiene habilitado ese día
-    // (esto último nunca es agendable, ni siquiera como sobrecupo).
-    if (this.esFechaHoraPasada(fecha, hora))          return 'pasado';
-    if (this.esFueraDeRangoInstitucional(fecha, hora)) return 'fuera-institucional';
+    const slot = this.buscarDisponibilidadEnBloque(fecha, hora);
+    if (!slot) {
+      // Sin dato de disponibilidad para este slot: puede ser porque el
+      // centro no atiende a esa hora ese día (p. ej. Viernes después de
+      // las 16:30 — la grilla comparte filas con Lunes-Jueves, que
+      // cierran más tarde) o, más raro, porque la respuesta del backend
+      // aún no llegó/falló. Se distingue en el cliente con la misma
+      // regla institucional del backend para no mostrar como "sin
+      // datos" (aspecto de carga/errror) algo que en realidad es
+      // "cerrado", que ya tiene su propio estado visual.
+      return this.fueraDeRangoInstitucional(fecha, hora) ? 'cerrado-centro' : 'sin-datos';
+    }
 
-    if (this.esHoraDeAlmuerzo(hora, fecha))          return 'colacion';
-    if (this.esFueraDeHorarioProfesional(hora, fecha)) return 'fuera-horario';
-    return 'disponible';
+    return this.claseVisualParaMotivo(slot);
   }
 
+  // A.4.7A.1 — fuente de verdad para el CONTENIDO del bloque (no solo su
+  // color/estado). Reemplaza el uso de getBloqueInfo() en la grilla:
+  // expone el arreglo completo de citas del slot para que la plantilla
+  // pinte una línea por cada una, en vez de una sola cadena que solo
+  // podía representar a la primera cita encontrada.
+  getBloqueCitas(fecha: string, hora: string): any[] {
+    return this.buscarCitasEnBloque(fecha, hora);
+  }
+
+  // Se mantiene por compatibilidad (otros consumidores/tests pueden
+  // seguir llamándolo para obtener un resumen en texto plano), pero ya
+  // no es lo que alimenta la grilla semanal: ahora concatena TODAS las
+  // citas del bloque en vez de reportar solo la primera.
   getBloqueInfo(fecha: string, hora: string): string {
-    if (this.esDiaCerrado(fecha)) return '';
-    const cita = this.buscarCitaEnBloque(fecha, hora);
-    if (cita) return cita.sobrecupo ? `${cita.estudiante} (Sobrecupo)` : cita.estudiante;
-    if (this.esFechaHoraPasada(fecha, hora)) return 'Esa hora ya pasó';
-    if (this.esFueraDeRangoInstitucional(fecha, hora)) return 'Fuera del horario institucional';
-    if (this.esHoraDeAlmuerzo(hora, fecha)) return 'Colación';
+    const citas = this.buscarCitasEnBloque(fecha, hora);
+    if (citas.length > 0) {
+      return citas
+        .map(c => c.sobrecupo ? `${c.estudiante} (Sobrecupo)` : c.estudiante)
+        .join(' · ');
+    }
+
+    const slot = this.buscarDisponibilidadEnBloque(fecha, hora);
+    if (slot?.motivo === 'en_colacion') return 'Colación';
     return '';
   }
 
@@ -863,57 +1341,103 @@ private crearGraficos(): void {
     return this.citasHorario.filter(c => c.fecha === this.diaSeleccionado);
   }
 
-  // ══════════════════════════════════════
-  // ESTADÍSTICAS DE LA SEMANA VISIBLE (agenda del profesional filtrado)
-  // Todo calculado en el cliente con datos que ya se cargan igual
-  // (citasHorario, semanaActual, horasGrilla) — sin endpoints nuevos.
-  // ══════════════════════════════════════
-  get estadisticasSemana(): {
-    programadas: number; capacidad: number; pctOcupado: number;
-    urgentes: number; sobrecupos: number; disponibles: number;
-  } {
-    const fechas = new Set(this.semanaActual.map(d => d.fecha));
-    const citasSemana = this.citasHorario.filter(c => fechas.has(c.fecha) && c.estado !== 'cancelada');
+  // A.4.7A v2 — helper GENÉRICO de capacidad de sobrecupo, unificado para
+  // los tres conflictos overridables reales (slot_ocupado, en_colacion,
+  // fuera_de_jornada). El backend (evaluar_politica_sobrecupo, reglas
+  // E/F) exige agenda.gestionar + agenda.sobrecupo para CUALQUIERA de
+  // los tres, no solo para slot_ocupado — la v1 solo lo exigía para el
+  // caso nuevo, dejando colación/fuera de jornada gateados solo por
+  // agenda.gestionar en el resto de las capas.
+  //
+  // Para 'ocupado' en particular: el dominio de getBloqueEstado() sigue
+  // devolviendo 'ocupado' cuando hay una Cita real (prioridad ya
+  // existente, sin cambios) — por eso esta función consulta POR
+  // SEPARADO disponibilidadPorFecha, para no perder el motivo/
+  // overridable_con_sobrecupo que el early-return de Cita ocultaría si
+  // se mirara solo getBloqueEstado().
+  //
+  // No duplica reglas de backend: solo lee overridable_con_sobrecupo
+  // (ya calculado por backend) y verifica que el motivo real coincida
+  // con el estado visual que el usuario está viendo, para no ofrecer
+  // sobrecupo sobre un conflicto distinto del que se muestra en pantalla.
+  puedeSolicitarSobrecupo(fecha: string, hora: string): boolean {
+    if (!this.hasPermission('agenda.gestionar')) return false;
+    if (!this.hasPermission('agenda.sobrecupo')) return false;
 
-    let capacidad = 0;
-    for (const dia of this.semanaActual) {
-      for (const h of this.horasGrilla) {
-        const estado = this.getBloqueEstado(dia.fecha, h);
-        // Cuenta como "capacidad" cualquier bloque que en principio se
-        // puede ocupar con una cita: disponible, o ya ocupado/urgente/sobrecupo.
-        if (['disponible', 'ocupado', 'urgente', 'sobrecupo'].includes(estado)) capacidad++;
-      }
-    }
-    const programadas  = citasSemana.length;
-    const urgentes     = citasSemana.filter(c => c.urgente).length;
-    const sobrecupos   = citasSemana.filter(c => c.sobrecupo).length;
-    const disponibles  = Math.max(0, capacidad - programadas);
-    const pctOcupado   = capacidad > 0 ? Math.round((programadas / capacidad) * 100) : 0;
+    const estado = this.getBloqueEstado(fecha, hora);
+    if (estado !== 'ocupado' && estado !== 'colacion' && estado !== 'fuera-horario') return false;
 
-    return { programadas, capacidad, pctOcupado, urgentes, sobrecupos, disponibles };
+    const slot = this.buscarDisponibilidadEnBloque(fecha, hora);
+    if (!slot || slot.overridable_con_sobrecupo !== true) return false;
+
+    if (estado === 'ocupado')       return slot.motivo === 'slot_ocupado';
+    if (estado === 'colacion')      return slot.motivo === 'en_colacion';
+    /* fuera-horario */             return slot.motivo === 'fuera_de_jornada';
   }
 
   // ══════════════════════════════════════
   // SOBRECUPO — forzar una cita fuera del horario habitual del profesional
   // ══════════════════════════════════════
   sobrecupoConfirmAbierto = false;
-  sobrecupoPendiente: { fecha: string; hora: string; motivoTexto: string } | null = null;
+  sobrecupoPendiente: { fecha: string; hora: string; mensaje: string } | null = null;
 
   clickBloque(fecha: string, hora: string): void {
     const estado = this.getBloqueEstado(fecha, hora);
-    if (estado === 'bloqueado' || estado === 'cerrado-centro' || estado === 'pasado' || estado === 'fuera-institucional') return;
 
-    this.diaSeleccionado = fecha;
+    // Corrección A.2B v2, punto 2: el panel contextual debe reflejar el día
+    // en que se hizo clic aunque el bloque no sea agendable — por ejemplo
+    // una cita histórica, un día cerrado o un slot ya pasado. Solo se omite
+    // cuando ni siquiera hay datos de disponibilidad todavía ('sin-datos').
+    if (estado !== 'sin-datos') {
+      this.diaSeleccionado = fecha;
+    }
+
+    if (estado === 'sin-datos' || estado === 'bloqueado' || estado === 'cerrado-centro') return;
+
+    // Un usuario con agenda.ver puede seleccionar
+    // el dia, pero no abrir citas ni sobrecupos.
+    if (!this.hasPermission('agenda.gestionar')) return;
 
     if (estado === 'disponible') {
       this.abrirModalNuevaCitaConFechaHora(fecha, hora, false);
     } else if (estado === 'colacion' || estado === 'fuera-horario') {
-      this.sobrecupoPendiente = {
-        fecha, hora,
-        motivoTexto: estado === 'colacion'
-          ? 'la hora de colación de'
-          : 'el horario habitual de'
-      };
+      // A.4.7A v2 — capa 2: ahora exige TAMBIÉN agenda.sobrecupo (antes
+      // solo miraba overridable_con_sobrecupo, dejando pasar a cualquier
+      // cuenta con agenda.gestionar).
+      if (!this.puedeSolicitarSobrecupo(fecha, hora)) return;
+
+      // A.4.7A v3 — el mensaje completo se arma acá (única fuente de
+      // verdad), en vez de concatenar "fuera de {{motivoTexto}} ..." en
+      // el template: esa construcción funcionaba para estos dos casos
+      // pero no era generalizable a slot_ocupado sin producir una frase
+      // gramaticalmente incorrecta (ver caso 'ocupado' más abajo).
+      const profesionalNombre = this.profesionalActual?.nombre ?? 'el profesional';
+      const fechaFormateada = this.formatearFecha(fecha);
+      const mensaje = estado === 'colacion'
+        ? `Estás agendando a las ${hora} del ${fechaFormateada}, durante la hora de colación de ${profesionalNombre}. Esta cita quedará marcada como sobrecupo. ¿Confirmas?`
+        : `Estás agendando a las ${hora} del ${fechaFormateada}, fuera del horario habitual de ${profesionalNombre}. Esta cita quedará marcada como sobrecupo. ¿Confirmas?`;
+
+      this.sobrecupoPendiente = { fecha, hora, mensaje };
+      this.sobrecupoConfirmAbierto = true;
+    } else if (estado === 'ocupado') {
+      // A.4.7A — sobrecupo real sobre un slot ya ocupado (A.4.4). Capa 2
+      // de la defensa en profundidad: puedeSolicitarSobrecupo() ya
+      // exige agenda.gestionar + agenda.sobrecupo + que backend siga
+      // informando ese slot como overridable en este mismo instante.
+      if (!this.puedeSolicitarSobrecupo(fecha, hora)) return;
+
+      // A.4.7A v3 — para slot_ocupado la oración "fuera de un cupo ya
+      // ocupado en la agenda de X" no es correcta ni neutral: acá NO
+      // hay un horario "fuera de jornada", hay ocupación dentro de la
+      // jornada normal. Mensaje propio, sin afirmar cardinalidad (no se
+      // dice "una cita", "un cupo" ni "dos citas" — el contrato del
+      // frontend no expone conteo, eso lo decide backend en A.4.4).
+      const fechaFormateada = this.formatearFecha(fecha);
+      const mensaje = `A las ${hora} del ${fechaFormateada}: este horario ya presenta ocupación. `
+        + 'El sistema permite solicitar un sobrecupo. La disponibilidad volverá a validarse al confirmar. '
+        + '¿Confirmas?';
+
+      this.sobrecupoPendiente = { fecha, hora, mensaje };
       this.sobrecupoConfirmAbierto = true;
     }
   }
@@ -924,6 +1448,17 @@ private crearGraficos(): void {
   }
 
   confirmarSobrecupo(): void {
+    // A.4.7A — capa 3: agenda.sobrecupo es exigido por
+    // evaluar_politica_sobrecupo() (backend) para CUALQUIER sobrecupo
+    // efectivo, no solo el de slot ocupado — colación y fuera de
+    // jornada también lo requieren desde A.4.3. Antes de este cambio
+    // solo se validaba agenda.gestionar acá, dejando que una cuenta con
+    // agenda.gestionar pero sin agenda.sobrecupo llegara hasta el modal
+    // de cita para recién enterarse por un 403 del backend.
+    if (!this.hasPermission('agenda.gestionar') || !this.hasPermission('agenda.sobrecupo')) {
+      this.cancelarSobrecupo();
+      return;
+    }
     if (!this.sobrecupoPendiente) return;
     const { fecha, hora } = this.sobrecupoPendiente;
     this.sobrecupoConfirmAbierto = false;
@@ -931,13 +1466,34 @@ private crearGraficos(): void {
     this.abrirModalNuevaCitaConFechaHora(fecha, hora, true);
   }
 
+  // Corrección A.2B v2, punto 3: una fecha histórica (ya pasada) nunca debe
+  // abrir "Nueva cita" — ni siquiera si diaSeleccionado quedó apuntando a
+  // ella (p. ej. el botón de la barra de herramientas usa diaSeleccionado
+  // directamente, sin pasar por clickBloque()).
+  private esFechaPasada(fecha: string): boolean {
+    if (!fecha) return false;
+    return fecha < this.toDateStr(new Date());
+  }
+
   abrirModalNuevaCita(): void { this.abrirModalNuevaCitaConFechaHora(this.diaSeleccionado ?? '', '', false); }
 
   abrirModalNuevaCitaConFechaHora(fecha: string, hora: string, esSobrecupo: boolean = false): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
+    // A.4.7A — capa 3b: si el flujo que abre este modal ya es de
+    // sobrecupo (viene de confirmarSobrecupo()), re-verificar acá
+    // también agenda.sobrecupo. Redundante con confirmarSobrecupo() por
+    // diseño (defensa en profundidad, no un único punto de fallo).
+    if (esSobrecupo && !this.hasPermission('agenda.sobrecupo')) return;
     if (this.profesionalActualBloqueado) return;
+    if (this.esFechaPasada(fecha)) return;
     this.nuevaCita = {
       fecha, hora, estudiante_id: null, profesional_id: Number(this.filtroProfesionalId),
-      observaciones: '', urgente: false, sobrecupo: esSobrecupo
+      observaciones: '', urgente: false, sobrecupo: esSobrecupo,
+      // A.4.1/A.4.7A — motivo HUMANO del sobrecupo, campo separado de
+      // observaciones (que es el motivo clínico de la consulta). Se
+      // reinicia en cada apertura para que un motivo anterior nunca
+      // quede reutilizado por accidente.
+      sobrecupo_motivo: ''
     };
     this.busquedaEstudiante     = '';
     this.resultadosEstudiante   = [];
@@ -950,9 +1506,26 @@ private crearGraficos(): void {
     this.busquedaEstudiante = '';
     this.resultadosEstudiante = [];
     this.estudianteSeleccionado = null;
+    // A.4.7A — limpiar el motivo de sobrecupo al cancelar, para que no
+    // sobreviva a la próxima apertura del modal (defensa adicional a la
+    // que ya hace abrirModalNuevaCitaConFechaHora al reconstruir
+    // nuevaCita completo).
+    this.nuevaCita.sobrecupo_motivo = '';
   }
 
-  nuevaCita: any = { fecha: '', hora: '', estudiante_id: null, profesional_id: null, observaciones: '', urgente: false, sobrecupo: false };
+  nuevaCita: any = {
+    fecha: '', hora: '', estudiante_id: null, profesional_id: null,
+    observaciones: '', urgente: false, sobrecupo: false, sobrecupo_motivo: ''
+  };
+
+  // A.4.7A v2 — punto 2: urgencia (A.4.5) y sobrecupo son flujos
+  // separados; el toggle "¿Es urgente?" se oculta por completo mientras
+  // la cita en curso es un sobrecupo, para que no sea posible activarlo
+  // desde la UI (la defensa real está en crearCitaDesdeHorario(), esto
+  // es solo la capa de presentación).
+  get mostrarToggleUrgente(): boolean {
+    return !this.nuevaCita.sobrecupo;
+  }
 
   buscarEstudiante(): void {
     const q = this.busquedaEstudiante.trim();
@@ -978,19 +1551,81 @@ private crearGraficos(): void {
   creandoCita = false;
 
   crearCitaDesdeHorario(): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
     if (this.creandoCita) return; // evita doble envío por doble clic
     if (!this.nuevaCita.estudiante_id) {
       this.mensajeError = 'Debes seleccionar un estudiante.';
       setTimeout(() => this.mensajeError = '', 3000); return;
     }
+
+    // A.4.7A v2 — punto 2: urgencia (A.4.5, todavía pendiente) y
+    // sobrecupo son flujos separados y NO deben combinarse. El toggle
+    // "¿Es urgente?" ya se oculta en el modal cuando sobrecupo=true
+    // (mostrarToggleUrgente), pero esto es la defensa en profundidad:
+    // si de cualquier forma nuevaCita quedara con ambos en true, no se
+    // manda ninguna request (ni a /citas ni a /admin/citas/urgente).
+    if (this.nuevaCita.sobrecupo && this.nuevaCita.urgente) {
+      this.mensajeError = 'Urgencia y sobrecupo todavía se gestionan por flujos separados.';
+      setTimeout(() => this.mensajeError = '', 3000);
+      return;
+    }
+
+    // A.4.7A — capa 4 (última, justo antes del POST): agenda.gestionar +
+    // agenda.sobrecupo + motivo se vuelven a exigir acá mismo, sin
+    // confiar en que las capas anteriores (render/clickBloque/
+    // confirmarSobrecupo) no hayan sido saltadas — p. ej. si algo
+    // externo pusiera nuevaCita.sobrecupo=true directamente. Backend
+    // sigue siendo la autoridad final; esto es solo para no mandar una
+    // request que el backend rechazaría, y dar el mensaje de validación
+    // localmente.
+    let sobrecupoMotivoNormalizado: string | null = null;
+    if (this.nuevaCita.sobrecupo) {
+      // A.4.7A v3 — esta capa debe ser AUTOSUFICIENTE: comprueba ambos
+      // permisos explícitamente acá mismo, sin depender de que el
+      // guard de agenda.gestionar del inicio de la función siga
+      // existiendo o mantenga su posición actual. Si falta cualquiera
+      // de los dos, no se manda la request y se muestra el mismo
+      // mensaje de autorización.
+      if (!this.hasPermission('agenda.gestionar') || !this.hasPermission('agenda.sobrecupo')) {
+        this.mensajeError = 'No cuentas con el permiso de sobrecupo (agenda.sobrecupo) para autorizar esta hora.';
+        setTimeout(() => this.mensajeError = '', 3000);
+        return;
+      }
+      const motivo = String(this.nuevaCita.sobrecupo_motivo ?? '').trim();
+      if (!motivo) {
+        this.mensajeError = 'Debes indicar el motivo del sobrecupo.';
+        setTimeout(() => this.mensajeError = '', 3000);
+        return;
+      }
+      sobrecupoMotivoNormalizado = motivo;
+    }
+
     this.creandoCita = true;
     const endpoint = this.nuevaCita.urgente ? `${API}/admin/citas/urgente` : `${API}/citas`;
-    this.http.post<any>(endpoint, {
+    const payload: any = {
       estudiante_id: this.nuevaCita.estudiante_id, profesional_id: this.nuevaCita.profesional_id,
       fecha: this.nuevaCita.fecha, hora: this.nuevaCita.hora,
       observaciones: this.nuevaCita.observaciones, urgente: this.nuevaCita.urgente,
       sobrecupo: this.nuevaCita.sobrecupo || false
-    }).subscribe({
+    };
+    // Campo separado de observaciones (motivo clínico) — nunca se
+    // reutiliza uno por otro. Para cita normal se omite por completo
+    // (ni null ni string vacío), siguiendo el estilo real ya usado en
+    // este payload (el resto de campos opcionales tampoco se envían
+    // "apagados").
+    if (this.nuevaCita.sobrecupo && sobrecupoMotivoNormalizado) {
+      payload.sobrecupo_motivo = sobrecupoMotivoNormalizado;
+    }
+
+    // A.4.7A v2 — punto 1: el mensaje de 409 depende de si ESTA cita es
+    // sobrecupo o no. Se calcula acá (antes del subscribe) porque
+    // cerrarModalCita()/next del éxito no tocan nuevaCita.sobrecupo,
+    // pero por claridad se fija el valor exacto que corresponde a esta
+    // request en particular, sin depender del estado del componente en
+    // el momento en que llega la respuesta.
+    const esSobrecupo = this.nuevaCita.sobrecupo === true;
+
+    this.http.post<any>(endpoint, payload).subscribe({
       next: () => {
         this.cerrarModalCita(); this.cargarHorarioProfesional();
         this.mensajeExito = 'Cita creada correctamente.';
@@ -999,12 +1634,42 @@ private crearGraficos(): void {
         this.cdr.detectChanges();
       },
       error: (err) => {
-        this.mensajeError = err?.error?.detail || 'No se pudo crear la cita.';
-        setTimeout(() => this.mensajeError = '', 3000);
         this.creandoCita = false;
-        // Si alguien más tomó esa hora justo antes, refrescamos la grilla
-        // para que la celda ya no aparezca como disponible.
-        if (err?.status === 409) {
+        const status = err?.status;
+        const detail = err?.error?.detail;
+
+        // A.4.7A — mapeo de error explícito (400/403/409). El 409
+        // SIEMPRE usa un mensaje UX estable propio, sin importar qué
+        // traiga el detail del backend: no forma parte del contrato
+        // público afirmar cuántas citas existen ya en ese slot. La
+        // palabra "sobrecupo" solo aparece si ESTA cita era realmente
+        // un sobrecupo — una cita normal que pierde la carrera A.3 no
+        // tiene nada que ver con sobrecupo y no debe mencionarlo. Para
+        // 400/403, el detail del backend YA es texto pensado para
+        // mostrarse (ver _mapear_denegacion_sobrecupo) — se usa tal
+        // cual cuando es un string seguro; si no lo es (objeto,
+        // ausente), se cae a un mensaje genérico y nunca se renderiza
+        // "[object Object]".
+        if (status === 409) {
+          this.mensajeError = esSobrecupo
+            ? 'El horario cambió y ya no admite este sobrecupo. La agenda se actualizará.'
+            : 'El horario cambió y ya no está disponible. La agenda se actualizará.';
+        } else if (typeof detail === 'string' && detail.trim()) {
+          this.mensajeError = detail;
+        } else if (status === 403) {
+          this.mensajeError = 'No cuentas con autorización para realizar esta acción.';
+        } else {
+          this.mensajeError = 'No se pudo crear la cita.';
+        }
+        setTimeout(() => this.mensajeError = '', 3000);
+
+        // Si alguien más tomó esa hora (o agotó el cupo de sobrecupo)
+        // justo antes, refrescamos la grilla para que la celda ya no
+        // aparezca con una capacidad que ya no existe — la grilla local
+        // nunca es la fuente de verdad, siempre se vuelve a consultar
+        // backend. Esto aplica igual para una cita normal (A.3) que
+        // para un sobrecupo.
+        if (status === 409) {
           this.cerrarModalCita();
           this.cargarHorarioProfesional();
         }
@@ -1027,13 +1692,16 @@ private crearGraficos(): void {
     }
   }
  // ══════════════════════════════════════
-  // SOLICITUDES DE HORARIO (colación, jornada y agenda por bloques)
+  // SOLICITUDES DE HORARIO (colación y jornada)
   // ══════════════════════════════════════
 
-  readonly NOMBRES_DIA_BLOQUES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
   solicitudesHorarioAdmin: any[] = [];
 
   cargarSolicitudesHorarioAdmin(): void {
+    if (!this.hasPermission('agenda.gestionar')) {
+      this.solicitudesHorarioAdmin = [];
+      return;
+    }
     this.http.get<any[]>(`${API}/admin/solicitudes-horario?estado=pendiente`).subscribe({
       next: (data) => {
         this.solicitudesHorarioAdmin = data ?? [];
@@ -1044,6 +1712,7 @@ private crearGraficos(): void {
   }
 
   aprobarSolicitudHorario(s: any): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
     this.http.patch(`${API}/admin/solicitudes-horario/${s.id}/aprobar`, {}).subscribe({
       next: () => {
         this.solicitudesHorarioAdmin = this.solicitudesHorarioAdmin.filter(x => x.id !== s.id);
@@ -1061,6 +1730,7 @@ private crearGraficos(): void {
   }
 
   rechazarSolicitudHorario(s: any): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
     const motivo = prompt('Motivo del rechazo (opcional):') || '';
     this.http.patch(`${API}/admin/solicitudes-horario/${s.id}/rechazar`, { motivo }).subscribe({
       next: () => {
@@ -1079,25 +1749,12 @@ private crearGraficos(): void {
   // PROFESIONALES
   // ══════════════════════════════════════
 
-  profesionales:          any[] = [];
-  busquedaProfesional           = '';
-  pagProf                       = 1;
-  modalProfAbierto              = false;
-  modalAccionesAbierto          = false;
-  profSeleccionado: any         = null;
-  modoEdicion                   = false;
-  mostrarConfirmacionProf       = false;
-  profNuevoDatos: any           = { nombre:'', especialidad:'', especialidadNueva:'', correo:'', rut:'', estado:'activo', password:'prof123' };
-  rutValido                     = true;
-  correoValido                  = true;
-  duracionNumero                = 45;
-  duracionUnidad                = 'minutos';
+  // profesionales[] sigue viviendo aquí: es la ÚNICA fuente de verdad,
+  // compartida además por Inicio, Horario y Configuración (Fase 3.4A/3.4C).
+  profesionales: any[] = [];
 
-  get duracionEnMinutos(): number {
-    return this.duracionUnidad === 'horas' ? this.duracionNumero * 60 : this.duracionNumero;
-  }
-
-  // Especialidades dinámicas desde el backend
+  // Especialidades dinámicas desde el backend (usadas también en Horario,
+  // Historial y Reportes, no exclusivas de Gestión de Profesionales).
   get especialidades(): string[] {
     const fromProfs = this.profesionales.map(p => p.especialidad).filter(Boolean);
     const base = ['Medicina General','Psicología','Kinesiología','Odontología','Nutrición','Oftalmología','Psicopedagogía'];
@@ -1108,72 +1765,48 @@ private crearGraficos(): void {
   get profesionalesConIncidencia(): number { return this.profesionales.filter(p => ['enfermo','inasistencia','licencia'].includes(p.estado)).length; }
 
   cargarProfesionales(): void {
+    if (!this.hasPermission('profesionales.ver')) {
+      this.profesionales = [];
+      return;
+    }
+
     this.http.get<any[]>(`${API}/admin/profesionales`).subscribe({
       next: (data) => {
         this.profesionales = data ?? [];
         this.cdr.detectChanges();
       },
-      error: () => {}
+      error: () => { this.profesionales = []; }
     });
   }
 
-  get profesionalesFiltradosBusqueda(): any[] {
-    const q = this.busquedaProfesional.toLowerCase();
-    return !q ? this.profesionales : this.profesionales.filter(p =>
-      p.nombre.toLowerCase().includes(q) || p.especialidad.toLowerCase().includes(q)
-    );
+  private cargarProfesionalesAgenda(): void {
+    if (!this.hasPermission('agenda.ver')) {
+      this.profesionales = [];
+      return;
+    }
+
+    this.http.get<any[]>(`${API}/agenda/profesionales`).subscribe({
+      next: (data) => {
+        this.profesionales = data ?? [];
+        this.cdr.detectChanges();
+      },
+      error: () => { this.profesionales = []; }
+    });
   }
 
-  get profesionalesPaginados(): any[] {
-    return this.profesionalesFiltradosBusqueda.slice((this.pagProf-1)*6, this.pagProf*6);
-  }
+  // ══════════════════════════════════════
+  // Handlers de los @Output de AdminProfesionalesComponent (Fase 3.4C).
+  // El hijo NO ejecuta HTTP: solo emite la intención. El shell sigue siendo
+  // quien llama al backend y actualiza profesionales[] (única fuente usada
+  // también por Inicio/Horario/Configuración).
+  // ══════════════════════════════════════
 
-  getPaginasProf(): number[] {
-    const total = Math.ceil(this.profesionalesFiltradosBusqueda.length / 6);
-    return Array.from({ length: total }, (_, i) => i+1);
-  }
-
-  abrirModalAgregar(): void {
-    this.profNuevoDatos = { nombre:'', especialidad:'', especialidadNueva:'', correo:'', rut:'', estado:'activo', password:'prof123' };
-    this.duracionNumero = 45; this.duracionUnidad = 'minutos';
-    this.mostrarConfirmacionProf = false; this.rutValido = true; this.correoValido = true;
-    this.modalProfAbierto = true; this.modoEdicion = false;
-  }
-
-  validarRut(rut: string): boolean {
-    const rutLimpio = rut.replace(/\./g,'').replace(/-/g,'');
-    if (rutLimpio.length < 2) return false;
-    const cuerpo = rutLimpio.slice(0,-1); const dv = rutLimpio.slice(-1).toUpperCase();
-    let suma = 0, multi = 2;
-    for (let i = cuerpo.length-1; i >= 0; i--) { suma += parseInt(cuerpo[i]) * multi; multi = multi === 7 ? 2 : multi+1; }
-    const dvEsperado = 11 - (suma % 11);
-    const dvCalc = dvEsperado === 11 ? '0' : dvEsperado === 10 ? 'K' : String(dvEsperado);
-    return dv === dvCalc;
-  }
-
-  onRutChange(): void { this.rutValido = !this.profNuevoDatos.rut || this.validarRut(this.profNuevoDatos.rut); }
-  onCorreoChange(): void { this.correoValido = !this.profNuevoDatos.correo || /^[a-zA-Z0-9._%+\-]+@utem\.cl$/.test(this.profNuevoDatos.correo); }
-
-  continuarCrearProf(): void {
-    if (!this.profNuevoDatos.nombre.trim()) { this.mensajeError = 'El nombre es obligatorio.'; setTimeout(() => this.mensajeError = '', 3000); return; }
-    if (!this.profNuevoDatos.especialidad)  { this.mensajeError = 'Selecciona una especialidad.'; setTimeout(() => this.mensajeError = '', 3000); return; }
-    if (!this.profNuevoDatos.correo.trim()) { this.mensajeError = 'El correo es obligatorio.'; setTimeout(() => this.mensajeError = '', 3000); return; }
-    if (!this.correoValido) { this.mensajeError = 'El correo debe ser @utem.cl.'; setTimeout(() => this.mensajeError = '', 3000); return; }
-    if (this.profNuevoDatos.rut && !this.rutValido) { this.mensajeError = 'El RUT ingresado no es válido.'; setTimeout(() => this.mensajeError = '', 3000); return; }
-    this.mostrarConfirmacionProf = true;
-  }
-
-  volverFormProf(): void { this.mostrarConfirmacionProf = false; }
-
-  confirmarCrearProf(): void {
-    const especialidadFinal = this.profNuevoDatos.especialidad === 'otra' ? this.profNuevoDatos.especialidadNueva : this.profNuevoDatos.especialidad;
-    this.http.post(`${API}/admin/profesionales`, {
-      nombre: this.profNuevoDatos.nombre, especialidad: especialidadFinal,
-      correo: this.profNuevoDatos.correo, rut: this.profNuevoDatos.rut,
-      duracion_min: this.duracionEnMinutos, estado: 'activo', password: 'prof123'
-    }).subscribe({
+  onCrearProfesional(payload: any): void {
+    if (!this.hasPermission('profesionales.gestionar')) return;
+    this.http.post(`${API}/admin/profesionales`, payload).subscribe({
       next: () => {
-        this.cerrarModal(); this.cargarProfesionales();
+        this.adminProfesionalesRef?.cerrarModal();
+        this.cargarProfesionales();
         this.mensajeExito = 'Profesional creado. Contraseña temporal: prof123';
         setTimeout(() => this.mensajeExito = '', 5000);
         this.cdr.detectChanges();
@@ -1182,29 +1815,17 @@ private crearGraficos(): void {
     });
   }
 
-  abrirModalAcciones(p: any): void {
-    this.profSeleccionado = { ...p, nuevoEstado: p.estado, motivoCambio: '' };
-    this.duracionNumero   = p.duracion_min <= 60 ? p.duracion_min : Math.round(p.duracion_min/60);
-    this.duracionUnidad   = p.duracion_min > 60 ? 'horas' : 'minutos';
-    this.modalAccionesAbierto = true;
-  }
-
-  cerrarModalAcciones(): void { this.modalAccionesAbierto = false; this.profSeleccionado = null; }
-
-  get estadoCambioRequiereMotivo(): boolean {
-    return this.profSeleccionado && ['licencia','inasistencia'].includes(this.profSeleccionado.nuevoEstado);
-  }
-
-  guardarEstadoProfesional(): void {
-    if (!this.profSeleccionado) return;
-    const cancelarCitas = ['licencia','inasistencia'].includes(this.profSeleccionado.nuevoEstado)
+  onCambiarEstadoProfesional(payload: { profesional: any; nuevoEstado: string; motivo: string }): void {
+    if (!this.hasPermission('profesionales.gestionar')) return;
+    const cancelarCitas = ['licencia','inasistencia'].includes(payload.nuevoEstado)
       ? confirm('¿Cancelar las citas de hoy y notificar estudiantes?') : false;
-    this.http.patch(`${API}/admin/profesionales/${this.profSeleccionado.id}/estado`, {
-      estado: this.profSeleccionado.nuevoEstado, motivo: this.profSeleccionado.motivoCambio || '',
+    this.http.patch(`${API}/admin/profesionales/${payload.profesional.id}/estado`, {
+      estado: payload.nuevoEstado, motivo: payload.motivo || '',
       cancelar_citas: cancelarCitas
     }).subscribe({
       next: () => {
-        this.cerrarModalAcciones(); this.cargarProfesionales();
+        this.adminProfesionalesRef?.cerrarModalAcciones();
+        this.cargarProfesionales();
         this.mensajeExito = 'Estado actualizado.'; setTimeout(() => this.mensajeExito = '', 3000);
         this.cdr.detectChanges();
       },
@@ -1212,25 +1833,63 @@ private crearGraficos(): void {
     });
   }
 
-  guardarDuracionProfesional(): void {
-    if (!this.profSeleccionado) return;
-    this.http.patch(`${API}/admin/profesionales/${this.profSeleccionado.id}`, { duracion_min: this.duracionEnMinutos }).subscribe({
+  onCambiarDuracionProfesional(payload: { profesional: any; duracionMin: number }): void {
+    if (!this.hasPermission('profesionales.gestionar')) return;
+    this.http.patch(`${API}/admin/profesionales/${payload.profesional.id}`, { duracion_min: payload.duracionMin }).subscribe({
       next: () => {
         this.cargarProfesionales();
-        this.mensajeExito = `Duración actualizada a ${this.duracionEnMinutos} min.`; setTimeout(() => this.mensajeExito = '', 3000);
+        this.mensajeExito = `Duración actualizada a ${payload.duracionMin} min.`; setTimeout(() => this.mensajeExito = '', 3000);
         this.cdr.detectChanges();
       },
       error: () => { this.mensajeError = 'No se pudo actualizar la duración.'; setTimeout(() => this.mensajeError = '', 3000); }
     });
   }
 
-  eliminarProfesionalDesdeModal(): void {
-    if (!this.profSeleccionado) return;
-    if (!confirm(`¿Eliminar a ${this.profSeleccionado.nombre}?`)) return;
-    if (!confirm('Se cancelarán TODAS sus citas pendientes y se notificará a los estudiantes. ¿Confirmar?')) return;
-    this.http.delete(`${API}/admin/profesionales/${this.profSeleccionado.id}`).subscribe({
+  /**
+   * tratamiento: null se envía explícito en el body (no se omite el campo)
+   * para que el backend distinga "limpiar tratamiento" de "no tocarlo".
+   */
+  onCambiarTratamientoProfesional(payload: { profesional: any; tratamiento: string | null }): void {
+    if (!this.hasPermission('profesionales.gestionar')) return;
+    this.http.patch(`${API}/admin/profesionales/${payload.profesional.id}`, { tratamiento: payload.tratamiento }).subscribe({
       next: () => {
-        this.cerrarModalAcciones(); this.cargarProfesionales();
+        this.cargarProfesionales();
+        this.cargarResumenDia();
+        this.mensajeExito = 'Prefijo actualizado.'; setTimeout(() => this.mensajeExito = '', 3000);
+        this.cdr.detectChanges();
+      },
+      error: () => { this.mensajeError = 'No se pudo actualizar el prefijo.'; setTimeout(() => this.mensajeError = '', 3000); }
+    });
+  }
+
+  /**
+   * color: null se envía explícito en el body (no se omite el campo) para
+   * que el backend distinga "quitar color" de "no tocarlo". Recarga
+   * también resumenDia porque Disponibilidad Hoy en Inicio usa
+   * color_identificador (vía nombreConTratamiento/badge) y debe quedar
+   * sincronizado de inmediato.
+   */
+  onCambiarColorIdentificador(payload: { profesional: any; color: string | null }): void {
+    if (!this.hasPermission('profesionales.gestionar')) return;
+    this.http.patch(`${API}/admin/profesionales/${payload.profesional.id}`, { color_identificador: payload.color }).subscribe({
+      next: () => {
+        this.cargarProfesionales();
+        this.cargarResumenDia();
+        this.mensajeExito = 'Color identificador actualizado.'; setTimeout(() => this.mensajeExito = '', 3000);
+        this.cdr.detectChanges();
+      },
+      error: () => { this.mensajeError = 'No se pudo actualizar el color.'; setTimeout(() => this.mensajeError = '', 3000); }
+    });
+  }
+
+  onEliminarProfesional(p: any): void {
+    if (!this.hasPermission('profesionales.gestionar')) return;
+    if (!confirm(`¿Eliminar a ${p.nombre}?`)) return;
+    if (!confirm('Se cancelarán TODAS sus citas pendientes y se notificará a los estudiantes. ¿Confirmar?')) return;
+    this.http.delete(`${API}/admin/profesionales/${p.id}`).subscribe({
+      next: () => {
+        this.adminProfesionalesRef?.cerrarModalAcciones();
+        this.cargarProfesionales();
         this.mensajeExito = 'Profesional eliminado.'; setTimeout(() => this.mensajeExito = '', 3000);
         this.cdr.detectChanges();
       },
@@ -1238,72 +1897,26 @@ private crearGraficos(): void {
     });
   }
 
-  cerrarModal(): void { this.modalProfAbierto = false; this.mostrarConfirmacionProf = false; }
-  abrirModalEditar(p: any): void { this.abrirModalAcciones(p); }
-  guardarProfesional(): void {}
-  eliminarProfesional(p: any): void { this.abrirModalAcciones(p); }
+  // Restaura exactamente el feedback de validación que existía antes de la
+  // extracción (Corrección previa a aprobación, Fase 3.4C): el hijo solo
+  // valida y emite el mensaje; el shell sigue siendo dueño de mensajeError/toast.
+  onErrorValidacionProfesional(mensaje: string): void {
+    this.mensajeError = mensaje;
+    setTimeout(() => this.mensajeError = '', 3000);
+  }
 
   // ══════════════════════════════════════
   // HISTORIAL
   // ══════════════════════════════════════
 
-  // ═══ CITAS (gestión del día a día: prioridad + cancelación) ═══
-  // A diferencia de Historial (consulta/exportación read-only), esta
-  // sección es accionable: marcar/quitar urgencia y cancelar citas.
-  citasAdmin:          any[] = [];
-  pagCitas                   = 1;
-  citasFiltroEstudiante      = '';
-  citasFiltroRango           = 'todas';   // 'todas' | 'hoy' | 'semana'
-  citasFiltroEstado          = '';
-  citasFiltroPrioridad       = '';        // '' | 'urgente' | 'normal'
-  citasCargando               = false;
-
-  cargarCitas(): void {
-    this.citasCargando = true;
-    let url = `${API}/admin/historial?`;
-    if (this.citasFiltroEstudiante) url += `estudiante=${encodeURIComponent(this.citasFiltroEstudiante)}&`;
-    if (this.citasFiltroEstado)     url += `estado=${this.citasFiltroEstado}&`;
-
-    if (this.citasFiltroRango === 'hoy') {
-      const hoy = new Date().toISOString().slice(0, 10);
-      url += `fecha_inicio=${hoy}&fecha_fin=${hoy}&`;
-    } else if (this.citasFiltroRango === 'semana') {
-      const hoy = new Date();
-      const fin = new Date(hoy); fin.setDate(hoy.getDate() + 7);
-      url += `fecha_inicio=${hoy.toISOString().slice(0,10)}&fecha_fin=${fin.toISOString().slice(0,10)}&`;
-    }
-
-    this.http.get<any[]>(url).subscribe({
-      next: (data) => {
-        this.citasAdmin = data ?? []; this.pagCitas = 1; this.citasCargando = false;
-        this.cdr.detectChanges();
-      },
-      error: () => { this.citasCargando = false; }
-    });
-  }
-
-  get citasFiltradas(): any[] {
-    if (!this.citasFiltroPrioridad) return this.citasAdmin;
-    const quiereUrgente = this.citasFiltroPrioridad === 'urgente';
-    return this.citasAdmin.filter(c => !!c.urgente === quiereUrgente);
-  }
-
-  get citasPaginadas(): any[] {
-    return this.citasFiltradas.slice((this.pagCitas - 1) * 8, this.pagCitas * 8);
-  }
-
-  getPaginasCitas(): number[] {
-    const total = Math.ceil(this.citasFiltradas.length / 8);
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }
-
-  limpiarFiltrosCitas(): void {
-    this.citasFiltroEstudiante = ''; this.citasFiltroRango = 'todas';
-    this.citasFiltroEstado = ''; this.citasFiltroPrioridad = '';
-    this.cargarCitas();
-  }
+  // ═══ CITAS ═══
+  // El listado, filtros, paginación y carga de datos de esta sección viven
+  // ahora en AdminCitasComponent (Fase 3.4B). Lo que permanece aquí son las
+  // acciones compartidas con otras secciones del shell (Inicio, Horario,
+  // Historial), comunicadas por AdminCitasComponent mediante Outputs.
 
   marcarPrioridadCita(cita: any, urgente: boolean): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
     this.http.patch<any>(`${API}/admin/citas/${cita.id}/prioridad`, { urgente }).subscribe({
       next: (res) => {
         cita.urgente = res.urgente;
@@ -1328,6 +1941,12 @@ private crearGraficos(): void {
   fichaEstudianteSeleccionado: any   = null;
 
   cargarEstudiantes(): void {
+    if (!this.hasPermission('usuarios.ver')) {
+      this.estudiantesAdmin = [];
+      this.estudiantesTotal = 0;
+      this.estudiantesCargando = false;
+      return;
+    }
     this.estudiantesCargando = true;
     let url = `${API}/admin/estudiantes/listado?pagina=${this.estudiantesPagina}&por_pagina=${this.estudiantesPorPagina}&`;
     if (this.estudiantesFiltroQ)       url += `q=${encodeURIComponent(this.estudiantesFiltroQ)}&`;
@@ -1350,10 +1969,6 @@ private crearGraficos(): void {
     this.cargarEstudiantes();
   }
 
-  getPaginasEstudiantes(): number[] {
-    const total = Math.ceil(this.estudiantesTotal / this.estudiantesPorPagina);
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }
 
   irAPaginaEstudiantes(pagina: number): void {
     this.estudiantesPagina = pagina;
@@ -1361,6 +1976,7 @@ private crearGraficos(): void {
   }
 
   verPerfilEstudianteAdmin(est: any): void {
+    if (!this.hasPermission('usuarios.ver')) return;
     this.modalPerfilEstudianteAbierto = true;
     this.perfilEstudianteCargando = true;
     this.fichaEstudianteSeleccionado = null;
@@ -1376,7 +1992,6 @@ private crearGraficos(): void {
   }
 
   historialAdmin:      any[] = [];
-  pagHist                    = 1;
   histFiltroEstudiante       = '';
   histFiltroDesde            = '';
   histFiltroHasta            = '';
@@ -1409,7 +2024,7 @@ private crearGraficos(): void {
     if (this.histFiltroCarrera)      url += `carrera=${encodeURIComponent(this.histFiltroCarrera)}&`;
     this.http.get<any[]>(url).subscribe({
       next: (data) => {
-        this.historialAdmin = data ?? []; this.pagHist = 1;
+        this.historialAdmin = data ?? [];
         if (this.histFiltroEstudiante.trim()) this.calcularEstadisticasEstudiante(this.historialAdmin);
         else this.estadisticasEstudiante = null;
         this.cdr.detectChanges();
@@ -1429,26 +2044,12 @@ private crearGraficos(): void {
     };
   }
 
-  get historialPaginado(): any[] { return this.historialAdmin.slice((this.pagHist-1)*8, this.pagHist*8); }
-
-  getPaginasHist(): number[] {
-    const total = Math.ceil(this.historialAdmin.length / 8);
-    return Array.from({ length: total }, (_, i) => i+1);
-  }
 
   limpiarFiltrosHistorial(): void {
     this.histFiltroEstudiante = ''; this.histFiltroDesde = ''; this.histFiltroHasta = '';
     this.histFiltroEspecialidad = ''; this.histFiltroEstado = ''; this.histFiltroCarrera = '';
     this.estadisticasEstudiante = null; this.cargarHistorial();
   }
-
-  // ══════════════════════════════════════
-  // REPORTES (a partir de datos ya cargados: historial + estadísticas + gráficos)
-  // ══════════════════════════════════════
-  get reporteCompletadas(): number { return this.historialAdmin.filter(h => h.estado === 'completada').length; }
-  get reporteCanceladas(): number { return this.historialAdmin.filter(h => h.estado === 'cancelada').length; }
-  get reportePendientes(): number { return this.historialAdmin.filter(h => h.estado === 'pendiente').length; }
-  get reporteInasistencias(): number { return this.historialAdmin.filter(h => h.estado === 'inasistencia').length; }
 
   descargarPdf(citaId: number): void { window.open(`${API}/citas/${citaId}/pdf`, '_blank'); }
   exportarHistorialPdf(): void { alert('Exportar PDF: pendiente.'); }
@@ -1474,9 +2075,20 @@ private crearGraficos(): void {
   // ══════════════════════════════════════
   // CONFIGURACIÓN → tabs (General / Citas / Horarios / Usuarios y roles / Seguridad)
   // ══════════════════════════════════════
-  configTabActiva: 'general' | 'citas' | 'horarios' | 'usuarios' | 'seguridad' = 'general';
-  cambiarTabConfig(tab: 'general' | 'citas' | 'horarios' | 'usuarios' | 'seguridad'): void {
+  configTabActiva: ConfigTab = 'general';
+
+  cambiarTabConfig(tab: ConfigTab): void {
+    if (!this.puedeAccederTabConfig(tab)) {
+      this.toast.error('No tienes permisos para acceder a esta opción.');
+      return;
+    }
+
     this.configTabActiva = tab;
+
+    if (tab === 'general') this.cargarConfiguracionCentro();
+    if (tab === 'citas') this.cargarConfiguracionCitas();
+    if (tab === 'horarios') this.cargarDiasCerrados();
+    if (tab === 'seguridad') this.cargarAuditoria();
   }
 
   // Reglas de citas (endpoint ya existente en backend: /admin/configuracion)
@@ -1487,6 +2099,8 @@ private crearGraficos(): void {
   guardandoConfigCitas = false;
 
   cargarConfiguracionCitas(): void {
+    if (!this.hasPermission('configuracion.gestionar')) return;
+
     this.http.get<any>(`${API}/admin/configuracion`).subscribe({
       next: (data) => { this.configCitas = data ?? this.configCitas; this.cdr.detectChanges(); },
       error: () => {}
@@ -1494,6 +2108,8 @@ private crearGraficos(): void {
   }
 
   guardarConfiguracionCitas(): void {
+    if (!this.hasPermission('configuracion.gestionar')) return;
+
     this.guardandoConfigCitas = true;
     this.http.patch(`${API}/admin/configuracion`, {
       duracion_turno_min: Number(this.configCitas.duracion_turno_min),
@@ -1522,34 +2138,11 @@ private crearGraficos(): void {
     return [...admin, ...profs];
   }
 
-  configPerfil: any = { nombre_admin: '', contrasena_actual: '', contrasena_nueva: '', contrasena_conf: '' };
   guardandoConfig         = false;
-  mostrarContrasenaActual = false;
-  mostrarContrasenaaNueva  = false;
-  mostrarContrasenaConf   = false;
 
-  // Edición de Perfil admin / Información del Centro: campos bloqueados hasta presionar "Editar"
-  adminPerfilEnEdicion = false;
+  // Edición de Información del Centro: campos bloqueados hasta presionar "Editar"
   centroEnEdicion      = false;
-  fotoAdminCambiada    = false;
   configCentroOriginal: any = {};
-
-  habilitarEdicionPerfilAdmin(): void { this.adminPerfilEnEdicion = true; }
-
-  cancelarEdicionPerfilAdmin(): void {
-    this.adminPerfilEnEdicion = false;
-    this.configPerfil.nombre_admin      = this.configCentro.nombre_admin || '';
-    this.configPerfil.contrasena_actual = '';
-    this.configPerfil.contrasena_nueva  = '';
-    this.configPerfil.contrasena_conf   = '';
-  }
-
-  get perfilAdminModificado(): boolean {
-    return this.configPerfil.nombre_admin !== (this.configCentro.nombre_admin || '')
-        || !!this.configPerfil.contrasena_actual
-        || !!this.configPerfil.contrasena_nueva
-        || this.fotoAdminCambiada;
-  }
 
   habilitarEdicionCentro(): void { this.centroEnEdicion = true; }
 
@@ -1575,7 +2168,6 @@ private crearGraficos(): void {
     this.http.get<any>(`${API}/configuracion-centro`).subscribe({
       next: (data) => {
         this.configCentro = data ?? this.configCentro;
-        this.configPerfil.nombre_admin = data?.nombre_admin ?? '';
         this.configCentroOriginal = {
           nombre_centro: this.configCentro.nombre_centro, telefono: this.configCentro.telefono,
           direccion: this.configCentro.direccion, correo_contacto: this.configCentro.correo_contacto,
@@ -1588,6 +2180,7 @@ private crearGraficos(): void {
   }
 
   guardarInfoCentro(): void {
+    if (!this.puedeConfigGeneral) return;
     if (!this.centroModificado) return;
     this.guardandoConfig = true;
     this.http.patch(`${API}/configuracion-centro`, {
@@ -1610,61 +2203,146 @@ private crearGraficos(): void {
     });
   }
 
-  guardarPerfilAdmin(): void {
-    if (!this.perfilAdminModificado) return;
-    const payloadCentro: any = { nombre_admin: this.configPerfil.nombre_admin };
-    if (this.configCentro.foto_admin_url) payloadCentro.foto_admin_url = this.configCentro.foto_admin_url;
-    this.http.patch(`${API}/configuracion-centro`, payloadCentro).subscribe({
-      next: () => {
-        this.configCentro.nombre_admin = this.configPerfil.nombre_admin;
+  // ══════════════════════════════════════
+  // MI PERFIL (SA-1.2) — identidad real del Usuario autenticado.
+  // Independiente de ConfiguracionCentro: fuente de verdad es
+  // GET/PATCH /usuarios/me. AdminPerfilComponent NO ejecuta HTTP: solo
+  // emite la intención; el shell dispara los PATCH y, tras éxito,
+  // actualiza también la sesión de AuthService (nombre/foto) para que
+  // el topbar (SA-1.1) refleje el cambio sin exigir logout/login.
+  //
+  // cargandoPerfil/perfilCargado: mientras el GET inicial no responde,
+  // AdminPerfilComponent no debe permitir editar/guardar un objeto
+  // vacío como si fueran datos reales del usuario (ver @Input
+  // perfilCargado en admin-perfil.ts).
+  // ══════════════════════════════════════
+  usuarioPerfil: any = {};
+  cargandoPerfil = false;
+  perfilCargado  = false;
+
+  cargarMiPerfil(): void {
+    this.cargandoPerfil = true;
+    this.perfilCargado  = false;
+    this.http.get<any>(`${API}/usuarios/me`).subscribe({
+      next: (data) => {
+        this.usuarioPerfil = data;
+        this.cargandoPerfil = false;
+        this.perfilCargado  = true;
         this.cdr.detectChanges();
       },
-      error: () => {}
-    });
-    if (this.configPerfil.contrasena_nueva) {
-      if (this.configPerfil.contrasena_nueva !== this.configPerfil.contrasena_conf) {
-        this.mensajeError = 'Las contraseñas nuevas no coinciden.'; setTimeout(() => this.mensajeError = '', 3000); return;
+      error: () => {
+        this.cargandoPerfil = false;
+        this.perfilCargado  = false;
+        this.mensajeError = 'No se pudo cargar tu perfil.'; setTimeout(() => this.mensajeError = '', 3000);
+        this.cdr.detectChanges();
       }
-      this.http.patch(`${API}/configuracion-centro/cambiar-password`, {
-        contrasena_actual: this.configPerfil.contrasena_actual, contrasena_nueva: this.configPerfil.contrasena_nueva
-      }).subscribe({
-        next: () => {
-  this.mensajeExito = 'Perfil y contraseña actualizados.';
-  this.configPerfil.contrasena_actual = ''; this.configPerfil.contrasena_nueva = ''; this.configPerfil.contrasena_conf = '';
-  this.adminPerfilEnEdicion = false;
-  this.fotoAdminCambiada = false;
-  setTimeout(() => this.mensajeExito = '', 3000);
-  this.cdr.detectChanges();
-},
-        error: (err) => { this.mensajeError = err?.error?.detail || 'Contraseña actual incorrecta.'; setTimeout(() => this.mensajeError = '', 3000); this.cdr.detectChanges(); }
-      });
-  } else {
-  this.adminPerfilEnEdicion = false;
-  this.fotoAdminCambiada = false;
-  this.mensajeExito = 'Perfil actualizado.'; setTimeout(() => this.mensajeExito = '', 3000);
-  this.cdr.detectChanges();
-}
+    });
   }
 
-  imagenParaRecortar: string | null = null;
-  verFotoAmpliada = false;
+  // Handler del @Output de AdminPerfilComponent.
+  //
+  // Flujo determinista (corrige el bug de la entrega anterior, que
+  // disparaba PATCH /usuarios/me ANTES de validar que las contraseñas
+  // nuevas coincidieran):
+  //   A. Valida localmente ANTES de cualquier PATCH.
+  //      A.1. Si CUALQUIERA de los tres campos de contraseña viene con
+  //           contenido, se considera que se intenta cambiar la
+  //           contraseña: en ese caso deben venir LOS TRES. Si falta
+  //           alguno, no se envía ningún PATCH (ni perfil ni
+  //           contraseña).
+  //      A.2. Solo con los tres presentes se valida que
+  //           contrasena_nueva === contrasena_conf. Si no coinciden,
+  //           tampoco se envía ningún PATCH.
+  //   B. PATCH /usuarios/me.
+  //   C. Solo si (B) tuvo éxito: sincroniza la sesión de AuthService.
+  //   D. Solo si además se pidió cambio de contraseña: PATCH
+  //      /configuracion-centro/cambiar-password, SIEMPRE después de
+  //      que (B) confirmó éxito — nunca en paralelo, nunca si (B) falló.
+  // Los 4 casos de mensaje (perfil solo / perfil+password OK /
+  // perfil OK+password falla / perfil falla) se distinguen
+  // explícitamente: nunca se afirma "Perfil y contraseña actualizados"
+  // si una de las dos partes falló.
+  onGuardarPerfilAdmin(payload: {
+    nombre: string;
+    telefono: string;
+    foto_url?: string;
+    contrasena_actual: string;
+    contrasena_nueva: string;
+    contrasena_conf: string;
+  }): void {
+    // A. Validación local — antes de tocar la red.
+    // A.1. Cualquier campo de contraseña con contenido => se exigen los tres.
+    const seSolicitaCambioPassword = !!payload.contrasena_actual || !!payload.contrasena_nueva || !!payload.contrasena_conf;
+    if (seSolicitaCambioPassword) {
+      const estanLosTresCampos = !!payload.contrasena_actual && !!payload.contrasena_nueva && !!payload.contrasena_conf;
+      if (!estanLosTresCampos) {
+        this.mensajeError = 'Completa todos los campos de contraseña.'; setTimeout(() => this.mensajeError = '', 3000);
+        return;
+      }
+      // A.2. Los tres campos están presentes: recién aquí tiene sentido
+      // comparar nueva vs. confirmación.
+      if (payload.contrasena_nueva !== payload.contrasena_conf) {
+        this.mensajeError = 'Las contraseñas nuevas no coinciden.'; setTimeout(() => this.mensajeError = '', 3000);
+        return;
+      }
+    }
 
-  onFotoSeleccionada(event: any): void {
-    if (!this.adminPerfilEnEdicion) return;
-    const file = event.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e: any) => {
-      this.imagenParaRecortar = e.target.result;
-      this.cdr.detectChanges();
-    };
-    reader.readAsDataURL(file);
-  }
+    const payloadUsuario: any = { nombre: payload.nombre, telefono: payload.telefono };
+    if (payload.foto_url) payloadUsuario.foto_url = payload.foto_url;
 
-  onFotoRecortada(dataUrl: string): void {
-    this.configCentro.foto_admin_url = dataUrl;
-    this.fotoAdminCambiada  = true;
-    this.imagenParaRecortar = null;
-    this.cdr.detectChanges();
+    // B. PATCH /usuarios/me. (C) y (D) dependen de su resultado.
+    this.http.patch<any>(`${API}/usuarios/me`, payloadUsuario).subscribe({
+      next: (usuarioActualizado) => {
+        this.usuarioPerfil = usuarioActualizado;
+
+        // C. Perfil guardado con éxito: sincroniza el topbar (SA-1.1)
+        // de inmediato, sin exigir logout/login. Correo y rol no se
+        // tocan: no son editables desde Mi Perfil en esta fase.
+        this.auth.actualizarIdentidadSesion({
+          nombre: usuarioActualizado.nombre,
+          foto_url: usuarioActualizado.foto_url
+        });
+        this.cdr.detectChanges();
+
+        if (payload.contrasena_nueva) {
+          // D. Cambio de contraseña solicitado: se dispara recién ahora,
+          // nunca antes ni en paralelo con (B).
+          this.http.patch(`${API}/configuracion-centro/cambiar-password`, {
+            contrasena_actual: payload.contrasena_actual, contrasena_nueva: payload.contrasena_nueva
+          }).subscribe({
+            next: () => {
+              // Caso: perfil OK + contraseña OK.
+              this.mensajeExito = 'Perfil y contraseña actualizados correctamente.';
+              this.adminPerfilRef?.finalizarEdicion(true);
+              setTimeout(() => this.mensajeExito = '', 3000);
+              this.cdr.detectChanges();
+            },
+            error: (err) => {
+              // Caso: perfil OK + contraseña falla. Nunca se informa
+              // como si ambos hubieran fallado o ambos tenido éxito:
+              // el perfil YA se guardó, la contraseña NO cambió.
+              this.mensajeExito = '';
+              this.mensajeError = 'Perfil actualizado, pero la contraseña no se pudo cambiar: '
+                + (err?.error?.detail || 'contraseña actual incorrecta.');
+              this.adminPerfilRef?.finalizarEdicion(false);
+              setTimeout(() => this.mensajeError = '', 4000);
+              this.cdr.detectChanges();
+            }
+          });
+        } else {
+          // Caso: solo perfil, sin cambio de contraseña.
+          this.adminPerfilRef?.finalizarEdicion(false);
+          this.mensajeExito = 'Perfil actualizado correctamente.'; setTimeout(() => this.mensajeExito = '', 3000);
+          this.cdr.detectChanges();
+        }
+      },
+      error: () => {
+        // Caso: el perfil falla -> nunca se intenta el cambio de
+        // contraseña, aunque se hubiera solicitado.
+        this.mensajeError = 'No se pudo actualizar el perfil.'; setTimeout(() => this.mensajeError = '', 3000);
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   esFeriado(fecha: string | undefined): boolean {
@@ -1700,6 +2378,10 @@ private crearGraficos(): void {
   get hoyISO(): string { return new Date().toISOString().split('T')[0]; }
 
   cargarDiasCerrados(): void {
+    if (!this.hasPermission('agenda.ver')) {
+      this.diasCerrados = [];
+      return;
+    }
     this.http.get<any[]>(`${API}/admin/dias-cerrados`).subscribe({
       next: (data) => { this.diasCerrados = data ?? []; this.cdr.detectChanges(); },
       error: () => { this.diasCerrados = []; this.cdr.detectChanges(); }
@@ -1707,6 +2389,7 @@ private crearGraficos(): void {
   }
 
   crearDiaCerrado(): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
     if (!this.nuevoDiaCerrado.fecha || !this.nuevoDiaCerrado.motivo || this.creandoDiaCerrado) return;
     this.creandoDiaCerrado = true;
     this.http.post<any>(`${API}/admin/dias-cerrados`, this.nuevoDiaCerrado).subscribe({
@@ -1728,6 +2411,7 @@ private crearGraficos(): void {
   }
 
   verCitasDiaCerrado(dia: any): void {
+    if (!this.hasPermission('agenda.ver')) return;
     this.diaCerradoSeleccionado = dia;
     this.modalCitasDiaCerradoAbierto = true;
     this.cargandoCitasDiaCerrado = true;
@@ -1743,6 +2427,7 @@ private crearGraficos(): void {
   }
 
   reabrirDiaCerrado(dia: any): void {
+    if (!this.hasPermission('agenda.gestionar')) return;
     if (!confirm(`¿Reabrir el ${dia.fecha}? Las citas que ya se cancelaron NO se restauran automáticamente.`)) return;
     this.http.delete(`${API}/admin/dias-cerrados/${dia.id}`).subscribe({
       next: () => {
@@ -1760,13 +2445,19 @@ private crearGraficos(): void {
   }
 
   cargarAuditoria(): void {
+    if (!this.hasPermission('auditoria.ver')) {
+      this.auditoria = [];
+      this.cargandoAuditoria = false;
+      return;
+    }
+
     this.cargandoAuditoria = true;
     let url = `${API}/admin/auditoria?`;
     if (this.auditFiltroDesde) url += `fecha_inicio=${this.auditFiltroDesde}&`;
     if (this.auditFiltroHasta) url += `fecha_fin=${this.auditFiltroHasta}&`;
     this.http.get<any[]>(url).subscribe({
       next: (data) => {
-        this.auditoria = (data ?? []).map(a => ({ ...a, seleccionada: false }));
+        this.auditoria = data ?? [];
         this.cargandoAuditoria = false;
         this.cdr.detectChanges();
       },
@@ -1774,43 +2465,15 @@ private crearGraficos(): void {
     });
   }
 
-  eliminarAuditoria(id: number): void {
-    this.http.delete(`${API}/admin/auditoria/${id}`).subscribe({
-      next: () => {
-        this.auditoria = this.auditoria.filter(a => a.id !== id);
-        this.cdr.detectChanges();
-      },
-      error: () => { this.mensajeError = 'No se pudo eliminar el registro.'; setTimeout(() => this.mensajeError = '', 3000); }
-    });
-  }
-
-  get auditoriaSeleccionada(): any[] { return this.auditoria.filter(a => a.seleccionada); }
-  get hayAuditoriaSeleccionada(): boolean { return this.auditoriaSeleccionada.length > 0; }
-  get todaAuditoriaSeleccionada(): boolean {
-    return this.auditoria.length > 0 && this.auditoria.every(a => a.seleccionada);
-  }
-
-  toggleSeleccionarTodaAuditoria(): void {
-    const nuevoValor = !this.todaAuditoriaSeleccionada;
-    this.auditoria.forEach(a => a.seleccionada = nuevoValor);
-  }
-
-  eliminarAuditoriaSeleccionada(): void {
-    const seleccionadas = this.auditoriaSeleccionada;
-    if (!seleccionadas.length) return;
-    if (!confirm(`¿Eliminar ${seleccionadas.length} registro(s) de auditoría seleccionados? Esta acción no se puede deshacer.`)) return;
-    seleccionadas.forEach(a => {
-      this.http.delete(`${API}/admin/auditoria/${a.id}`).subscribe({
-        next: () => {
-          this.auditoria = this.auditoria.filter(x => x.id !== a.id);
-          this.cdr.detectChanges();
-        },
-        error: () => { this.mensajeError = 'No se pudo eliminar uno de los registros.'; setTimeout(() => this.mensajeError = '', 3000); }
-      });
-    });
-  }
+  // SA-5: la auditoría es append-only. Se retiraron eliminarAuditoria(),
+  // auditoriaSeleccionada, hayAuditoriaSeleccionada,
+  // todaAuditoriaSeleccionada, toggleSeleccionarTodaAuditoria() y
+  // eliminarAuditoriaSeleccionada() — ya no existe ningún borrado ni
+  // selección de registros de auditoría en el dashboard.
 
   exportarAuditoriaExcel(): void {
+    if (!this.hasPermission('auditoria.ver')) return;
+
     this.exportarComoExcel(this.auditoria.map(a => ({
       'Fecha/Hora': a.fecha, Acción: a.accion, Detalle: a.detalle,
       Entidad: a.entidad, 'ID Entidad': a.entidad_id
@@ -1824,6 +2487,12 @@ private crearGraficos(): void {
   // ══════════════════════════════════════
 
   private exportarComoExcel(datos: any[], nombreArchivo: string): void {
+    // NOTA (iteración Admin Inicio): este método genera un .xls que en
+    // realidad es texto TSV, lo que hace que Excel muestre "posible
+    // pérdida de datos" y rompa tildes/ñ (sin BOM/encoding real). Usado
+    // hoy solo por exportarAuditoriaExcel() — Inicio ya migró a
+    // exportarComoXlsx() (.xlsx real vía SheetJS). Pendiente migrar
+    // Auditoría en su propia fase para no tocar ese módulo ahora.
     if (!datos.length) { alert('No hay datos para exportar.'); return; }
     const headers = Object.keys(datos[0]);
     const filas   = datos.map(fila => headers.map(h => fila[h] ?? '').join('\t'));
@@ -1833,5 +2502,18 @@ private crearGraficos(): void {
     const a    = document.createElement('a');
     a.href = url; a.download = `${nombreArchivo}_${new Date().toISOString().slice(0,10)}.xls`;
     a.click(); URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Genera un .xlsx real (formato binario/XML de Excel, no TSV disfrazado)
+   * vía SheetJS. Preserva tildes/ñ correctamente porque el formato .xlsx
+   * es UTF-8 nativo — no depende de BOM ni de que Excel adivine el encoding.
+   */
+  private exportarComoXlsx(datos: any[], nombreArchivo: string, nombreHoja: string): void {
+    if (!datos.length) { alert('No hay datos para exportar.'); return; }
+    const hoja  = XLSX.utils.json_to_sheet(datos);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, nombreHoja);
+    XLSX.writeFile(libro, `${nombreArchivo}_${new Date().toISOString().slice(0,10)}.xlsx`);
   }
 }

@@ -1,5 +1,5 @@
 <!-- dashboard-admin.html -->
-<div class="dashboard" [class.tema-oscuro]="temaOscuro" [class.sidebar-abierta]="sidebarMovilAbierta">
+<div class="dashboard admin-shell" [class.tema-oscuro]="temaOscuro" [class.sidebar-abierta]="sidebarMovilAbierta">
 
   <!-- ═══════════════ SIDEBAR ═══════════════ -->
   <div class="sidebar-overlay" *ngIf="sidebarMovilAbierta" (click)="toggleSidebarMovil()"></div>
@@ -20,48 +20,53 @@
         </svg>
         Inicio
       </button>
-      <button class="nav-item" [class.active]="seccionActiva==='horario'" (click)="navegarA('horario')">
+      <button class="nav-item" *ngIf="puedeAccederSeccion('horario')" [class.active]="seccionActiva==='horario'" (click)="navegarA('horario')">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
         </svg>
         Agenda
       </button>
-      <button class="nav-item" [class.active]="seccionActiva==='citas'" (click)="navegarA('citas')">
+      <button class="nav-item" *ngIf="puedeAccederSeccion('citas')" [class.active]="seccionActiva==='citas'" (click)="navegarA('citas')">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
         </svg>
         Citas
       </button>
-      <button class="nav-item" [class.active]="seccionActiva==='profesional'" (click)="navegarA('profesional')">
+      <button class="nav-item" *ngIf="puedeAccederSeccion('profesional')" [class.active]="seccionActiva==='profesional'" (click)="navegarA('profesional')">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
         </svg>
         Profesionales
       </button>
-      <button class="nav-item" [class.active]="seccionActiva==='estudiantes'" (click)="navegarA('estudiantes')">
+      <button class="nav-item" *ngIf="puedeAccederSeccion('estudiantes')" [class.active]="seccionActiva==='estudiantes'" (click)="navegarA('estudiantes')">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
         </svg>
         Estudiantes
       </button>
-      <button class="nav-item" [class.active]="seccionActiva==='historial'" (click)="navegarA('historial')">
+      <button class="nav-item" *ngIf="puedeAccederSeccion('historial')" [class.active]="seccionActiva==='historial'" (click)="navegarA('historial')">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
           <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
         Historial
       </button>
-      <button class="nav-item" [class.active]="seccionActiva==='reportes'" (click)="navegarA('reportes')">
+      <button class="nav-item" *ngIf="puedeAccederSeccion('reportes')" [class.active]="seccionActiva==='reportes'" (click)="navegarA('reportes')">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
         </svg>
         Reportes
       </button>
-      <button class="nav-item" [class.active]="seccionActiva==='configuracion'" (click)="navegarA('configuracion')">
+      <button class="nav-item" *ngIf="puedeAccederSeccion('configuracion')" [class.active]="seccionActiva==='configuracion'" (click)="navegarA('configuracion')">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
         </svg>
         Configuración
+      </button>
+      <!-- ══ SA-4: Administradores — visible SOLO con roles.gestionar (hoy, solo SUPERADMIN) ══ -->
+      <button class="nav-item" *ngIf="puedeAccederSeccion('administradores')" [class.active]="seccionActiva==='administradores'" (click)="navegarA('administradores')">
+        <span class="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>
+        Administradores
       </button>
     </nav>
 
@@ -93,7 +98,7 @@
   </button>
   <div class="topbar-left">
         <h1 class="topbar-title" *ngIf="seccionActiva!=='inicio'">{{ tituloSeccion }}</h1>
-        <h1 class="topbar-title" *ngIf="seccionActiva==='inicio'">Hola, {{ configCentro.nombre_admin || 'Administrador/a' }} 👋</h1>
+        <h1 class="topbar-title" *ngIf="seccionActiva==='inicio'">Hola, {{ nombreUsuario }} 👋</h1>
         <span class="topbar-sub">{{ subtituloSeccion }}</span>
       </div>
       <div class="topbar-actions">
@@ -135,11 +140,11 @@
           <span class="notif-badge" *ngIf="notifNoLeidas > 0">{{ notifNoLeidas }}</span>
         </button>
         <div class="topbar-perfil">
-          <div class="admin-avatar-topbar" *ngIf="!configCentro.foto_admin_url">AD</div>
-          <img *ngIf="configCentro.foto_admin_url" [src]="configCentro.foto_admin_url" class="admin-avatar-img-topbar" alt="Foto admin" />
+          <div class="admin-avatar-topbar" *ngIf="!fotoUsuarioUrl">{{ inicialesUsuario }}</div>
+          <img *ngIf="fotoUsuarioUrl" [src]="fotoUsuarioUrl" class="admin-avatar-img-topbar" alt="Foto de perfil" />
           <div class="topbar-perfil-info">
-            <span class="topbar-perfil-nombre">{{ configCentro.nombre_admin || 'Admin SESAES' }}</span>
-            <span class="topbar-perfil-rol">Administrador</span>
+            <span class="topbar-perfil-nombre">{{ nombreUsuario }}</span>
+            <span class="topbar-perfil-rol">{{ rolVisual }}</span>
           </div>
         </div>
       </div>
@@ -188,1104 +193,209 @@
     <main class="main-content">
 
       <!-- ══ INICIO ══ -->
-      <div *ngIf="seccionActiva==='inicio'">
+      <app-admin-inicio
+        *ngIf="seccionActiva==='inicio'"
+        [puedeVerAgenda]="hasPermission('agenda.ver')"
+        [puedeGestionarAgenda]="hasPermission('agenda.gestionar')"
+        [estadisticas]="estadisticas"
+        [resumenDia]="resumenDia"
+        [actualizandoDisponibilidad]="actualizandoDisponibilidad"
+        [graficoEspecialidad]="graficoEspecialidad"
+        [graficoSemana]="graficoSemana"
+        [proximasCitas]="proximasCitas"
+        [actividadReciente]="actividadReciente"
+        [(filtroGraficoAnio)]="filtroGraficoAnio"
+        [(filtroGraficoCarrera)]="filtroGraficoCarrera"
+        (recargarGraficoEspecialidad)="cargarGraficoEspecialidad()"
+        (exportarEspecialidad)="exportarEspecialidadExcel()"
+        (exportarSemana)="exportarSemanaExcel()"
+        (verAgenda)="navegarA('horario')"
+        (marcarInasistenciaCita)="marcarInasistencia($event)"
+        (cancelarCita)="cancelarCitaAdmin($event)"
+        (actualizarDisponibilidad)="cargarResumenDia()"
+      ></app-admin-inicio>
 
-        <!-- 1. Estadísticas -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon blue">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-            </div>
-            <div class="stat-info">
-              <span class="stat-label">Reservas de hoy</span>
-              <span class="stat-num">{{ estadisticas.reservas_hoy }}</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon green">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
-              </svg>
-            </div>
-            <div class="stat-info">
-              <span class="stat-label">Profesionales activos</span>
-              <span class="stat-num">{{ estadisticas.profesionales_activos }}</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon teal">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-              </svg>
-            </div>
-            <div class="stat-info">
-              <span class="stat-label">Horas disponibles</span>
-              <span class="stat-num">{{ estadisticas.horas_disponibles }}</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon orange">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-            </div>
-            <div class="stat-info">
-              <span class="stat-label">Solicitudes urgentes</span>
-              <span class="stat-num urgente">{{ estadisticas.urgentes }}</span>
-            </div>
-            <span class="urgente-badge" *ngIf="estadisticas.urgentes > 0">URGENTE</span>
-          </div>
-        </div>
+<!-- ══ HORARIO ══ -->
+      <app-admin-horario
+        *ngIf="seccionActiva==='horario' && puedeAccederSeccion('horario')"
+        [puedeGestionarAgenda]="hasPermission('agenda.gestionar')"
+        [solicitudesHorarioAdmin]="solicitudesHorarioAdmin"
+        [especialidades]="especialidades"
+        [profesionalesFiltrados]="profesionalesFiltrados"
+        [(filtroEspecialidad)]="filtroEspecialidad"
+        [(filtroProfesionalId)]="filtroProfesionalId"
+        [profesionalActual]="profesionalActual"
+        [profesionalActualBloqueado]="profesionalActualBloqueado"
+        [semanaActual]="semanaActual"
+        [semanaLabel]="semanaLabel"
+        [horasGrilla]="horasGrilla"
+        [(diaSeleccionado)]="diaSeleccionado"
+        [citasDiaSeleccionado]="citasDiaSeleccionado"
+        [citasHorario]="citasHorarioAgenda"
+        [diasCerrados]="diasCerrados"
+        [bloqueEstadoFn]="horarioBloqueEstadoFn"
+        [bloqueInfoFn]="horarioBloqueInfoFn"
+        [bloqueCitasFn]="horarioBloqueCitasFn"
+        [bloqueSobrecupoDisponibleFn]="horarioBloqueSobrecupoDisponibleFn"
+        [formatearFechaFn]="horarioFormatearFechaFn"
+        [esFeriadoFn]="horarioEsFeriadoFn"
+        [nombreFeriadoFn]="horarioNombreFeriadoFn"
+        (aprobarSolicitud)="aprobarSolicitudHorario($event)"
+        (rechazarSolicitud)="rechazarSolicitudHorario($event)"
+        (filtrar)="filtrarProfesionales()"
+        (recargarHorario)="cargarHorarioProfesional()"
+        (abrirNuevaCita)="abrirModalNuevaCita()"
+        (imprimir)="imprimirAgenda()"
+        (anterior)="semanaAnterior()"
+        (siguiente)="semanaSiguiente()"
+        (hoy)="irAHoy()"
+        (bloqueClick)="clickBloque($event.fecha, $event.hora)"
+        (cancelarCita)="cancelarCitaAdmin($event)"
+      ></app-admin-horario>
 
-        <!-- 2. Gráficos -->
-        <div class="graficos-grid">
-          <div class="card grafico-card">
-            <div class="card-header">
-              <h3 class="card-title">Citas por especialidad</h3>
-              <div class="grafico-filtros">
-                <select [(ngModel)]="filtroGraficoAnio" (change)="cargarGraficoEspecialidad()">
-                  <option *ngFor="let a of aniosDisponiblesGrafico" [value]="a">{{ a }}</option>
-                </select>
-                <input class="grafico-filtro-input" [(ngModel)]="filtroGraficoCarrera" placeholder="Carrera..." (change)="cargarGraficoEspecialidad()" />
-                <button class="btn-exportar-small" (click)="exportarEspecialidadExcel()">↓ Excel</button>
-              </div>
-            </div>
-            <div class="grafico-canvas-wrap">
-              <canvas #chartEspecialidad></canvas>
-            </div>
-            <div class="grafico-leyenda">
-              <span *ngFor="let item of graficoEspecialidad; let i = index" class="leyenda-chip">
-                <span class="leyenda-dot" [style.background]="coloresGrafico[i % coloresGrafico.length]"></span>
-                {{ item.especialidad }} {{ item.porcentaje }}%
-              </span>
-              <span *ngIf="graficoEspecialidad.length === 0" class="tabla-vacia">Sin datos</span>
-            </div>
-          </div>
-
-          <div class="card grafico-card">
-            <div class="card-header">
-              <h3 class="card-title">Citas por semana</h3>
-              <button class="btn-exportar-small" (click)="exportarSemanaExcel()">↓ Excel</button>
-            </div>
-            <div class="grafico-canvas-wrap">
-              <canvas #chartSemana></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3. Disponibilidad Hoy + Calendario -->
-        <div class="inicio-grid">
-          <div class="card disponibilidad-card">
-            <div class="card-header">
-              <h3 class="card-title">Disponibilidad Hoy</h3>
-            </div>
-            <div class="disponibilidad-lista">
-              <div *ngFor="let prof of resumenDia" class="disponibilidad-item">
-                <span class="disp-icono">{{ getIconoEstadoProf(prof.estado) }}</span>
-                <span class="disp-nombre">{{ prof.nombre }}</span>
-                <span class="disp-estado" [ngClass]="'disp-' + prof.estado">
-                  {{ prof.estado === 'activo' ? 'Activo' : prof.estado === 'licencia' ? 'En licencia médica' : 'Inasistencia' }}
-                  <span *ngIf="prof.estado === 'activo' && prof.citas_hoy !== undefined"> ({{ prof.citas_hoy }} citas hoy)</span>
-                </span>
-              </div>
-              <div *ngIf="resumenDia.length === 0" class="tabla-vacia">Sin datos de disponibilidad</div>
-            </div>
-          </div>
-
-          <!-- Calendario del mes (solo visual) -->
-          <div class="card inicio-calendario">
-            <div class="calendario-header">
-              <button class="cal-nav-btn" (click)="calMesAnterior()">‹</button>
-              <span>{{ calNombreMesVisible }}</span>
-              <button class="cal-nav-btn" (click)="calMesSiguiente()">›</button>
-            </div>
-            <div class="cal-grid-dias-nombre-admin">
-              <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
-            </div>
-            <div class="cal-grid-admin">
-              <div *ngFor="let dia of calDiasMes" class="cal-celda-admin" [class.vacia]="!dia" [class.clickeable]="dia" (click)="seleccionarDiaInfo(dia)">
-                <span *ngIf="dia" [class.hoy]="dia.esHoy" [class.feriado]="esFeriado(dia.fecha)" [title]="nombreFeriado(dia.fecha)">{{ dia.num }}</span>
-              </div>
-            </div>
-            <div class="info-dia-admin" *ngIf="diaSeleccionadoInfo && infoDelDia(diaSeleccionadoInfo).length > 0">
-              <span class="info-dia-admin-item" *ngFor="let info of infoDelDia(diaSeleccionadoInfo)">{{ info }}</span>
-            </div>
-            <p class="info-dia-admin-vacio" *ngIf="diaSeleccionadoInfo && infoDelDia(diaSeleccionadoInfo).length === 0">
-              Nada especial que celebrar este día.
-            </p>
-          </div>
-        </div>
-
-        <!-- 4. Próximas Citas + Actividad Reciente -->
-        <div class="inicio-grid">
-          <div class="card proximas-citas-card">
-            <div class="card-header">
-              <h3 class="card-title">Próximas Citas</h3>
-              <button class="btn-ver-agenda" (click)="navegarA('horario')">Ver agenda completa →</button>
-            </div>
-            <table class="admin-tabla">
-              <thead>
-                <tr>
-                  <th>ESTUDIANTE</th><th>ESPECIALIDAD</th><th>PROFESIONAL</th><th>FECHA</th><th>HORARIO</th><th>ACCIONES</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let cita of proximasCitas">
-                  <td>
-                    <div class="tabla-usuario">
-                      <div class="mini-avatar">{{ cita.estudiante | slice:0:2 }}</div>
-                      <div><strong>{{ cita.estudiante }}</strong><span>{{ cita.rut }}</span></div>
-                    </div>
-                  </td>
-                  <td><span class="esp-badge">{{ cita.especialidad }}</span></td>
-                  <td>{{ cita.profesional }}</td>
-                  <td><span class="fecha-cell">{{ formatearFecha(cita.fecha) }}</span></td>
-                  <td><div class="horario-cell">{{ cita.hora }}</div></td>
-                  <td>
-                    <div class="tabla-acciones">
-                      <button class="btn-tabla inasistencia" (click)="marcarInasistencia(cita)" title="Marcar inasistencia">✕</button>
-                      <button class="btn-tabla cancelar" (click)="cancelarCitaAdmin(cita)" title="Cancelar cita">🗑️</button>
-                    </div>
-                  </td>
-                </tr>
-                <tr *ngIf="proximasCitas.length === 0">
-                  <td colspan="6" class="tabla-vacia">No hay citas próximas</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div class="card actividad-card">
-            <h3 class="card-title">Actividad Reciente</h3>
-            <div class="actividad-lista">
-              <div *ngFor="let item of actividadReciente" class="actividad-item">
-                <div class="actividad-icono" [ngClass]="item.tipo"></div>
-                <div class="actividad-texto"><p>{{ item.mensaje }}</p><span>{{ item.tiempo }}</span></div>
-              </div>
-              <div *ngIf="actividadReciente.length === 0" class="tabla-vacia">Sin actividad reciente</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══ HORARIO ══ -->
-      <div *ngIf="seccionActiva==='horario'">
-        <!-- Solicits -->
-      <div class="card" *ngIf="solicitudesHorarioAdmin.length > 0">
-          <div class="card-header">
-            <h3 class="card-title">⏳ Solicitudes de Horario Pendientes ({{ solicitudesHorarioAdmin.length }})</h3>
-          </div>
-          <table class="admin-tabla">
-            <thead>
-              <tr><th>PROFESIONAL</th><th>ESPECIALIDAD</th><th>TIPO</th><th>HORARIO SOLICITADO</th><th>SOLICITADO EL</th><th>ACCIONES</th></tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let s of solicitudesHorarioAdmin">
-                <td>{{ s.profesional_nombre }}</td>
-                <td><span class="esp-badge">{{ s.especialidad }}</span></td>
-                <td>{{ s.tipo === 'colacion' ? '🍽️ Colación' : (s.tipo === 'bloques' ? '🗓️ Agenda semanal' : '🕐 Jornada') }}</td>
-                <td>
-                  <span *ngIf="s.tipo !== 'bloques'">{{ s.hora_inicio }} – {{ s.hora_fin }}</span>
-                  <div *ngIf="s.tipo === 'bloques'" class="bloques-preview-admin">
-                    <div *ngFor="let b of s.bloques" class="bloques-preview-item-admin" [class.colacion]="b.tipo === 'colacion'">
-                      {{ NOMBRES_DIA_BLOQUES[b.dia_semana] }} {{ b.hora_inicio }}–{{ b.hora_fin }}{{ b.tipo === 'colacion' ? ' (colación)' : '' }}
-                    </div>
-                  </div>
-                </td>
-                <td>{{ s.fecha_solicitud | date:'dd/MM/yyyy HH:mm' }}</td>
-                <td>
-                  <div class="tabla-acciones">
-                    <button class="btn-tabla ver" (click)="aprobarSolicitudHorario(s)" title="Aprobar">✓ Aprobar</button>
-                    <button class="btn-tabla cancelar" (click)="rechazarSolicitudHorario(s)" title="Rechazar">✕ Rechazar</button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="horario-filtros">
-          <div class="filtro-grupo">
-            <label>Especialidad</label>
-            <select [(ngModel)]="filtroEspecialidad" (change)="filtrarProfesionales()">
-              <option value="">Todas</option>
-              <option *ngFor="let e of especialidades">{{ e }}</option>
-            </select>
-          </div>
-          <div class="filtro-grupo">
-            <label>Profesional</label>
-            <select [(ngModel)]="filtroProfesionalId" (change)="cargarHorarioProfesional()">
-              <option value="">Seleccionar...</option>
-              <option *ngFor="let p of profesionalesFiltrados" [value]="p.id">{{ p.nombre }}</option>
-            </select>
-          </div>
-          <div class="horario-acciones-top">
-            <button class="btn-nueva-cita-top" (click)="abrirModalNuevaCita()" [disabled]="!filtroProfesionalId || profesionalActualBloqueado">
-              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              Nueva Cita +
-            </button>
-            <button class="btn-imprimir" (click)="imprimirAgenda()">
-              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-              </svg>
-              Imprimir Agenda
-            </button>
-          </div>
-        </div>
-
-        <div class="horario-leyenda">
-          <span class="leyenda-item">🟢 Hora disponible</span>
-          <span class="leyenda-item">🔵 Cita habitual</span>
-          <span class="leyenda-item">🔴 Cita urgente</span>
-          <span class="leyenda-item">🟣 Sobrecupo</span>
-          <span class="leyenda-item">⚪ Fuera de horario</span>
-          <span class="leyenda-item">⚫ Bloqueado</span>
-          <span class="leyenda-item">🟥 Centro cerrado</span>
-          <span class="leyenda-item">🟠 Feriado</span>
-        </div>
-
-        <div class="horario-bloqueado-aviso" *ngIf="filtroProfesionalId && profesionalActualBloqueado">
-          ⚠️ {{ profesionalActual?.nombre }} está actualmente en estado "{{ profesionalActual?.estado }}" — su agenda está bloqueada hasta que se reactive manualmente desde Profesional → Gestionar.
-        </div>
-
-        <div class="stats-semana-bar" *ngIf="filtroProfesionalId">
-          <div class="stat-semana">
-            <span class="stat-semana-num">{{ estadisticasSemana.programadas }}<small>/{{ estadisticasSemana.capacidad }}</small></span>
-            <span class="stat-semana-label">Citas programadas</span>
-          </div>
-          <div class="stat-semana">
-            <span class="stat-semana-num">{{ estadisticasSemana.pctOcupado }}%</span>
-            <span class="stat-semana-label">Ocupado</span>
-          </div>
-          <div class="stat-semana stat-semana-urgente" *ngIf="estadisticasSemana.urgentes > 0">
-            <span class="stat-semana-num">{{ estadisticasSemana.urgentes }}</span>
-            <span class="stat-semana-label">Urgentes</span>
-          </div>
-          <div class="stat-semana stat-semana-sobrecupo" *ngIf="estadisticasSemana.sobrecupos > 0">
-            <span class="stat-semana-num">{{ estadisticasSemana.sobrecupos }}</span>
-            <span class="stat-semana-label">Sobrecupos</span>
-          </div>
-          <div class="stat-semana">
-            <span class="stat-semana-num">{{ estadisticasSemana.disponibles }}</span>
-            <span class="stat-semana-label">Bloques libres</span>
-          </div>
-        </div>
-
-        <div class="horario-layout" *ngIf="filtroProfesionalId">
-          <div class="card horario-card">
-            <div class="semana-header">
-              <button class="cal-nav-btn" (click)="semanaAnterior()">‹</button>
-              <span class="semana-titulo">{{ semanaLabel }}</span>
-              <button class="cal-nav-btn" (click)="semanaSiguiente()">›</button>
-              <button class="btn-hoy" (click)="irAHoy()">Hoy</button>
-            </div>
-            <div class="semana-grilla">
-              <div class="hora-col">
-                <div class="hora-celda header"></div>
-                <div class="hora-celda" *ngFor="let h of horasGrilla">{{ h }}</div>
-              </div>
-              <div class="dia-col" *ngFor="let dia of semanaActual">
-                <div class="dia-header" [class.hoy]="dia.esHoy" [class.feriado]="esFeriado(dia.fecha)" [title]="nombreFeriado(dia.fecha)">
-                  <span class="dia-nombre">{{ dia.nombre }}</span>
-                  <span class="dia-num">{{ dia.num }}</span>
-                </div>
-                <div class="bloque-celda" *ngFor="let h of horasGrilla"
-                     [class.disponible]="getBloqueEstado(dia.fecha, h) === 'disponible'"
-                     [class.ocupado]="getBloqueEstado(dia.fecha, h) === 'ocupado'"
-                     [class.urgente-bloque]="getBloqueEstado(dia.fecha, h) === 'urgente'"
-                     [class.sobrecupo-bloque]="getBloqueEstado(dia.fecha, h) === 'sobrecupo'"
-                     [class.colacion-bloque]="getBloqueEstado(dia.fecha, h) === 'colacion'"
-                     [class.fuera-horario-bloque]="getBloqueEstado(dia.fecha, h) === 'fuera-horario'"
-                     [class.bloqueado]="getBloqueEstado(dia.fecha, h) === 'bloqueado'"
-                     [class.cerrado-centro-bloque]="getBloqueEstado(dia.fecha, h) === 'cerrado-centro'"
-                     [class.pasado-bloque]="getBloqueEstado(dia.fecha, h) === 'pasado'"
-                     [class.fuera-institucional-bloque]="getBloqueEstado(dia.fecha, h) === 'fuera-institucional'"
-                     [title]="getBloqueEstado(dia.fecha, h) === 'cerrado-centro' ? 'El centro no atiende este día' : (getBloqueEstado(dia.fecha, h) === 'pasado' ? 'Esa hora ya pasó' : (getBloqueEstado(dia.fecha, h) === 'fuera-institucional' ? 'Fuera del horario institucional' : (getBloqueEstado(dia.fecha, h) === 'fuera-horario' ? 'Fuera del horario habitual — clic para forzar sobrecupo' : (getBloqueEstado(dia.fecha, h) === 'colacion' ? 'Hora de colación — clic para forzar sobrecupo' : ''))))"
-                     (click)="clickBloque(dia.fecha, h)">
-                  <ng-container *ngIf="citaEnBloque(dia.fecha, h) as cita; else infoSimple">
-                    <div class="bloque-cita-card">
-                      <div class="bloque-cita-linea1">
-                        <strong class="bloque-cita-nombre">{{ cita.estudiante }}</strong>
-                        <span class="bloque-badge bloque-badge-urgente" *ngIf="cita.urgente">URGENTE</span>
-                        <span class="bloque-badge bloque-badge-sobrecupo" *ngIf="cita.sobrecupo">SOBRECUPO</span>
-                      </div>
-                      <span class="bloque-cita-rut">{{ cita.rut }}</span>
-                    </div>
-                  </ng-container>
-                  <ng-template #infoSimple>
-                    <span *ngIf="getBloqueInfo(dia.fecha, h) as info" class="bloque-info">{{ info }}</span>
-                  </ng-template>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card detalle-dia-card" *ngIf="diaSeleccionado">
-            <div class="detalle-header">
-              <h4>{{ formatearFecha(diaSeleccionado) }}</h4>
-              <button class="detalle-cerrar" (click)="diaSeleccionado=null">✕</button>
-            </div>
-            <div class="detalle-lista">
-              <div *ngFor="let cita of citasDiaSeleccionado" class="detalle-cita" [class.urgente]="cita.urgente">
-                <span class="detalle-hora">{{ cita.hora }}</span>
-                <div class="detalle-info">
-                  <strong>{{ cita.estudiante }}</strong>
-                  <span>{{ cita.especialidad }}</span>
-                  <span *ngIf="cita.urgente" class="urgente-tag">URGENTE</span>
-                </div>
-                <span class="estado-badge" [ngClass]="cita.estado">{{ cita.estado }}</span>
-                <div class="detalle-acciones" *ngIf="cita.estado === 'pendiente'">
-                  <button class="btn-tabla cancelar" (click)="cancelarCitaAdmin(cita)" title="Cancelar">✕</button>
-                </div>
-              </div>
-              <div *ngIf="citasDiaSeleccionado.length === 0" class="tabla-vacia">Sin citas este día</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="horario-vacio" *ngIf="!filtroProfesionalId">
-          <p>Selecciona un profesional para ver su agenda</p>
-        </div>
-      </div>
-
-      <!-- ══ CITAS ══ -->
-      <div *ngIf="seccionActiva==='citas'">
-        <div class="card">
-          <div class="historial-filtros-admin">
-            <div class="filtro-grupo"><label>Buscar estudiante</label><input [(ngModel)]="citasFiltroEstudiante" placeholder="Nombre o RUT..." /></div>
-            <div class="filtro-grupo">
-              <label>Rango</label>
-              <select [(ngModel)]="citasFiltroRango">
-                <option value="todas">Todas</option>
-                <option value="hoy">Hoy</option>
-                <option value="semana">Próximos 7 días</option>
-              </select>
-            </div>
-            <div class="filtro-grupo">
-              <label>Estado</label>
-              <select [(ngModel)]="citasFiltroEstado">
-                <option value="">Todos</option>
-                <option value="pendiente">Pendiente</option>
-                <option value="completada">Completada</option>
-                <option value="cancelada">Cancelada</option>
-                <option value="inasistencia">Inasistencia</option>
-              </select>
-            </div>
-            <div class="filtro-grupo">
-              <label>Prioridad</label>
-              <select [(ngModel)]="citasFiltroPrioridad">
-                <option value="">Todas</option>
-                <option value="urgente">🚨 Urgente</option>
-                <option value="normal">Normal</option>
-              </select>
-            </div>
-          </div>
-          <div class="historial-acciones">
-            <button class="btn-filtrar" (click)="cargarCitas()">Aplicar Filtros</button>
-            <button class="btn-limpiar" (click)="limpiarFiltrosCitas()">Limpiar</button>
-            <button class="btn-nueva-cita-top" (click)="navegarA('horario')">+ Agendar cita (en Agenda)</button>
-          </div>
-
-          <div *ngIf="citasCargando" class="tabla-vacia">Cargando...</div>
-          <table class="admin-tabla" *ngIf="!citasCargando">
-            <thead>
-              <tr><th>ESTUDIANTE</th><th>ESPECIALIDAD</th><th>PROFESIONAL</th><th>FECHA Y HORA</th><th>PRIORIDAD</th><th>ESTADO</th><th>ACCIONES</th></tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let c of citasPaginadas" [class.fila-urgente]="c.urgente">
-                <td>
-                  <div class="tabla-usuario">
-                    <div class="mini-avatar">{{ c.iniciales }}</div>
-                    <div><strong>{{ c.estudiante }}</strong><span>{{ c.rut }}</span></div>
-                  </div>
-                </td>
-                <td><span class="esp-badge">{{ c.especialidad }}</span></td>
-                <td>{{ c.profesional }}</td>
-                <td>{{ c.fecha }} — {{ c.hora }}</td>
-                <td>
-                  <span class="urgente-tag" *ngIf="c.urgente">🚨 URGENTE</span>
-                  <span *ngIf="!c.urgente" class="texto-gris">Normal</span>
-                </td>
-                <td><span class="estado-badge" [ngClass]="c.estado">{{ c.estado }}</span></td>
-                <td>
-                  <div class="tabla-acciones">
-                    <button class="btn-tabla ver" (click)="verDetalleCita(c)" title="Ver detalle">👁️</button>
-                    <button class="btn-tabla" *ngIf="!c.urgente && c.estado === 'pendiente'" (click)="marcarPrioridadCita(c, true)" title="Marcar como urgente">🚨</button>
-                    <button class="btn-tabla" *ngIf="c.urgente && c.estado === 'pendiente'" (click)="marcarPrioridadCita(c, false)" title="Quitar prioridad urgente">↩️</button>
-                    <button class="btn-tabla cancelar" *ngIf="c.estado === 'pendiente'" (click)="cancelarCitaAdmin(c)" title="Cancelar cita">🗑️</button>
-                  </div>
-                </td>
-              </tr>
-              <tr *ngIf="citasPaginadas.length === 0">
-                <td colspan="7" class="tabla-vacia">No hay citas con los filtros aplicados</td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="paginacion" *ngIf="!citasCargando">
-            <span>Mostrando {{ citasFiltradas.length === 0 ? 0 : (pagCitas-1)*8+1 }}–{{ minVal(pagCitas*8, citasFiltradas.length) }} de {{ citasFiltradas.length }} citas</span>
-            <div class="pag-btns">
-              <button class="btn-pag" [disabled]="pagCitas===1" (click)="pagCitas=pagCitas-1">‹</button>
-              <button class="btn-pag" *ngFor="let p of getPaginasCitas()" [class.active]="p===pagCitas" (click)="pagCitas=p">{{ p }}</button>
-              <button class="btn-pag" [disabled]="pagCitas*8>=citasFiltradas.length" (click)="pagCitas=pagCitas+1">›</button>
-            </div>
-          </div>
-        </div>
-      </div>
+<!-- ══ CITAS ══ -->
+      <app-admin-citas
+        *ngIf="seccionActiva==='citas' && puedeAccederSeccion('citas')"
+        [puedeGestionarAgenda]="hasPermission('agenda.gestionar')"
+        (verDetalle)="verDetalleCita($event)"
+        (marcarPrioridad)="marcarPrioridadCita($event.cita, $event.urgente)"
+        (cancelarCita)="cancelarCitaAdmin($event)"
+        (irAHorario)="navegarA('horario')"
+      ></app-admin-citas>
 
       <!-- ══ PROFESIONALES ══ -->
-      <div *ngIf="seccionActiva==='profesional'">
-        <div class="prof-stats">
-          <div class="stat-card-sm"><span class="stat-label">Total profesionales</span><span class="stat-num">{{ profesionales.length }}</span></div>
-          <div class="stat-card-sm"><span class="stat-label">Activos hoy</span><span class="stat-num green">{{ profesionalesActivos }}</span></div>
-          <div class="stat-card-sm"><span class="stat-label">Especialidades</span><span class="stat-num blue">{{ especialidades.length }}</span></div>
-          <div class="stat-card-sm"><span class="stat-label">Con incidencias</span><span class="stat-num orange">{{ profesionalesConIncidencia }}</span></div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Listado de Personal</h3>
-            <div class="card-header-actions">
-              <input class="search-input" placeholder="Buscar profesional..." [(ngModel)]="busquedaProfesional" />
-              <button class="btn-agregar" (click)="abrirModalAgregar()">+ Agregar profesional</button>
-            </div>
-          </div>
-          <table class="admin-tabla">
-            <thead>
-              <tr><th>PROFESIONAL</th><th>ESPECIALIDAD</th><th>RUT</th><th>ESTADO</th><th>ACCIONES</th></tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let p of profesionalesPaginados">
-                <td>
-                  <div class="tabla-usuario">
-                    <div class="mini-avatar">{{ p.iniciales }}</div>
-                    <div><strong>{{ p.nombre }}</strong><span>{{ p.correo }}</span></div>
-                  </div>
-                </td>
-                <td>{{ p.especialidad }}</td>
-                <td>{{ p.rut || '—' }}</td>
-                <td><span class="estado-badge" [ngClass]="p.estado">{{ p.estado }}</span></td>
-                <td>
-                  <button class="btn-tabla-acciones" (click)="abrirModalAcciones(p)">⋯ Gestionar</button>
-                </td>
-              </tr>
-              <tr *ngIf="profesionalesPaginados.length === 0">
-                <td colspan="5" class="tabla-vacia">No hay profesionales registrados</td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="paginacion">
-            <span>Mostrando {{ (pagProf-1)*6+1 }} a {{ minVal(pagProf*6, profesionalesFiltradosBusqueda.length) }} de {{ profesionalesFiltradosBusqueda.length }} profesionales</span>
-            <div class="pag-btns">
-              <button class="btn-pag" [disabled]="pagProf===1" (click)="pagProf=pagProf-1">‹</button>
-              <button class="btn-pag" *ngFor="let p of getPaginasProf()" [class.active]="p===pagProf" (click)="pagProf=p">{{ p }}</button>
-              <button class="btn-pag" [disabled]="pagProf*6>=profesionalesFiltradosBusqueda.length" (click)="pagProf=pagProf+1">›</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <app-admin-profesionales
+        *ngIf="seccionActiva==='profesional' && puedeAccederSeccion('profesional')"
+        [puedeGestionarProfesionales]="hasPermission('profesionales.gestionar')"
+        [profesionales]="profesionales"
+        [especialidades]="especialidades"
+        [profesionalesActivos]="profesionalesActivos"
+        [profesionalesConIncidencia]="profesionalesConIncidencia"
+        (crearProfesional)="onCrearProfesional($event)"
+        (cambiarEstado)="onCambiarEstadoProfesional($event)"
+        (cambiarDuracion)="onCambiarDuracionProfesional($event)"
+        (cambiarTratamiento)="onCambiarTratamientoProfesional($event)"
+        (cambiarColorIdentificador)="onCambiarColorIdentificador($event)"
+        (eliminarProfesional)="onEliminarProfesional($event)"
+        (errorValidacion)="onErrorValidacionProfesional($event)"
+      ></app-admin-profesionales>
 
       <!-- ══ ESTUDIANTES ══ -->
-      <div *ngIf="seccionActiva==='estudiantes'">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Estudiantes</h3>
-            <div class="card-header-actions">
-              <input class="search-input" placeholder="Buscar por nombre o RUT..." [(ngModel)]="estudiantesFiltroQ" (keyup.enter)="buscarEstudiantesAdmin()" />
-              <input class="search-input" placeholder="Carrera..." [(ngModel)]="estudiantesFiltroCarrera" (keyup.enter)="buscarEstudiantesAdmin()" style="max-width:180px" />
-              <button class="btn-filtrar" (click)="buscarEstudiantesAdmin()">Buscar</button>
-              <button class="btn-limpiar" (click)="limpiarFiltrosEstudiantes()">Limpiar</button>
-            </div>
-          </div>
-          <p class="card-desc">El administrador consulta esta información; los datos clínicos permanecen protegidos.</p>
-          <div *ngIf="estudiantesCargando" class="tabla-vacia">Cargando...</div>
-          <table class="admin-tabla" *ngIf="!estudiantesCargando">
-            <thead>
-              <tr><th>NOMBRE</th><th>RUT</th><th>CARRERA</th><th>ACCIONES</th></tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let e of estudiantesAdmin">
-                <td>
-                  <div class="tabla-usuario">
-                    <div class="mini-avatar">{{ e.nombre | slice:0:2 }}</div>
-                    <div><strong>{{ e.nombre }}</strong><span>{{ e.correo }}</span></div>
-                  </div>
-                </td>
-                <td>{{ e.rut || '—' }}</td>
-                <td>{{ e.carrera || '—' }}</td>
-                <td><button class="btn-tabla-acciones" (click)="verPerfilEstudianteAdmin(e)">Ver ficha</button></td>
-              </tr>
-              <tr *ngIf="estudiantesAdmin.length === 0">
-                <td colspan="4" class="tabla-vacia">No hay estudiantes con los filtros aplicados</td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="paginacion" *ngIf="!estudiantesCargando">
-            <span>Mostrando {{ estudiantesTotal === 0 ? 0 : (estudiantesPagina-1)*estudiantesPorPagina+1 }}–{{ minVal(estudiantesPagina*estudiantesPorPagina, estudiantesTotal) }} de {{ estudiantesTotal }} estudiantes</span>
-            <div class="pag-btns">
-              <button class="btn-pag" [disabled]="estudiantesPagina===1" (click)="irAPaginaEstudiantes(estudiantesPagina-1)">‹</button>
-              <button class="btn-pag" *ngFor="let p of getPaginasEstudiantes()" [class.active]="p===estudiantesPagina" (click)="irAPaginaEstudiantes(p)">{{ p }}</button>
-              <button class="btn-pag" [disabled]="estudiantesPagina*estudiantesPorPagina>=estudiantesTotal" (click)="irAPaginaEstudiantes(estudiantesPagina+1)">›</button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <app-admin-estudiantes
+        *ngIf="seccionActiva==='estudiantes' && puedeAccederSeccion('estudiantes')"
+        [estudiantesAdmin]="estudiantesAdmin"
+        [estudiantesTotal]="estudiantesTotal"
+        [estudiantesPagina]="estudiantesPagina"
+        [estudiantesPorPagina]="estudiantesPorPagina"
+        [estudiantesCargando]="estudiantesCargando"
+        [(estudiantesFiltroQ)]="estudiantesFiltroQ"
+        [(estudiantesFiltroCarrera)]="estudiantesFiltroCarrera"
+        [modalPerfilEstudianteAbierto]="modalPerfilEstudianteAbierto"
+        [perfilEstudianteCargando]="perfilEstudianteCargando"
+        [fichaEstudianteSeleccionado]="fichaEstudianteSeleccionado"
+        (buscar)="buscarEstudiantesAdmin()"
+        (limpiar)="limpiarFiltrosEstudiantes()"
+        (cambiarPagina)="irAPaginaEstudiantes($event)"
+        (verPerfil)="verPerfilEstudianteAdmin($event)"
+        (cerrarPerfil)="cerrarModalPerfilEstudiante()"
+      ></app-admin-estudiantes>
 
-      <!-- ══ REPORTES ══ -->
-      <div *ngIf="seccionActiva==='reportes'">
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-info"><span class="stat-label">Citas completadas</span><span class="stat-num">{{ reporteCompletadas }}</span></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-info"><span class="stat-label">Citas canceladas</span><span class="stat-num">{{ reporteCanceladas }}</span></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-info"><span class="stat-label">Citas pendientes</span><span class="stat-num">{{ reportePendientes }}</span></div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-info"><span class="stat-label">Profesionales activos</span><span class="stat-num">{{ profesionalesActivos }}</span></div>
-          </div>
-        </div>
+<!-- ══ REPORTES ══ -->
+      <app-admin-reportes
+        *ngIf="seccionActiva==='reportes' && puedeAccederSeccion('reportes')"
+        [historialAdmin]="historialAdmin"
+        [graficoEspecialidad]="graficoEspecialidad"
+        [profesionalesActivos]="profesionalesActivos"
+        [urgentesPendientes]="estadisticas.urgentes"
+        [puedeExportarCgr]="puedeExportarCgr"
+        (exportarEspecialidadExcel)="exportarEspecialidadExcel()"
+        (irAHistorial)="navegarA('historial')"
+      ></app-admin-reportes>
 
-        <div class="graficos-grid">
-          <div class="card grafico-card">
-            <div class="card-header">
-              <h3 class="card-title">Citas por especialidad</h3>
-              <button class="btn-exportar-small" (click)="exportarEspecialidadExcel()">↓ Excel</button>
-            </div>
-            <div class="grafico-leyenda" style="flex-direction:column; align-items:stretch; gap:8px;">
-              <div *ngFor="let item of graficoEspecialidad" class="reporte-barra-fila">
-                <span class="reporte-barra-label">{{ item.especialidad }}</span>
-                <div class="reporte-barra-track"><div class="reporte-barra-fill" [style.width.%]="item.porcentaje"></div></div>
-                <span class="reporte-barra-pct">{{ item.porcentaje }}%</span>
-              </div>
-              <span *ngIf="graficoEspecialidad.length === 0" class="tabla-vacia">Sin datos</span>
-            </div>
-          </div>
+<!-- ══ MI PERFIL (SA-1.2 — fuente: Usuario vía GET /usuarios/me) ══ -->
+      <app-admin-perfil
+        *ngIf="seccionActiva==='miperfil'"
+        [usuario]="usuarioPerfil"
+        [perfilCargado]="perfilCargado"
+        [cargandoPerfil]="cargandoPerfil"
+        (guardarPerfil)="onGuardarPerfilAdmin($event)"
+      ></app-admin-perfil>
 
-          <div class="card grafico-card">
-            <div class="card-header">
-              <h3 class="card-title">Atenciones prioritarias</h3>
-            </div>
-            <div class="est-stats-grid">
-              <div class="est-stat orange"><span class="est-stat-num">{{ estadisticas.urgentes }}</span><span class="est-stat-label">Urgentes pendientes</span></div>
-              <div class="est-stat red"><span class="est-stat-num">{{ reporteCanceladas }}</span><span class="est-stat-label">Canceladas (histórico)</span></div>
-              <div class="est-stat"><span class="est-stat-num">{{ reporteInasistencias }}</span><span class="est-stat-label">Inasistencias</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Exportar reportes</h3>
-          </div>
-          <p class="card-desc">Los reportes detallados (atenciones, listado de alumnos) están disponibles en Historial → Exportación CGR.</p>
-          <div class="historial-acciones">
-            <button class="btn-filtrar" (click)="navegarA('historial')">Ir a Historial / Exportación CGR →</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══ MI PERFIL ══ -->
-      <div *ngIf="seccionActiva==='miperfil'">
-        <div class="card config-card" style="max-width:560px">
-          <div class="card-header">
-            <h3 class="card-title">Perfil del Administrador</h3>
-            <button class="btn-editar-perfil" *ngIf="!adminPerfilEnEdicion" (click)="habilitarEdicionPerfilAdmin()">✎ Editar</button>
-          </div>
-          <div class="perfil-foto-row">
-            <div class="perfil-foto-preview" [class.clickable]="configCentro.foto_admin_url" (click)="configCentro.foto_admin_url && (verFotoAmpliada = true)">
-              <img *ngIf="configCentro.foto_admin_url" [src]="configCentro.foto_admin_url" alt="Foto" />
-              <div *ngIf="!configCentro.foto_admin_url" class="perfil-foto-placeholder">AD</div>
-            </div>
-            <label class="btn-subir-foto" *ngIf="adminPerfilEnEdicion">
-              <input type="file" accept="image/*" (change)="onFotoSeleccionada($event)" style="display:none" />
-              📷 Cambiar foto
-            </label>
-          </div>
-          <div class="campo-grupo" style="margin-bottom:12px">
-            <label>Nombre completo</label>
-            <input [(ngModel)]="configPerfil.nombre_admin" [disabled]="!adminPerfilEnEdicion" placeholder="Nombre del administrador" />
-          </div>
-          <div class="campo-grupo" style="margin-bottom:12px">
-            <label>Correo</label>
-            <input [value]="configCentro.correo_contacto" disabled />
-          </div>
-          <div class="campo-grupo" style="margin-bottom:12px">
-            <label>Rol</label>
-            <input value="Administrador" disabled />
-          </div>
-          <p class="config-seccion-titulo">Cambiar contraseña</p>
-          <div class="form-grid">
-            <div class="campo-grupo">
-              <label>Contraseña actual</label>
-              <div class="password-wrap">
-                <input [type]="mostrarContrasenaActual ? 'text' : 'password'" [(ngModel)]="configPerfil.contrasena_actual" [disabled]="!adminPerfilEnEdicion" placeholder="••••••" />
-                <button class="btn-ojo" (click)="mostrarContrasenaActual = !mostrarContrasenaActual" type="button">👁️</button>
-              </div>
-            </div>
-            <div class="campo-grupo">
-              <label>Nueva contraseña</label>
-              <div class="password-wrap">
-                <input [type]="mostrarContrasenaaNueva ? 'text' : 'password'" [(ngModel)]="configPerfil.contrasena_nueva" [disabled]="!adminPerfilEnEdicion" placeholder="••••••" />
-                <button class="btn-ojo" (click)="mostrarContrasenaaNueva = !mostrarContrasenaaNueva" type="button">👁️</button>
-              </div>
-            </div>
-            <div class="campo-grupo">
-              <label>Confirmar nueva contraseña</label>
-              <div class="password-wrap">
-                <input [type]="mostrarContrasenaConf ? 'text' : 'password'" [(ngModel)]="configPerfil.contrasena_conf" [disabled]="!adminPerfilEnEdicion" placeholder="••••••" />
-                <button class="btn-ojo" (click)="mostrarContrasenaConf = !mostrarContrasenaConf" type="button">👁️</button>
-              </div>
-            </div>
-          </div>
-          <div class="perfil-acciones-edicion" *ngIf="adminPerfilEnEdicion">
-            <button class="btn-cancelar-modal" (click)="cancelarEdicionPerfilAdmin()">Cancelar</button>
-            <button class="btn-guardar-config" [disabled]="!perfilAdminModificado" (click)="guardarPerfilAdmin()">Guardar cambios</button>
-          </div>
-        </div>
-      </div>
+      <!-- ══ SA-4: ADMINISTRADORES — el hijo es dueño de su propio HTTP; el
+           shell solo decide si se renderiza (sección activa + permiso) ══ -->
+      <app-admin-administradores
+        *ngIf="seccionActiva==='administradores' && puedeAccederSeccion('administradores')"
+        (sesionAdministrativaActualizada)="onSesionAdministrativaActualizada()"
+      ></app-admin-administradores>
 
       <!-- ══ HISTORIAL ══ -->
-      <div *ngIf="seccionActiva==='historial'">
-        <div class="card">
-          <div class="historial-filtros-admin">
-            <div class="filtro-grupo"><label>Buscar estudiante</label><input [(ngModel)]="histFiltroEstudiante" placeholder="Nombre o RUT..." /></div>
-            <div class="filtro-grupo"><label>Desde</label><input type="date" [(ngModel)]="histFiltroDesde" /></div>
-            <div class="filtro-grupo"><label>Hasta</label><input type="date" [(ngModel)]="histFiltroHasta" /></div>
-            <div class="filtro-grupo">
-              <label>Especialidad</label>
-              <select [(ngModel)]="histFiltroEspecialidad">
-                <option value="">Todas</option>
-                <option *ngFor="let e of especialidades">{{ e }}</option>
-              </select>
-            </div>
-            <div class="filtro-grupo">
-              <label>Estado</label>
-              <select [(ngModel)]="histFiltroEstado">
-                <option value="">Todos</option>
-                <option value="completada">Completada</option>
-                <option value="cancelada">Cancelada</option>
-                <option value="inasistencia">Inasistencia</option>
-                <option value="pendiente">Pendiente</option>
-              </select>
-            </div>
-            <div class="filtro-grupo"><label>Carrera</label><input [(ngModel)]="histFiltroCarrera" placeholder="Ej: Derecho..." /></div>
-          </div>
-          <div class="historial-acciones">
-            <button class="btn-filtrar" (click)="cargarHistorial()">Aplicar Filtros</button>
-            <button class="btn-limpiar" (click)="limpiarFiltrosHistorial()">Limpiar</button>
-            <button class="btn-exportar-pdf" (click)="exportarHistorialPdf()">↓ Exportar PDF</button>
-            <button class="btn-exportar-excel" (click)="exportarHistorialExcel()">↓ Exportar Excel</button>
-          </div>
+      <app-admin-historial
+        *ngIf="seccionActiva==='historial' && puedeAccederSeccion('historial')"
+        [historialAdmin]="historialAdmin"
+        [especialidades]="especialidades"
+        [estadisticasEstudiante]="estadisticasEstudiante"
+        [(histFiltroEstudiante)]="histFiltroEstudiante"
+        [(histFiltroDesde)]="histFiltroDesde"
+        [(histFiltroHasta)]="histFiltroHasta"
+        [(histFiltroEspecialidad)]="histFiltroEspecialidad"
+        [(histFiltroEstado)]="histFiltroEstado"
+        [(histFiltroCarrera)]="histFiltroCarrera"
+        [(cgrAnio)]="cgrAnio"
+        [cgrAniosDisponibles]="cgrAniosDisponibles"
+        [(cgrFechaFin)]="cgrFechaFin"
+        [puedeExportarCgr]="puedeExportarCgr"
+        [puedeDescargarPdf]="false"
+        (aplicarFiltros)="cargarHistorial()"
+        (limpiarFiltros)="limpiarFiltrosHistorial()"
+        (exportarHistorialPdf)="exportarHistorialPdf()"
+        (exportarHistorialExcel)="exportarHistorialExcel()"
+        (exportarCgr)="exportarCGR()"
+        (exportarAlumnos)="exportarListadoAlumnos()"
+        (verDetalle)="verDetalleCita($event)"
+        (descargarPdf)="descargarPdf($event)"
+      ></app-admin-historial>
 
-          <!-- Exportación CGR -->
-          <div class="cgr-panel">
-            <h4 class="cgr-titulo">📋 Exportación CGR (Contraloría General de la República)</h4>
-            <p class="cgr-desc">Excluye automáticamente los registros de prueba según lo solicitado.</p>
-            <div class="cgr-selector">
-              <div class="cgr-campo">
-                <label>Año</label>
-                <select [(ngModel)]="cgrAnio">
-                  <option *ngFor="let a of cgrAniosDisponibles" [value]="a">{{ a }}</option>
-                </select>
-              </div>
-              <div class="cgr-campo">
-                <label>Hasta fecha <span class="opcional">(opcional)</span></label>
-                <input type="date" [(ngModel)]="cgrFechaFin" />
-              </div>
-            </div>
-            <div class="cgr-btns">
-              <button class="btn-cgr" (click)="exportarCGR()">
-                ↓ Atenciones {{ cgrAnio }}{{ cgrFechaFin ? ' (hasta ' + cgrFechaFin + ')' : '' }}
-              </button>
-              <button class="btn-cgr secondary" (click)="exportarListadoAlumnos()">
-                ↓ Listado de Alumnos
-              </button>
-            </div>
-          </div>
-
-          <!-- Estadísticas del estudiante -->
-          <div class="est-stats-panel" *ngIf="estadisticasEstudiante">
-            <div class="est-stats-titulo">Resumen de <strong>{{ estadisticasEstudiante.nombre }}</strong></div>
-            <div class="est-stats-grid">
-              <div class="est-stat"><span class="est-stat-num">{{ estadisticasEstudiante.total }}</span><span class="est-stat-label">Total citas</span></div>
-              <div class="est-stat green"><span class="est-stat-num">{{ estadisticasEstudiante.completadas }}</span><span class="est-stat-label">Completadas</span></div>
-              <div class="est-stat red"><span class="est-stat-num">{{ estadisticasEstudiante.canceladas }}</span><span class="est-stat-label">Canceladas</span></div>
-              <div class="est-stat orange"><span class="est-stat-num">{{ estadisticasEstudiante.inasistencias }}</span><span class="est-stat-label">Inasistencias</span></div>
-            </div>
-          </div>
-
-          <table class="admin-tabla">
-            <thead>
-              <tr><th>ESTUDIANTE</th><th>ESPECIALIDAD</th><th>PROFESIONAL</th><th>FECHA Y HORA</th><th>ESTADO</th><th>ACCIONES</th></tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let h of historialPaginado">
-                <td>
-                  <div class="tabla-usuario">
-                    <div class="mini-avatar">{{ h.iniciales }}</div>
-                    <div><strong>{{ h.estudiante }}</strong><span>{{ h.rut }}</span></div>
-                  </div>
-                </td>
-                <td><span class="esp-badge">{{ h.especialidad }}</span></td>
-                <td>{{ h.profesional }}</td>
-                <td>{{ h.fecha }} — {{ h.hora }}</td>
-                <td><span class="estado-badge" [ngClass]="h.estado">{{ h.estado }}</span></td>
-                <td>
-                  <div class="tabla-acciones">
-                    <button class="btn-tabla ver" (click)="verDetalleCita(h)" title="Ver detalle">👁️</button>
-                    <button class="btn-tabla descargar" *ngIf="h.tiene_pdf" (click)="descargarPdf(h.id)" title="Descargar PDF">⬇️</button>
-                  </div>
-                </td>
-              </tr>
-              <tr *ngIf="historialPaginado.length === 0">
-                <td colspan="6" class="tabla-vacia">No hay registros con los filtros aplicados</td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="paginacion">
-            <span>Mostrando {{ (pagHist-1)*8+1 }}–{{ minVal(pagHist*8, historialAdmin.length) }} de {{ historialAdmin.length }} resultados</span>
-            <div class="pag-btns">
-              <button class="btn-pag" [disabled]="pagHist===1" (click)="pagHist=pagHist-1">‹</button>
-              <button class="btn-pag" *ngFor="let p of getPaginasHist()" [class.active]="p===pagHist" (click)="pagHist=p">{{ p }}</button>
-              <button class="btn-pag" [disabled]="pagHist*8>=historialAdmin.length" (click)="pagHist=pagHist+1">›</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ══ CONFIGURACIÓN ══ -->
-      <div *ngIf="seccionActiva==='configuracion'">
-
-        <div class="config-tabs">
-          <button class="config-tab" [class.active]="configTabActiva==='general'" (click)="cambiarTabConfig('general')">⚙️ General</button>
-          <button class="config-tab" [class.active]="configTabActiva==='citas'" (click)="cambiarTabConfig('citas')">📋 Citas</button>
-          <button class="config-tab" [class.active]="configTabActiva==='horarios'" (click)="cambiarTabConfig('horarios')">🕐 Horarios</button>
-          <button class="config-tab" [class.active]="configTabActiva==='usuarios'" (click)="cambiarTabConfig('usuarios')">👥 Usuarios y roles</button>
-          <button class="config-tab" [class.active]="configTabActiva==='seguridad'" (click)="cambiarTabConfig('seguridad')">🔐 Seguridad</button>
-        </div>
-
-        <!-- TAB GENERAL -->
-        <div class="config-nueva-layout" *ngIf="configTabActiva==='general'">
-          <div class="card config-card">
-            <div class="card-header">
-              <h3 class="card-title">Información del Centro SESAES</h3>
-              <button class="btn-editar-perfil" *ngIf="!centroEnEdicion" (click)="habilitarEdicionCentro()">✎ Editar</button>
-            </div>
-            <p class="card-desc">Estos datos son visibles para los estudiantes y se usan en los PDFs.</p>
-            <div class="form-grid">
-              <div class="campo-grupo"><label>Nombre del centro</label><input [(ngModel)]="configCentro.nombre_centro" [disabled]="!centroEnEdicion" /></div>
-              <div class="campo-grupo"><label>Teléfono de contacto</label><input [(ngModel)]="configCentro.telefono" [disabled]="!centroEnEdicion" placeholder="+56 2 XXXX XXXX" /></div>
-              <div class="campo-grupo" style="grid-column: 1 / -1"><label>Dirección</label><input [(ngModel)]="configCentro.direccion" [disabled]="!centroEnEdicion" /></div>
-              <div class="campo-grupo"><label>Correo de contacto</label><input [(ngModel)]="configCentro.correo_contacto" [disabled]="!centroEnEdicion" placeholder="sesaes@utem.cl" /></div>
-              <div class="campo-grupo"><label>Horario de atención</label><input [(ngModel)]="configCentro.horario_atencion" [disabled]="!centroEnEdicion" placeholder="Lunes a Viernes 08:00–18:00" /></div>
-            </div>
-            <div class="perfil-acciones-edicion" *ngIf="centroEnEdicion">
-              <button class="btn-cancelar-modal" (click)="cancelarEdicionCentro()">Cancelar</button>
-              <button class="btn-guardar-config" [disabled]="!centroModificado || guardandoConfig" (click)="guardarInfoCentro()">
-                {{ guardandoConfig ? 'Guardando...' : 'Guardar cambios' }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB CITAS -->
-        <div class="config-nueva-layout" *ngIf="configTabActiva==='citas'">
-          <div class="card config-card">
-            <div class="card-header"><h3 class="card-title">Reglas de citas</h3></div>
-            <p class="card-desc">La duración de atención se define por profesional (ver módulo Profesionales). Aquí se configuran las reglas generales del servicio.</p>
-            <div class="form-grid">
-              <div class="campo-grupo">
-                <label>Duración de turno por defecto (min)</label>
-                <input type="number" min="5" [(ngModel)]="configCitas.duracion_turno_min" />
-              </div>
-              <div class="campo-grupo">
-                <label>Cupos por turno</label>
-                <input type="number" min="1" [(ngModel)]="configCitas.cupos_por_turno" />
-              </div>
-              <div class="campo-grupo toggle-row" style="grid-column: 1 / -1">
-                <span>Permitir agendamiento por pacientes</span>
-                <div class="toggle" [class.on]="configCitas.agendamiento_por_pacientes" (click)="configCitas.agendamiento_por_pacientes = !configCitas.agendamiento_por_pacientes"></div>
-              </div>
-              <div class="campo-grupo toggle-row" style="grid-column: 1 / -1">
-                <span>Permitir cancelación instantánea</span>
-                <div class="toggle" [class.on]="configCitas.cancelacion_instantanea" (click)="configCitas.cancelacion_instantanea = !configCitas.cancelacion_instantanea"></div>
-              </div>
-              <div class="campo-grupo toggle-row" style="grid-column: 1 / -1">
-                <span>Sobrecupos habilitados</span>
-                <div class="toggle" [class.on]="configCitas.sobreturnos_habilitados" (click)="configCitas.sobreturnos_habilitados = !configCitas.sobreturnos_habilitados"></div>
-              </div>
-            </div>
-            <div class="perfil-acciones-edicion">
-              <button class="btn-guardar-config" [disabled]="guardandoConfigCitas" (click)="guardarConfiguracionCitas()">
-                {{ guardandoConfigCitas ? 'Guardando...' : 'Guardar cambios' }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB HORARIOS -->
-        <div class="config-nueva-layout" *ngIf="configTabActiva==='horarios'">
-          <div class="card config-card">
-            <div class="card-header">
-              <h3 class="card-title">Días en que el centro no atiende</h3>
-            </div>
-            <p class="card-desc">
-              A diferencia de un feriado normal (que solo se marca visualmente), un día cerrado
-              bloquea por completo el agendamiento para cualquier profesional. Las citas que ya
-              existieran ese día se cancelan y se notifica automáticamente a los estudiantes.
-            </p>
-
-            <div class="form-grid">
-              <div class="campo-grupo">
-                <label>Fecha a cerrar</label>
-                <input type="date" [(ngModel)]="nuevoDiaCerrado.fecha" [min]="hoyISO" />
-              </div>
-              <div class="campo-grupo" style="grid-column: 1 / -1">
-                <label>Motivo</label>
-                <input type="text" [(ngModel)]="nuevoDiaCerrado.motivo" placeholder="Ej: Feriado irrenunciable, aniversario UTEM…" />
-              </div>
-            </div>
-            <div class="perfil-acciones-edicion">
-              <button class="btn-guardar-config" [disabled]="!nuevoDiaCerrado.fecha || !nuevoDiaCerrado.motivo || creandoDiaCerrado" (click)="crearDiaCerrado()">
-                {{ creandoDiaCerrado ? 'Cerrando día...' : '🔒 Cerrar este día' }}
-              </button>
-            </div>
-
-            <table class="admin-tabla" style="margin-top: 18px;" *ngIf="diasCerrados.length > 0">
-              <thead>
-                <tr><th>Fecha</th><th>Motivo</th><th></th></tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let d of diasCerrados">
-                  <td><strong>{{ d.fecha }}</strong></td>
-                  <td>{{ d.motivo }}</td>
-                  <td style="text-align: right; white-space: nowrap;">
-                    <button class="btn-editar-perfil" style="padding: 5px 12px; font-size: 12px;" (click)="verCitasDiaCerrado(d)">Ver citas canceladas</button>
-                    <button class="btn-eliminar-todo-auditoria" style="padding: 5px 12px; font-size: 12px; margin-left: 6px;" (click)="reabrirDiaCerrado(d)">Reabrir</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p class="tabla-vacia" *ngIf="diasCerrados.length === 0">No hay días cerrados programados.</p>
-          </div>
-        </div>
-
-        <!-- TAB USUARIOS Y ROLES -->
-        <div class="config-nueva-layout" *ngIf="configTabActiva==='usuarios'">
-          <div class="card config-card">
-            <div class="card-header"><h3 class="card-title">Usuarios y roles</h3></div>
-            <p class="card-desc">Estudiante, Profesional y Administrador tienen distintos permisos. Solo el administrador puede marcar una cita como urgente.</p>
-            <table class="admin-tabla">
-              <thead><tr><th>USUARIO</th><th>ROL</th><th>ESTADO</th></tr></thead>
-              <tbody>
-                <tr *ngFor="let u of usuariosDelSistema">
-                  <td>{{ u.nombre }}</td>
-                  <td>{{ u.rol }}</td>
-                  <td><span class="estado-badge" [ngClass]="u.estado">{{ u.estado }}</span></td>
-                </tr>
-              </tbody>
-            </table>
-            <p class="card-desc" style="margin-top:14px">Los estudiantes se gestionan desde el módulo <strong>Estudiantes</strong> y no requieren asignación de rol manual.</p>
-          </div>
-        </div>
-
-        <!-- TAB SEGURIDAD -->
-        <div class="config-nueva-layout" *ngIf="configTabActiva==='seguridad'">
-          <div class="card config-card auditoria-card">
-            <div class="card-header">
-              <h3 class="card-title">Registro de actividad</h3>
-              <div class="auditoria-filtros">
-                <input type="date" [(ngModel)]="auditFiltroDesde" />
-                <input type="date" [(ngModel)]="auditFiltroHasta" />
-                <button class="btn-filtrar" (click)="cargarAuditoria()">Filtrar</button>
-                <button class="btn-exportar-excel" (click)="exportarAuditoriaExcel()">↓ Excel</button>
-                <button class="btn-exportar-pdf" (click)="exportarAuditoriaPdf()">↓ PDF</button>
-                <button class="btn-eliminar-todo-auditoria" *ngIf="hayAuditoriaSeleccionada" (click)="eliminarAuditoriaSeleccionada()">
-                  🗑️ Eliminar seleccionados ({{ auditoriaSeleccionada.length }})
-                </button>
-              </div>
-            </div>
-            <p class="card-desc">Quién realizó cada acción, qué hizo, cuándo y sobre qué registro. Exportable.</p>
-            <div *ngIf="cargandoAuditoria" class="tabla-vacia">Cargando...</div>
-            <table class="admin-tabla" *ngIf="!cargandoAuditoria">
-              <thead>
-                <tr>
-                  <th class="th-checkbox">
-                    <input type="checkbox" *ngIf="auditoria.length > 0" [checked]="todaAuditoriaSeleccionada" (change)="toggleSeleccionarTodaAuditoria()" />
-                  </th>
-                  <th>FECHA / HORA</th><th>ACCIÓN</th><th>DETALLE</th><th>ENTIDAD</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let a of auditoria" [class.fila-seleccionada]="a.seleccionada">
-                  <td class="td-checkbox"><input type="checkbox" [(ngModel)]="a.seleccionada" /></td>
-                  <td>{{ a.fecha | date:'dd/MM/yyyy HH:mm' }}</td>
-                  <td>{{ a.accion }}</td>
-                  <td>{{ a.detalle }}</td>
-                  <td>{{ a.entidad }}{{ a.entidad_id ? ' #' + a.entidad_id : '' }}</td>
-                </tr>
-                <tr *ngIf="auditoria.length === 0">
-                  <td colspan="5" class="tabla-vacia">Sin registros de actividad</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      </div>
-
-    </main>
+<!-- ══ CONFIGURACIÓN ══ -->
+      <app-admin-configuracion
+        *ngIf="seccionActiva==='configuracion' && puedeAccederSeccion('configuracion')"
+        [configTabActiva]="configTabActiva"
+        (configTabActivaChange)="cambiarTabConfig($event)"
+        [configCentro]="configCentro"
+        [centroEnEdicion]="centroEnEdicion"
+        [centroModificado]="centroModificado"
+        [guardandoConfig]="guardandoConfig"
+        [configCitas]="configCitas"
+        [guardandoConfigCitas]="guardandoConfigCitas"
+        [diasCerrados]="diasCerrados"
+        [nuevoDiaCerrado]="nuevoDiaCerrado"
+        [creandoDiaCerrado]="creandoDiaCerrado"
+        [hoyISO]="hoyISO"
+        [usuariosDelSistema]="usuariosDelSistema"
+        [auditoria]="auditoria"
+        [auditFiltroDesde]="auditFiltroDesde"
+        (auditFiltroDesdeChange)="auditFiltroDesde=$event"
+        [auditFiltroHasta]="auditFiltroHasta"
+        (auditFiltroHastaChange)="auditFiltroHasta=$event"
+        [cargandoAuditoria]="cargandoAuditoria"
+        [puedeConfigGeneral]="puedeConfigGeneral"
+        [puedeConfigCitas]="puedeConfigCitas"
+        [puedeConfigHorarios]="puedeConfigHorarios"
+        [puedeConfigUsuarios]="puedeConfigUsuarios"
+        [puedeVerAuditoria]="puedeVerAuditoria"
+        (habilitarEdicionCentro)="habilitarEdicionCentro()"
+        (cancelarEdicionCentro)="cancelarEdicionCentro()"
+        (guardarInfoCentro)="guardarInfoCentro()"
+        (guardarConfiguracionCitas)="guardarConfiguracionCitas()"
+        (crearDiaCerrado)="crearDiaCerrado()"
+        (verCitasDiaCerrado)="verCitasDiaCerrado($event)"
+        (reabrirDiaCerrado)="reabrirDiaCerrado($event)"
+        (cargarAuditoria)="cargarAuditoria()"
+        (exportarAuditoriaExcel)="exportarAuditoriaExcel()"
+        (exportarAuditoriaPdf)="exportarAuditoriaPdf()"
+      ></app-admin-configuracion>
+</main>
 
   
-  </div>
-
-  <!-- MODAL: NUEVO PROFESIONAL -->
-  <div class="modal-overlay" *ngIf="modalProfAbierto" (click)="cerrarModal()">
-    <div class="modal" (click)="$event.stopPropagation()">
-      <div *ngIf="!mostrarConfirmacionProf">
-        <div class="modal-header">
-          <h3>Nuevo Profesional</h3>
-          <button class="modal-cerrar" (click)="cerrarModal()">✕</button>
-        </div>
-        <div class="form-grid">
-          <div class="campo-grupo" style="grid-column: 1 / -1">
-            <label>Nombre Completo *</label>
-            <input [(ngModel)]="profNuevoDatos.nombre" placeholder="Dr. Nombre Apellido" />
-          </div>
-          <div class="campo-grupo">
-            <label>Especialidad *</label>
-            <select [(ngModel)]="profNuevoDatos.especialidad">
-              <option value="">Seleccionar...</option>
-              <option *ngFor="let e of especialidades">{{ e }}</option>
-              <option value="otra">+ Nueva especialidad</option>
-            </select>
-          </div>
-          <div class="campo-grupo" *ngIf="profNuevoDatos.especialidad === 'otra'">
-            <label>Nueva especialidad *</label>
-            <input [(ngModel)]="profNuevoDatos.especialidadNueva" placeholder="Nombre de la especialidad" />
-          </div>
-          <div class="campo-grupo">
-            <label>Correo electrónico * (@utem.cl)</label>
-            <input [(ngModel)]="profNuevoDatos.correo" placeholder="nombre@utem.cl"
-                   (input)="onCorreoChange()" [class.input-error]="!correoValido" />
-            <span class="campo-error" *ngIf="!correoValido">Debe ser @utem.cl</span>
-          </div>
-          <div class="campo-grupo">
-            <label>RUT (formato: 12.345.678-9)</label>
-            <input [(ngModel)]="profNuevoDatos.rut" placeholder="12.345.678-9"
-                   (input)="onRutChange()" [class.input-error]="!rutValido" />
-            <span class="campo-error" *ngIf="!rutValido">RUT inválido</span>
-          </div>
-          <!-- Selector de duración -->
-          <div class="campo-grupo" style="grid-column: 1 / -1">
-            <label>Duración de atención por paciente</label>
-            <div class="duracion-selector">
-              <input type="number" min="1" max="60" [(ngModel)]="duracionNumero" class="duracion-input" />
-              <select [(ngModel)]="duracionUnidad" class="duracion-unidad">
-                <option value="minutos">Minutos</option>
-                <option value="horas">Horas</option>
-              </select>
-              <span class="duracion-preview">= {{ duracionEnMinutos }} min por paciente</span>
-            </div>
-          </div>
-          <div class="campo-grupo" style="grid-column: 1 / -1">
-            <label>Estado inicial</label>
-            <input value="Activo" disabled style="background:#f1f5f9; color:#94a3b8" />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancelar-modal" (click)="cerrarModal()">Cancelar</button>
-          <button class="btn-guardar-modal" (click)="continuarCrearProf()">Continuar →</button>
-        </div>
-      </div>
-
-      <div *ngIf="mostrarConfirmacionProf">
-        <div class="modal-header">
-          <h3>Confirmar nuevo profesional</h3>
-          <button class="modal-cerrar" (click)="cerrarModal()">✕</button>
-        </div>
-        <div class="confirmacion-resumen">
-          <div class="conf-row"><span class="conf-label">Nombre</span><span class="conf-val">{{ profNuevoDatos.nombre }}</span></div>
-          <div class="conf-row">
-            <span class="conf-label">Especialidad</span>
-            <span class="conf-val">{{ profNuevoDatos.especialidad === 'otra' ? profNuevoDatos.especialidadNueva : profNuevoDatos.especialidad }}</span>
-          </div>
-          <div class="conf-row"><span class="conf-label">Correo</span><span class="conf-val">{{ profNuevoDatos.correo }}</span></div>
-          <div class="conf-row"><span class="conf-label">RUT</span><span class="conf-val">{{ profNuevoDatos.rut || '—' }}</span></div>
-          <div class="conf-row"><span class="conf-label">Duración atención</span><span class="conf-val">{{ duracionEnMinutos }} minutos</span></div>
-          <div class="conf-row"><span class="conf-label">Estado</span><span class="conf-val"><span class="estado-badge activo">Activo</span></span></div>
-          <div class="conf-row conf-password"><span class="conf-label">Contraseña temporal</span><span class="conf-val conf-val-password">prof123</span></div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-cancelar-modal" (click)="volverFormProf()">← Volver</button>
-          <button class="btn-guardar-modal" (click)="confirmarCrearProf()">✓ Confirmar y crear</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: ACCIONES PROFESIONAL -->
-  <div class="modal-overlay" *ngIf="modalAccionesAbierto" (click)="cerrarModalAcciones()">
-    <div class="modal modal-acciones" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h3>Gestionar Profesional</h3>
-        <button class="modal-cerrar" (click)="cerrarModalAcciones()">✕</button>
-      </div>
-      <div *ngIf="profSeleccionado">
-        <div class="prof-datos-readonly">
-          <div class="mini-avatar avatar-lg">{{ profSeleccionado.iniciales }}</div>
-          <div class="prof-datos-info">
-            <h4>{{ profSeleccionado.nombre }}</h4>
-            <span class="esp-badge">{{ profSeleccionado.especialidad }}</span>
-          </div>
-        </div>
-        <div class="prof-datos-grid">
-          <div class="dato-row"><span class="dato-label">Correo</span><span class="dato-val">{{ profSeleccionado.correo }}</span></div>
-          <div class="dato-row"><span class="dato-label">RUT</span><span class="dato-val">{{ profSeleccionado.rut || '—' }}</span></div>
-          <div class="dato-row">
-            <span class="dato-label">Estado actual</span>
-            <span class="estado-badge" [ngClass]="profSeleccionado.estado">{{ profSeleccionado.estado }}</span>
-          </div>
-        </div>
-
-        <!-- Duración de atención -->
-        <div class="modal-separador"></div>
-        <p class="config-seccion-titulo">Duración de atención por paciente</p>
-        <div class="duracion-selector" style="margin-bottom:12px">
-          <input type="number" min="1" max="60" [(ngModel)]="duracionNumero" class="duracion-input" />
-          <select [(ngModel)]="duracionUnidad" class="duracion-unidad">
-            <option value="minutos">Minutos</option>
-            <option value="horas">Horas</option>
-          </select>
-          <span class="duracion-preview">= {{ duracionEnMinutos }} min</span>
-          <button class="btn-guardar-modal" style="padding:7px 14px" (click)="guardarDuracionProfesional()">Guardar duración</button>
-        </div>
-
-        <div class="modal-separador"></div>
-        <p class="config-seccion-titulo">Cambiar estado operacional</p>
-        <div class="campo-grupo" style="margin-bottom:10px">
-          <label>Nuevo estado</label>
-          <select [(ngModel)]="profSeleccionado.nuevoEstado">
-            <option value="activo">Activo</option>
-            <option value="licencia">En Licencia Médica</option>
-            <option value="inasistencia">Inasistencia</option>
-          </select>
-        </div>
-        <div class="campo-grupo" *ngIf="estadoCambioRequiereMotivo" style="margin-bottom:10px">
-          <label>Motivo (opcional)</label>
-          <input [(ngModel)]="profSeleccionado.motivoCambio" placeholder="Ej: Licencia médica hasta el 30/06" />
-        </div>
-        <button class="btn-guardar-modal" style="width:100%;margin-bottom:12px" (click)="guardarEstadoProfesional()">Guardar Estado</button>
-
-        <div class="modal-separador"></div>
-        <button class="btn-eliminar-prof" (click)="eliminarProfesionalDesdeModal()">🗑️ Eliminar Profesional</button>
-      </div>
-    </div>
   </div>
 
   <!-- MODAL: DETALLE DE CITA (Historial) -->
@@ -1308,23 +418,26 @@
       <div class="modal-footer">
         <button class="btn-cancelar-modal" (click)="cerrarModalDetalleCita()">Cerrar</button>
         <button class="btn-guardar-modal" *ngIf="citaDetalle?.tiene_pdf" (click)="descargarPdf(citaDetalle.id)">⬇ Descargar PDF</button>
-        <button class="btn-guardar-modal" *ngIf="citaDetalle?.estado === 'pendiente' && !citaDetalle?.urgente"
+        <button class="btn-guardar-modal" *ngIf="hasPermission('agenda.gestionar') && citaDetalle?.estado === 'pendiente' && !citaDetalle?.urgente"
                 (click)="marcarPrioridadCita(citaDetalle, true)">🚨 Marcar como urgente</button>
-        <button class="btn-cancelar-modal" *ngIf="citaDetalle?.estado === 'pendiente' && citaDetalle?.urgente"
+        <button class="btn-cancelar-modal" *ngIf="hasPermission('agenda.gestionar') && citaDetalle?.estado === 'pendiente' && citaDetalle?.urgente"
                 (click)="marcarPrioridadCita(citaDetalle, false)">↩️ Quitar prioridad urgente</button>
       </div>
     </div>
   </div>
 
   <!-- MODAL: NUEVA CITA -->
-  <div class="modal-overlay" *ngIf="modalCitaAbierto" (click)="cerrarModalCita()">
+  <div class="modal-overlay" *ngIf="modalCitaAbierto && hasPermission('agenda.gestionar')" (click)="cerrarModalCita()">
     <div class="modal" (click)="$event.stopPropagation()">
       <div class="modal-header">
         <h3>Nueva Cita{{ nuevaCita.urgente ? ' — URGENTE' : '' }}{{ nuevaCita.sobrecupo ? ' — SOBRECUPO' : '' }}</h3>
-        <button class="modal-cerrar" (click)="cerrarModalCita()">✕</button>
+        <button class="modal-cerrar" (click)="cerrarModalCita()" aria-label="Cerrar">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
       <p class="aviso-sobrecupo-modal" *ngIf="nuevaCita.sobrecupo">
-        🟣 Estás agendando fuera del horario habitual del profesional. Esta cita quedará marcada como <strong>sobrecupo</strong>.
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        Estás creando una cita como <strong>sobrecupo</strong>. El sistema volverá a validar la disponibilidad al confirmar.
       </p>
       <div class="campo-grupo" style="margin-bottom:12px; position:relative">
         <label>Buscar estudiante (nombre o RUT) *</label>
@@ -1345,30 +458,45 @@
           <label>Observaciones (opcional)</label>
           <input [(ngModel)]="nuevaCita.observaciones" placeholder="Motivo de la cita" />
         </div>
-        <div class="campo-grupo toggle-row" style="grid-column: 1 / -1">
+        <!-- A.4.7A — motivo del sobrecupo: campo SEPARADO de observaciones,
+             exigido por backend para cualquier sobrecupo efectivo. Solo
+             aparece cuando esta cita ya viene marcada como sobrecupo. -->
+        <div class="campo-grupo" style="grid-column: 1 / -1" *ngIf="nuevaCita.sobrecupo">
+          <label>Motivo del sobrecupo *</label>
+          <textarea [(ngModel)]="nuevaCita.sobrecupo_motivo" rows="3"
+              placeholder="Explica por qué corresponde autorizar este sobrecupo"></textarea>
+          <span class="campo-error" *ngIf="nuevaCita.sobrecupo && !(nuevaCita.sobrecupo_motivo || '').trim()">
+            Debes indicar el motivo del sobrecupo.
+          </span>
+        </div>
+        <div class="campo-grupo toggle-row" style="grid-column: 1 / -1" *ngIf="mostrarToggleUrgente">
           <span>¿Es urgente?</span>
           <div class="toggle" [class.on]="nuevaCita.urgente" (click)="nuevaCita.urgente = !nuevaCita.urgente"></div>
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn-cancelar-modal" (click)="cerrarModalCita()">Cancelar</button>
-        <button class="btn-guardar-modal" [disabled]="creandoCita" (click)="crearCitaDesdeHorario()">{{ creandoCita ? 'Creando…' : 'Confirmar Cita' }}</button>
+        <button class="btn-guardar-modal"
+            [disabled]="creandoCita || (nuevaCita.sobrecupo && !(nuevaCita.sobrecupo_motivo || '').trim())"
+            (click)="crearCitaDesdeHorario()">{{ creandoCita ? 'Creando…' : 'Confirmar Cita' }}</button>
       </div>
     </div>
   </div>
 
   <!-- MODAL: CONFIRMAR SOBRECUPO -->
-  <div class="modal-overlay" *ngIf="sobrecupoConfirmAbierto" (click)="cancelarSobrecupo()">
+  <div class="modal-overlay" *ngIf="sobrecupoConfirmAbierto && hasPermission('agenda.gestionar') && hasPermission('agenda.sobrecupo')" (click)="cancelarSobrecupo()">
     <div class="modal" (click)="$event.stopPropagation()" style="max-width: 420px;">
       <div class="modal-header">
-        <h3>🟣 Confirmar sobrecupo</h3>
-        <button class="modal-cerrar" (click)="cancelarSobrecupo()">✕</button>
+        <h3>
+          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+          Confirmar sobrecupo
+        </h3>
+        <button class="modal-cerrar" (click)="cancelarSobrecupo()" aria-label="Cerrar">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
       <p style="font-size: 13.5px; color: #475569; line-height: 1.5; margin: 0 0 20px 0;">
-        Estás agendando a las <strong>{{ sobrecupoPendiente?.hora }}</strong> del
-        <strong>{{ diaSeleccionado ? formatearFecha(diaSeleccionado) : '' }}</strong>,
-        fuera de {{ sobrecupoPendiente?.motivoTexto }} {{ profesionalActual?.nombre }}.
-        Esta cita quedará marcada como <strong>sobrecupo</strong>. ¿Confirmas?
+        {{ sobrecupoPendiente?.mensaje }}
       </p>
       <div class="modal-footer">
         <button class="btn-cancelar-modal" (click)="cancelarSobrecupo()">Cancelar</button>
@@ -1377,54 +505,6 @@
     </div>
   </div>
 
-  <!-- MODAL: FICHA ESTUDIANTE -->
-  <div class="modal-overlay" *ngIf="modalPerfilEstudianteAbierto" (click)="cerrarModalPerfilEstudiante()">
-    <div class="modal" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h3>Ficha del estudiante</h3>
-        <button class="modal-cerrar" (click)="cerrarModalPerfilEstudiante()">✕</button>
-      </div>
-      <div *ngIf="perfilEstudianteCargando" class="tabla-vacia">Cargando...</div>
-      <div *ngIf="!perfilEstudianteCargando && fichaEstudianteSeleccionado">
-        <div class="prof-datos-readonly">
-          <div class="mini-avatar avatar-lg">{{ fichaEstudianteSeleccionado.nombre | slice:0:2 }}</div>
-          <div class="prof-datos-info">
-            <h4>{{ fichaEstudianteSeleccionado.nombre }}</h4>
-            <span class="esp-badge">{{ fichaEstudianteSeleccionado.carrera || 'Sin carrera' }}</span>
-          </div>
-        </div>
-        <p class="config-seccion-titulo">Datos personales</p>
-        <div class="prof-datos-grid">
-          <div class="dato-row"><span class="dato-label">RUT</span><span class="dato-val">{{ fichaEstudianteSeleccionado.rut || '—' }}</span></div>
-          <div class="dato-row"><span class="dato-label">Correo</span><span class="dato-val">{{ fichaEstudianteSeleccionado.correo || '—' }}</span></div>
-          <div class="dato-row"><span class="dato-label">Carrera</span><span class="dato-val">{{ fichaEstudianteSeleccionado.carrera || '—' }}</span></div>
-        </div>
-        <div class="modal-separador"></div>
-        <p class="config-seccion-titulo">Citas</p>
-        <div class="est-stats-grid">
-          <div class="est-stat"><span class="est-stat-num">{{ fichaEstudianteSeleccionado.citas_totales ?? 0 }}</span><span class="est-stat-label">Citas totales</span></div>
-          <div class="est-stat green"><span class="est-stat-num">{{ fichaEstudianteSeleccionado.citas_atendidas ?? 0 }}</span><span class="est-stat-label">Atendidas</span></div>
-        </div>
-        <div class="modal-separador"></div>
-        <p class="config-seccion-titulo">Últimas atenciones</p>
-        <table class="admin-tabla" *ngIf="fichaEstudianteSeleccionado.ultimas_atenciones?.length > 0">
-          <thead><tr><th>Fecha</th><th>Profesional</th><th>Especialidad</th><th>Estado</th></tr></thead>
-          <tbody>
-            <tr *ngFor="let a of fichaEstudianteSeleccionado.ultimas_atenciones">
-              <td>{{ a.fecha }} — {{ a.hora }}</td>
-              <td>{{ a.profesional }}</td>
-              <td>{{ a.especialidad }}</td>
-              <td><span class="estado-badge" [ngClass]="a.estado">{{ a.estado }}</span></td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="tabla-vacia" *ngIf="!fichaEstudianteSeleccionado.ultimas_atenciones?.length">Sin atenciones registradas.</p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-cancelar-modal" (click)="cerrarModalPerfilEstudiante()">Cerrar</button>
-      </div>
-    </div>
-  </div>
 
   <!-- MODAL: CITAS CANCELADAS POR UN DÍA CERRADO -->
   <div class="modal-overlay" *ngIf="modalCitasDiaCerradoAbierto" (click)="modalCitasDiaCerradoAbierto = false">
@@ -1458,14 +538,3 @@
   </div>
 
 </div>
-
-<app-photo-cropper *ngIf="imagenParaRecortar"
-  [imagenSrc]="imagenParaRecortar"
-  (recortada)="onFotoRecortada($event)"
-  (cancelado)="imagenParaRecortar = null">
-</app-photo-cropper>
-
-<app-photo-viewer *ngIf="verFotoAmpliada && configCentro.foto_admin_url"
-  [imagenSrc]="configCentro.foto_admin_url"
-  (cerrar)="verFotoAmpliada = false">
-</app-photo-viewer>

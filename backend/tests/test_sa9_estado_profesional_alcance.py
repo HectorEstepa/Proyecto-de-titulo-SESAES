@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from app.models.cita import Cita
 from app.models.profesional import Profesional
 from app.models.usuario import Usuario
+from app.models.ausencia_profesional import AusenciaProfesional
 from app.rbac.admin_authorization import (
     AlcanceAdministrativoEfectivo,
     normalizar_especialidad,
@@ -365,8 +366,13 @@ def test_estado_dentro_de_scope_cancelando_citas_conserva_flujo(
         == "Profesional: inactivo"
     )
 
-    # 1 historial + 1 notificaci?n.
-    assert len(db.add_calls) == 2
+    # 1 historial + 1 AusenciaProfesional (bloquea agendamiento nuevo
+    # ese día — ver app.models.ausencia_profesional) + 1 notificación.
+    assert len(db.add_calls) == 3
+    assert any(
+        isinstance(obj, AusenciaProfesional) and obj.fecha == "2026-09-20"
+        for obj in db.add_calls
+    )
     assert len(correos) == 1
 
     # Auditor?a estado + auditor?a cancelaci?n masiva.

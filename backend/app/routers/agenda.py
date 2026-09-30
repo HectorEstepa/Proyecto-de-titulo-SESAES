@@ -24,6 +24,11 @@ from app.rbac.admin_authorization import (
     obtener_alcance_administrativo_efectivo,
     especialidad_permitida_por_alcance,
 )
+from app.services.agenda_disponibilidad_service import (
+    listar_disponibilidad_rango,
+    ParametrosRangoInvalidosError,
+    ProfesionalNoEncontradoError,
+)
 
 router = APIRouter(prefix="/agenda", tags=["agenda"])
 
@@ -293,3 +298,67 @@ def get_citas_profesional_admin(
             "sobrecupo":     c.sobrecupo or False,
         })
     return result
+
+
+@router.get("/profesional/{profesional_id}/disponibilidad")
+def get_disponibilidad_rango_admin(
+    profesional_id: int,
+    fecha_inicio: str,
+    fecha_fin: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_effective_permission(Permission.AGENDA_VER)),
+):
+    """
+    A.2B — disponibilidad real de un profesional, día por día, para un
+    rango [fecha_inicio, fecha_fin] (YYYY-MM-DD, inclusive, máximo
+    definido por agenda_disponibilidad_service.MAX_DIAS_RANGO_DISPONIBILIDAD
+    días). Genérico por diseño: hoy lo consume la vista Semana de Agenda
+    Admin, pero no está acoplado a 7 días — Día/Mes podrán reutilizarlo
+    sin un endpoint nuevo.
+
+    Requiere Permission.AGENDA_VER y respeta el alcance administrativo
+    efectivo, igual que el resto de este router: el profesional
+    solicitado se valida contra el alcance (institucional o por
+    especialidad) SIN confiar en el profesional_id que envía el
+    frontend. SUPERADMIN tiene alcance institucional administrativo,
+    pero eso no le da acceso clínico universal — esto solo expone
+    disponibilidad operacional (nunca datos clínicos).
+
+    La evaluación de cada slot vive en
+    app.services.agenda_disponibilidad_service.listar_disponibilidad_rango,
+    que comparte núcleo con evaluar_disponibilidad_slot() (el que valida
+    POST /citas). Este endpoint no reimplementa esa lógica: solo aplica
+    RBAC/scope y adapta errores de dominio a HTTP.
+    """
+    profesional = (
+        db.query(Profesional)
+        .filter(Profesional.id == profesional_id)
+        .first()
+    )
+    if not profesional:
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
+    alcance = obtener_alcance_administrativo_efectivo(db, current_user)
+
+    if (
+        alcance is None
+        or not especialidad_permitida_por_alcance(alcance, profesional.especialidad)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="El profesional está fuera de tu alcance administrativo.",
+        )
+
+    try:
+        return listar_disponibilidad_rango(
+            db,
+            profesional_id=profesional_id,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+        )
+    except ParametrosRangoInvalidosError as exc:
+        raise HTTPException(status_code=400, detail=exc.mensaje)
+    except ProfesionalNoEncontradoError:
+        # Defensivo: ya se validó arriba, pero si el registro se borra
+        # entre ambas consultas (carrera infrecuente), fail-closed igual.
+        raise HTTPException(status_code=404, detail="Profesional no encontrado")

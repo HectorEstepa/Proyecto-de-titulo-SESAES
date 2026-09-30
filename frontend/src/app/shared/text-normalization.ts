@@ -1,25 +1,24 @@
 /**
- * Normaliza texto para comparaciones de búsqueda/filtro que deben ignorar
- * mayúsculas, tildes y espacios extra (ver Documento Maestro §6.5 y §6.1:
- * "Filtro/búsqueda de profesional debe ignorar mayúsculas, espacios y tildes").
- *
- * Comportamiento puro y neutral — sin paleta ni dependencia de ningún
- * dashboard — para que Estudiante, Profesional y Admin puedan reutilizarlo
- * sin acoplar sus estilos.
+ * Normaliza texto para búsquedas de UI: ignora espacios extremos,
+ * mayúsculas/minúsculas y diacríticos (tildes).
  */
-export function normalizarTexto(valor: string | null | undefined): string {
-  if (!valor) return '';
-  return valor
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // quita tildes/diacríticos
-    .toLowerCase()
+export function normalizarTexto(value: unknown): string {
+  return String(value ?? '')
     .trim()
-    .replace(/\s+/g, ' '); // colapsa espacios múltiples
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
 }
 
-/** true si `texto` contiene `busqueda`, ignorando mayúsculas/tildes/espacios. */
-export function coincideBusqueda(texto: string | null | undefined, busqueda: string | null | undefined): boolean {
-  const b = normalizarTexto(busqueda);
-  if (!b) return true;
-  return normalizarTexto(texto).includes(b);
+
+/**
+ * Devuelve true cuando la consulta normalizada aparece en cualquiera de los
+ * valores indicados. Una consulta vacía no filtra resultados.
+ */
+export function coincideBusqueda(consulta: unknown, ...valores: unknown[]): boolean {
+  const q = normalizarTexto(consulta);
+  if (!q) return true;
+
+  return valores.some(valor => normalizarTexto(valor).includes(q));
 }

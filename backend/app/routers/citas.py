@@ -2,27 +2,49 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from datetime import datetime, date
+from datetime import datetime
 import io
 import os
 
 from app.database import get_db
 from app.models.cita import Cita
+from app.models.cita_sobrecupo import CitaSobrecupo, CitaSobrecupoConflicto
 from app.models.profesional import Profesional
 from app.models.usuario import Usuario
 from app.models.historial_paciente import HistorialPaciente
 from app.models.notificacion import Notificacion
 from app.schemas import CitaCreate
+from app.auditoria import registrar_evento_auditoria
 from app.auth_dependencies import get_current_user, verificar_acceso
-from app.models.ausencia_profesional import AusenciaProfesional
-from app.models.auditoria import Auditoria
-from app.reglas_horario import validar_fecha_agendable, rango_institucional_dia, parsear_hora_24h
+from app.rbac.permissions import Permission
+from app.rbac.admin_authorization import (
+    tiene_permiso_efectivo,
+    obtener_alcance_administrativo_efectivo,
+    especialidad_permitida_por_alcance,
+)
+from app.services.agenda_disponibilidad_service import (
+    evaluar_disponibilidad_slot,
+    excede_ventana_agendamiento_estudiante,
+    adquirir_lock_agenda_profesional_fecha,
+    canonicalizar_fecha_valida,
+    ConflictoSlot,
+    SlotInvalidoError,
+)
+from app.services.cita_origen_service import resolver_origen_cita
+# A.4.3 — política central de sobrecupo: reemplaza el `if` compuesto
+# que antes vivía acá mismo (puede_gestionar_agenda AND cita.sobrecupo
+# AND overridable AND NOT hay_bloqueo_absoluto(...)). citas.py ya NO
+# importa hay_bloqueo_absoluto/tiene_permiso_efectivo para decidir
+# sobrecupo — eso quedó encapsulado en el servicio (sí sigue usando
+# tiene_permiso_efectivo para _puede_gestionar_agenda(), que es un
+# chequeo de propiedad/alcance distinto, no de sobrecupo).
+from app.services.sobrecupo_policy_service import (
+    CODIGO_DENEGADO_SIN_MOTIVO,
+    CODIGO_DENEGADO_SIN_PERMISO,
+    evaluar_politica_sobrecupo,
+)
 
 router = APIRouter(tags=["citas"])
-
-
-def registrar_auditoria(db, accion, detalle=None, entidad=None, entidad_id=None, usuario_id=None):
-    db.add(Auditoria(accion=accion, detalle=detalle, entidad=entidad, entidad_id=entidad_id, usuario_id=usuario_id))
 
 
 def _cita_a_datetime(cita: Cita) -> datetime:
@@ -30,49 +52,161 @@ def _cita_a_datetime(cita: Cita) -> datetime:
     return datetime.strptime(f"{cita.fecha} {cita.hora}", "%Y-%m-%d %I:%M %p")
 
 
-def _normalizar_hora_24h(hora_str: str) -> str:
+def _puede_gestionar_agenda(
+    current_user: dict,
+    db: Session,
+) -> bool:
     """
-    CitaCreate.hora acepta dos formatos según quién agende: 'HH:MM' 24h
-    (lo que entrega /disponibilidad, usado por Estudiante) o 'HH:MM AM/PM'
-    (compatibilidad con flujos antiguos, ej. admin/urgente). Normaliza
-    ambos a 'HH:MM' 24h para poder compararlos contra el rango institucional.
-    Si no calza con ningún formato conocido, devuelve el string tal cual
-    (la validación de rango simplemente no aplicará sobre un valor no
-    parseable, en vez de romper el flujo de agendamiento).
+    Resuelve agenda.gestionar contra el estado actual de la BD.
+
+    ADMIN depende de su configuracion administrativa efectiva.
+    SUPERADMIN conserva sus permisos explicitos de rol a traves
+    del mismo resolver.
     """
-    hora_str = (hora_str or "").strip()
-    if not hora_str:
-        return hora_str
-    if "AM" in hora_str.upper() or "PM" in hora_str.upper():
-        try:
-            t = datetime.strptime(hora_str.upper(), "%I:%M %p")
-            return t.strftime("%H:%M")
-        except ValueError:
-            return hora_str
-    return hora_str
+    return tiene_permiso_efectivo(
+        db,
+        current_user,
+        Permission.AGENDA_GESTIONAR,
+    )
 
 
-def _verificar_acceso_a_cita(cita: Cita, current_user: dict, db: Session) -> None:
+def _mapear_denegacion_sobrecupo(decision, resultado_disponibilidad) -> dict:
     """
-    Un recurso 'cita' puede ser accedido por: el estudiante dueño de la cita,
-    el profesional que la atiende, o un admin. Cualquier otro caso -> 403.
+    A.4.3 — único lugar que traduce un `DecisionSobrecupo` denegado
+    (transport-agnostic, ver app.services.sobrecupo_policy_service) a
+    un status/detail HTTP concreto. Devuelve un dict pensado para
+    `HTTPException(**resultado)`.
 
-    OJO: Cita.profesional_id apunta a Profesional.id, que es una PK distinta
-    de Usuario.id (el id que va en el JWT). Por eso hay que resolver primero
-    el Profesional y comparar su usuario_id, no comparar directo contra
-    cita.profesional_id.
+    Preserva EXACTAMENTE el status/mensaje legacy para los rechazos que
+    ya existían antes de A.4.3 (precondición terminal, bloqueo
+    absoluto, conflicto sin intención — incluida la rama en que el
+    actor ni siquiera tiene agenda.gestionar, que la política también
+    devuelve con este mismo código para no filtrar la existencia de
+    agenda.sobrecupo a quien no puede ejercerla). Solo introduce
+    status/detail NUEVOS para los dos códigos que A.4.3 agrega de
+    verdad: falta de permiso específico y falta de motivo humano.
+    """
+    if decision.codigo == CODIGO_DENEGADO_SIN_PERMISO:
+        return {
+            "status_code": 403,
+            "detail": (
+                "No cuentas con el permiso de sobrecupo "
+                "(agenda.sobrecupo) para autorizar esta hora."
+            ),
+        }
+
+    if decision.codigo == CODIGO_DENEGADO_SIN_MOTIVO:
+        return {
+            "status_code": 400,
+            "detail": "Debes indicar el motivo del sobrecupo.",
+        }
+
+    # denegado_precondicion_legacy / denegado_bloqueo_absoluto /
+    # denegado_conflicto_sin_intencion / denegado_entrada_incoherente
+    # (fail-closed defensivo) — mismo criterio legacy de siempre:
+    # slot_ocupado tras la re-evaluación DENTRO del lock es, por
+    # definición, perder la carrera de concurrencia (409); el resto de
+    # los motivos son problemas de validez del slot en sí (400).
+    status_code = (
+        409 if resultado_disponibilidad.motivo == "slot_ocupado" else 400
+    )
+    return {
+        "status_code": status_code,
+        "detail": resultado_disponibilidad.mensaje or "Esa hora no está disponible.",
+    }
+
+
+def _verificar_propietario_o_agenda(
+    current_user: dict,
+    estudiante_id: int,
+    db: Session,
+) -> bool:
+    """
+    Permite:
+      - estudiante operando sobre su propio Usuario.id, o
+      - usuario con agenda.gestionar efectivo.
+
+    Devuelve True cuando la operacion usa capacidad administrativa.
+    """
+    puede_gestionar = _puede_gestionar_agenda(
+        current_user,
+        db,
+    )
+
+    if puede_gestionar:
+        return True
+
+    verificar_acceso(
+        current_user,
+        id_esperado=estudiante_id,
+        roles_permitidos=["estudiante"],
+    )
+
+    return False
+
+
+
+def _verificar_alcance_profesional_agenda(
+    db: Session,
+    current_user: dict,
+    profesional: Profesional | None,
+) -> None:
+    """
+    Comprueba el alcance administrativo sobre el profesional objetivo.
+
+    Un profesional inexistente o fuera del alcance se trata como 404
+    para no revelar recursos pertenecientes a otro alcance.
+    """
+    alcance = obtener_alcance_administrativo_efectivo(
+        db,
+        current_user,
+    )
+
+    if (
+        alcance is None
+        or profesional is None
+        or not especialidad_permitida_por_alcance(
+            alcance,
+            profesional.especialidad,
+        )
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Profesional no encontrado",
+        )
+
+
+def _verificar_acceso_a_cita(
+    cita: Cita,
+    current_user: dict,
+    db: Session,
+) -> None:
+    """
+    Acceso privado a una cita: estudiante dueño o profesional asignado.
+
+    ADMIN y SUPERADMIN no reciben bypass clínico por este helper.
+    agenda.gestionar se evalúa solamente en operaciones administrativas
+    concretas, como crear o cancelar una cita.
     """
     rol = current_user["rol"]
     uid = current_user["id"]
-    if rol == "admin":
-        return
+
     if rol == "estudiante" and cita.estudiante_id == uid:
         return
+
     if rol == "profesional":
-        prof = db.query(Profesional).filter(Profesional.id == cita.profesional_id).first()
+        prof = (
+            db.query(Profesional)
+            .filter(Profesional.id == cita.profesional_id)
+            .first()
+        )
         if prof and prof.usuario_id == uid:
             return
-    raise HTTPException(status_code=403, detail="No tienes permiso para acceder a esta cita.")
+
+    raise HTTPException(
+        status_code=403,
+        detail="No tienes permiso para acceder a esta cita.",
+    )
 
 
 @router.get("/citas/estudiante/{estudiante_id}")
@@ -81,7 +215,7 @@ def get_citas_estudiante(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso(current_user, id_esperado=estudiante_id, roles_permitidos=["estudiante", "admin"])
+    _verificar_propietario_o_agenda(current_user, estudiante_id, db)
     citas = db.query(Cita).filter(
         Cita.estudiante_id == estudiante_id,
         Cita.estado == "pendiente"
@@ -109,7 +243,11 @@ def get_historial(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso(current_user, id_esperado=estudiante_id, roles_permitidos=["estudiante", "admin"])
+    verificar_acceso(
+        current_user,
+        id_esperado=estudiante_id,
+        roles_permitidos=["estudiante"],
+    )
     # Solo estados ya resueltos: completada, cancelada, inasistencia
     citas = db.query(Cita).filter(
         Cita.estudiante_id == estudiante_id,
@@ -132,7 +270,6 @@ def get_historial(
             "medicamento":            c.medicamento            if c.estado == "completada" else None,
             "observaciones_atencion": c.observaciones_atencion if c.estado == "completada" else None,
             "motivo_cancelacion":     c.motivo_cancelacion,
-            "rechazada_por_profesional": c.rechazada_por_profesional or False,
         })
     return result
 
@@ -145,43 +282,47 @@ def crear_cita(
 ):
     # Un estudiante solo puede agendar para sí mismo; un admin puede agendar
     # a nombre de cualquier estudiante (ej. citas urgentes desde recepción).
-    verificar_acceso(current_user, id_esperado=cita.estudiante_id, roles_permitidos=["estudiante", "admin"])
+    puede_gestionar_agenda = _verificar_propietario_o_agenda(
+        current_user,
+        cita.estudiante_id,
+        db,
+    )
+
+    # A.3 (v3) — canonicalizar la fecha UNA sola vez, antes de CUALQUIER
+    # query que dependa de ella, y reutilizar exactamente ese mismo
+    # valor en todo el resto del flujo (DiaCerrado, ventana de
+    # agendamiento, lock, evaluar_disponibilidad_slot, INSERT de
+    # Cita.fecha) — ver canonicalizar_fecha_valida() en
+    # agenda_disponibilidad_service.py. Una fecha no interpretable
+    # nunca se mutasilenciosamente ni se deja pasar: se rechaza acá
+    # mismo con 400, antes de la consulta de DiaCerrado que existía
+    # antes de esta corrección y que comparaba contra el string crudo.
+    try:
+        fecha_canon = canonicalizar_fecha_valida(cita.fecha)
+    except SlotInvalidoError as exc:
+        raise HTTPException(status_code=400, detail=exc.mensaje)
 
     # Un día marcado como "cerrado" (centro completo sin atención) bloquea
     # el agendamiento sin excepción, incluso para el admin — ningún
     # profesional trabaja ese día, así que no existe sobrecupo posible ahí.
     from app.models.dia_cerrado import DiaCerrado
-    if db.query(DiaCerrado).filter(DiaCerrado.fecha == cita.fecha).first():
+    if db.query(DiaCerrado).filter(DiaCerrado.fecha == fecha_canon).first():
         raise HTTPException(status_code=400, detail="El centro permanece cerrado ese día. Elige otra fecha.")
 
-    # Regla institucional dura, sin excepción de sobrecupo: nadie agenda en
-    # sábado/domingo, en una fecha ya pasada, ni fuera del rango horario que
-    # la universidad tiene habilitado ese día de la semana. El "sobrecupo"
-    # del admin solo excusa el horario PERSONAL del profesional (colación o
-    # fuera de su jornada propia), nunca el horario institucional completo.
-    error_fecha = validar_fecha_agendable(cita.fecha)
-    if error_fecha:
-        raise HTTPException(status_code=400, detail=error_fecha)
+    prof = (
+        db.query(Profesional)
+        .filter(
+            Profesional.id == cita.profesional_id
+        )
+        .first()
+    )
 
-    fecha_obj = datetime.strptime(cita.fecha, "%Y-%m-%d").date()
-    rango_institucional = rango_institucional_dia(fecha_obj.weekday())
-    hora_normalizada = parsear_hora_24h(_normalizar_hora_24h(cita.hora))
-    if rango_institucional and hora_normalizada:
-        inst_inicio, inst_fin = rango_institucional
-        if not (inst_inicio <= hora_normalizada < inst_fin):
-            raise HTTPException(
-                status_code=400,
-                detail="Ese horario está fuera del rango de atención institucional para ese día."
-            )
-
-    if fecha_obj == date.today() and hora_normalizada and hora_normalizada <= datetime.now().time():
-        raise HTTPException(status_code=400, detail="No se puede agendar una hora que ya pasó.")
-
-    if db.query(AusenciaProfesional).filter(
-        AusenciaProfesional.profesional_id == cita.profesional_id,
-        AusenciaProfesional.fecha == cita.fecha
-    ).first():
-        raise HTTPException(status_code=400, detail="El profesional no atiende ese día. Elige otra fecha.")
+    if puede_gestionar_agenda:
+        _verificar_alcance_profesional_agenda(
+            db,
+            current_user,
+            prof,
+        )
 
     # El "paciente" de una cita SIEMPRE debe ser una cuenta con rol estudiante.
     # Sin este chequeo, un admin podría —por error, ej. escribiendo mal un
@@ -194,7 +335,93 @@ def crear_cita(
             detail="El paciente seleccionado no corresponde a una cuenta de estudiante."
         )
 
-    prof = db.query(Profesional).filter(Profesional.id == cita.profesional_id).first()
+    # A.2 (corrección v2, punto 2) — la ventana de 7 días es una
+    # política de agendamiento propia de Estudiante, no una regla
+    # estructural del slot (ver docstring de agenda_disponibilidad_service).
+    # Se re-aplica acá explícitamente SOLO cuando quien agenda es el
+    # propio estudiante (sin agenda.gestionar): así una llamada directa
+    # a POST /citas no le permite saltarse una restricción que
+    # GET /disponibilidad ya le oculta en la UI. No se aplica cuando
+    # quien agenda tiene capacidad administrativa, para no romper la
+    # futura Agenda Admin, que necesita poder navegar/agendar semanas
+    # posteriores a esta ventana.
+    if not puede_gestionar_agenda and excede_ventana_agendamiento_estudiante(fecha_canon):
+        raise HTTPException(
+            status_code=400,
+            detail="Esa fecha está fuera del rango de agendamiento disponible.",
+        )
+
+    # A.2 — antes de esto, fecha/hora no se validaban contra jornada,
+    # colación, grilla real, DiaCerrado ni ocupación real: bastaba con
+    # que el cliente enviara cualquier valor. evaluar_disponibilidad_slot()
+    # es la misma fuente que usa GET /disponibilidad/{id} (Estudiante)
+    # y que debería usar la grilla de Agenda Admin.
+    #
+    # sobrecupo=True (solo posible si puede_gestionar_agenda; ver
+    # arriba) puede superar únicamente los motivos marcados como
+    # overridable_con_sobrecupo — fuera de jornada o en colación.
+    # Nunca supera centro cerrado, fin de semana, fecha/hora pasada,
+    # profesional inactivo/inexistente, un horario fuera de grilla ni
+    # un slot ya ocupado por otra cita: eso replica la semántica que
+    # ya tenía el frontend (clickBloque() solo ofrece sobrecupo para
+    # 'fuera-horario' y 'colacion'). El diseño definitivo de
+    # autorización/auditoría de sobrecupo queda para A.4.
+    #
+    # A.3 — concurrencia/doble-reserva: el lock DEBE adquirirse ANTES
+    # de esta re-evaluación, no después. evaluar_disponibilidad_slot()
+    # aquí NO es una simple validación — es la re-evaluación dentro de
+    # la sección crítica que cierra la carrera SELECT→INSERT: dos
+    # peticiones concurrentes para el mismo profesional/fecha se
+    # serializan en esta línea (la segunda espera hasta que la primera
+    # haga commit/rollback), y para cuando la segunda continúa, ya ve
+    # la cita que la primera insertó. Evaluar antes del lock y confiar
+    # en que el resultado siga vigente al insertar es exactamente la
+    # carrera que esto existe para cerrar — ver
+    # adquirir_lock_agenda_profesional_fecha().
+    adquirir_lock_agenda_profesional_fecha(
+        db,
+        profesional_id=cita.profesional_id,
+        fecha=fecha_canon,
+    )
+    resultado_disponibilidad = evaluar_disponibilidad_slot(
+        db,
+        profesional_id=cita.profesional_id,
+        fecha=fecha_canon,
+        hora=cita.hora,
+    )
+    # A.4.3 — política central de sobrecupo (ver
+    # app.services.sobrecupo_policy_service): reemplaza el `if`
+    # compuesto que antes vivía acá mismo. La política recibe el
+    # `resultado_disponibilidad` YA calculado arriba, DENTRO del lock
+    # A.3 — nunca reanaliza disponibilidad ni reimplementa ninguna
+    # regla de conflicto de A.4.2 (usa hay_bloqueo_absoluto() /
+    # ConflictoSlot.overridable_con_sobrecupo internamente).
+    decision_sobrecupo = evaluar_politica_sobrecupo(
+        db,
+        current_user,
+        sobrecupo_solicitado=bool(cita.sobrecupo),
+        sobrecupo_motivo=cita.sobrecupo_motivo,
+        resultado_disponibilidad=resultado_disponibilidad,
+    )
+
+    if not decision_sobrecupo.permitido:
+        raise HTTPException(
+            **_mapear_denegacion_sobrecupo(
+                decision_sobrecupo, resultado_disponibilidad,
+            )
+        )
+
+    # A.4.1 — motivo estructurado REALMENTE superado, si lo hay. Solo se
+    # llena cuando la política de arriba autorizó un sobrecupo EFECTIVO
+    # — nunca se inventa un "conflicto" para el caso (posible, si
+    # alguien llama a la API directamente con sobrecupo=True sobre un
+    # slot que ya estaba libre) en que no hubo nada real que superar.
+    # Ver app.models.cita_sobrecupo.CitaSobrecupo.
+    motivo_conflicto_superado: str | None = (
+        resultado_disponibilidad.motivo
+        if decision_sobrecupo.es_sobrecupo_efectivo
+        else None
+    )
 
     if prof:
         # Una cita "pendiente" solo debe bloquear un nuevo agendamiento si
@@ -222,20 +449,22 @@ def crear_cita(
                 break
         if duplicada:
             if duplicada.profesional_id == cita.profesional_id:
-                # Acaparamiento: el mismo estudiante intenta tomar una SEGUNDA
-                # hora con el MISMO profesional teniendo ya una pendiente.
-                # No se explica el motivo real (evita que alguien "tantee" el
-                # sistema para descubrir la regla); se responde como si
-                # simplemente no hubiera disponibilidad, y queda registrado
-                # en auditoría — visible para el Admin — como intento de
-                # acaparamiento, distinto de un "sin disponibilidad" real.
-                est = db.query(Usuario).filter(Usuario.id == cita.estudiante_id).first()
-                registrar_auditoria(
-                    db, "Intento de acaparamiento detectado",
-                    f"{est.nombre if est else cita.estudiante_id} intentó tomar una segunda hora "
-                    f"con {prof.nombre if prof else cita.profesional_id} ({cita.fecha} {cita.hora}) "
-                    f"teniendo ya una cita pendiente con el mismo profesional.",
-                    "cita", duplicada.id, cita.estudiante_id
+                # Acaparamiento: el mismo estudiante intenta tomar una
+                # SEGUNDA hora con el MISMO profesional teniendo ya una
+                # pendiente. No se explica el motivo real (evita que
+                # alguien "tantee" el sistema para descubrir la regla);
+                # se responde como si simplemente no hubiera
+                # disponibilidad, y queda registrado en auditoría
+                # (visible para el admin) como intento de acaparamiento,
+                # distinto de un "sin disponibilidad" real.
+                registrar_evento_auditoria(
+                    db, current_user, "Intento de acaparamiento detectado",
+                    entidad="cita", entidad_id=duplicada.id,
+                    detalle=(
+                        f"Estudiante intentó tomar una segunda hora con el "
+                        f"profesional {cita.profesional_id} ({cita.fecha} {cita.hora}) "
+                        f"teniendo ya una cita pendiente con el mismo profesional."
+                    ),
                 )
                 db.commit()
                 raise HTTPException(status_code=400,
@@ -243,30 +472,145 @@ def crear_cita(
             raise HTTPException(status_code=400,
                 detail="Ya tienes una cita pendiente en esta especialidad")
 
+    # A.4.1 — origen de la cita: SIEMPRE el actor autenticado de esta
+    # request (current_user), nunca un valor del body. Ver
+    # app.services.cita_origen_service — misma función usada por
+    # POST /admin/citas/urgente, para que ambos canales registren el
+    # origen con exactamente el mismo criterio.
+    origen = resolver_origen_cita(db, current_user)
+
     nueva = Cita(
         estudiante_id  = cita.estudiante_id,
         profesional_id = cita.profesional_id,
-        fecha          = cita.fecha,
+        # A.3 (v3) — se guarda fecha_canon, NUNCA cita.fecha crudo: es
+        # la misma forma canónica ya usada arriba para DiaCerrado, el
+        # lock y evaluar_disponibilidad_slot (ver
+        # canonicalizar_fecha_valida()). Guardar el string crudo aquí
+        # era precisamente el hueco que A.3 (v2) dejaba abierto.
+        fecha          = fecha_canon,
         hora           = cita.hora,
         observaciones  = cita.observaciones,
-        urgente        = cita.urgente or False,
-        # sobrecupo solo puede activarlo un admin, sin importar lo que
-        # mande el body — así un estudiante no puede autoasignarse la marca.
-        sobrecupo      = bool(cita.sobrecupo) if current_user["rol"] == "admin" else False,
-        estado         = "pendiente"
+        # Estas marcas son administrativas: el estudiante no puede
+        # elevar prioridad ni crear sobrecupo manipulando el body.
+        urgente        = (
+            bool(cita.urgente)
+            if puede_gestionar_agenda
+            else False
+        ),
+        # A.4.1 v2 — "sobrecupo efectivo": Cita.sobrecupo representa la
+        # intención del cliente autorizada Y CONFIRMADA por la
+        # re-evaluación DENTRO del lock A.3, no la intención cruda que
+        # llegó en el body. Si el cliente pidió sobrecupo=True pero,
+        # al re-evaluar dentro del lock, el slot resultó realmente
+        # disponible (p. ej. la cita que antes lo bloqueaba fue
+        # cancelada mientras tanto), NO hay ningún conflicto que
+        # "sobrecupo" esté superando — persistir True ahí crearía dos
+        # fuentes de verdad contradictorias (Cita.sobrecupo=True sin
+        # ningún CitaSobrecupo/conflicto/auditoría que lo respalde,
+        # como pasaba en A.4.1 v1). motivo_conflicto_superado ya es
+        # None en ese caso (ver arriba), así que basta con usarlo como
+        # única fuente de verdad — nunca se rechaza la cita solo
+        # porque el conflicto desapareció; eso es una mejora legítima
+        # de la concurrencia, no un error.
+        sobrecupo      = motivo_conflicto_superado is not None,
+        estado         = "pendiente",
+        creado_por_usuario_id = origen.creado_por_usuario_id,
+        creado_por_rol        = origen.creado_por_rol,
+        creado_por_perfil     = origen.creado_por_perfil,
     )
     db.add(nueva)
     try:
-        db.commit()
+        # A.4.1 — flush (no commit todavía): necesitamos nueva.id para
+        # poder crear, en la MISMA transacción, el detalle de
+        # sobrecupo y su evento de auditoría cuando corresponda (ver
+        # abajo). Mismo patrón que ya usa POST /admin/citas/urgente
+        # (admin.py) — Cita + CitaSobrecupo + CitaSobrecupoConflicto +
+        # Auditoria se confirman o se deshacen juntos con un único
+        # commit al final.
+        db.flush()
     except IntegrityError:
-        # Otra persona reservó exactamente esta misma hora una fracción de
-        # segundo antes (dos peticiones simultáneas) — lo atrapa el índice
-        # único de la base de datos, no solo la validación de arriba.
+        # A.3 — esta red de seguridad NO es (nunca lo fue) la
+        # protección real contra doble reserva: Cita no tiene, ni tuvo
+        # nunca, ningún UniqueConstraint/Index único sobre
+        # (profesional_id, fecha, hora) que este INSERT pudiera violar
+        # (confirmado en el diagnóstico de A.3 — antes este comentario
+        # afirmaba lo contrario, era falso). La protección real es
+        # adquirir_lock_agenda_profesional_fecha() + la re-evaluación
+        # de evaluar_disponibilidad_slot() DENTRO de ese lock, arriba.
+        # Este except se conserva solo como red de seguridad genérica
+        # ante cualquier violación de integridad real (p. ej. FK), no
+        # como mecanismo de concurrencia.
         db.rollback()
         raise HTTPException(
             status_code=409,
             detail="Esa hora acaba de ser reservada por otra persona. Por favor elige otra."
         )
+
+    # A.4.1 — auditoría de sobrecupo (hallazgo confirmado en el
+    # diagnóstico A.4: POST /citas hoy NO auditaba la creación de
+    # sobrecupo, a diferencia de POST /admin/citas/urgente). Se
+    # registra si y solo si hubo sobrecupo EFECTIVO
+    # (motivo_conflicto_superado no es None, ver arriba) — nunca
+    # cuando cita.sobrecupo=True llegó marcado sobre un slot que, tras
+    # la re-evaluación dentro del lock, resultó realmente libre.
+    if motivo_conflicto_superado is not None:
+        detalle_sobrecupo = CitaSobrecupo(
+            cita_id=nueva.id,
+            # A.4.3 — motivo YA validado/trim por la política
+            # (DecisionSobrecupo.motivo_normalizado): nunca None ni
+            # vacío en este punto, porque `es_sobrecupo_efectivo=True`
+            # solo ocurre en CODIGO_AUTORIZADO, que exige motivo no
+            # vacío. El router no vuelve a hacer strip()/validación acá
+            # — persiste EXACTAMENTE ese valor.
+            motivo=decision_sobrecupo.motivo_normalizado,
+            estado_revision=None,
+        )
+        db.add(detalle_sobrecupo)
+        db.flush()
+        # A.4.2 — una fila de CitaSobrecupoConflicto POR CADA conflicto
+        # estructurado que este sobrecupo realmente superó, no solo el
+        # motivo ganador de la precedencia legacy. `sobrecupo_autoriza`
+        # ya garantizó arriba (vía hay_bloqueo_absoluto) que ningún
+        # conflicto de esta lista es un bloqueo absoluto, así que cada
+        # uno de ellos es, por definición, overridable y fue
+        # efectivamente superado por este sobrecupo — nunca se persiste
+        # acá un conflicto absoluto como si hubiera sido superado.
+        #
+        # Red de seguridad (no debería ocurrir dado el análisis
+        # estructurado de A.4.2): si por algún motivo la lista
+        # estructurada llegara vacía pese a existir un motivo ganador
+        # overridable, se conserva al menos ese único motivo — el
+        # mismo comportamiento que ya tenía A.4.1 — para no perder la
+        # trazabilidad del sobrecupo. El mensaje de auditoría de abajo
+        # sigue usando únicamente `motivo_conflicto_superado` (el
+        # motivo ganador legacy) sin cambios respecto a A.4.1 — no se
+        # enumeran acá los conflictos adicionales.
+        conflictos_superados = resultado_disponibilidad.conflictos or (
+            motivo_conflicto_superado,
+        )
+        for conflicto in conflictos_superados:
+            codigo = (
+                conflicto.codigo
+                if isinstance(conflicto, ConflictoSlot)
+                else conflicto
+            )
+            db.add(CitaSobrecupoConflicto(
+                cita_sobrecupo_id=detalle_sobrecupo.id,
+                codigo=codigo,
+            ))
+        registrar_evento_auditoria(
+            db, current_user, "Creó cita con sobrecupo",
+            entidad="cita", entidad_id=nueva.id,
+            detalle=(
+                f"Estudiante id {cita.estudiante_id} — Profesional id "
+                f"{cita.profesional_id} ({nueva.fecha} {nueva.hora}). "
+                f"Conflicto superado: {motivo_conflicto_superado}. "
+                f"Motivo informado: {cita.sobrecupo_motivo or '(no informado por el cliente)'}. "
+                f"Perfil administrativo del actor: {origen.creado_por_perfil or '-'}."
+            ),
+        )
+
+    db.commit()
     db.refresh(nueva)
 
     # Si es la primera vez que este estudiante agenda con este profesional
@@ -292,7 +636,7 @@ def crear_cita(
         "profesional":  prof.nombre       if prof else "",
         "fecha":        nueva.fecha,
         "hora":         nueva.hora,
-        "urgente":      False,
+        "urgente":      nueva.urgente or False,
         "aviso":        "Cancelación hasta 5 horas antes",
         "estado":       nueva.estado
     }
@@ -308,7 +652,31 @@ def cancelar_cita(
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
 
-    _verificar_acceso_a_cita(cita, current_user, db)
+    puede_gestionar_agenda = _puede_gestionar_agenda(
+        current_user,
+        db,
+    )
+
+    if puede_gestionar_agenda:
+        prof = (
+            db.query(Profesional)
+            .filter(
+                Profesional.id == cita.profesional_id
+            )
+            .first()
+        )
+
+        _verificar_alcance_profesional_agenda(
+            db,
+            current_user,
+            prof,
+        )
+    else:
+        _verificar_acceso_a_cita(
+            cita,
+            current_user,
+            db,
+        )
 
     if cita.estado != "pendiente":
         raise HTTPException(status_code=400, detail="Esta cita no se puede cancelar")
@@ -320,7 +688,7 @@ def cancelar_cita(
 
     # Un admin puede cancelar sin la restricción de las 5 horas (ej. por
     # ausencia del profesional o motivos operativos).
-    if fecha_hora_cita and current_user["rol"] != "admin":
+    if fecha_hora_cita and not puede_gestionar_agenda:
         horas_restantes = (fecha_hora_cita - datetime.now()).total_seconds() / 3600
         # La restricción de "mínimo 5 horas antes" solo tiene sentido si la
         # cita todavía está por venir. Si ya pasó la fecha/hora (horas_restantes
@@ -394,10 +762,10 @@ def descargar_pdf_cita(
     campo(pdf, "Hora:", f" {cita.hora}")
     campo(pdf, "Motivo de consulta:", f" {cita.observaciones or 'No especificado'}")
 
-    # ── Indicaciones médicas / receta ──
+    # ── Registro de atención (NO es una receta; ver SA-11.3B) ──
     pdf.ln(6)
     pdf.set_font("Helvetica", "B", 13)
-    pdf.cell(0, 8, "Indicaciones Médicas", ln=True)
+    pdf.cell(0, 8, "Registro de atención", ln=True)
     pdf.set_draw_color(230, 230, 230)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)

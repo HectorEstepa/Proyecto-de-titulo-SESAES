@@ -12,10 +12,18 @@ import { AuthService } from './auth.service';
  * (incluyendo si el intento vino del botón "atrás" del navegador).
  */
 export const leaveDashboardGuard: CanDeactivateFn<unknown> = () => {
+  const auth = inject(AuthService);
+
+  // Un logout explícito ya cerró la sesión antes de navegar. En ese caso
+  // no debemos volver a preguntar ni ejecutar logout por segunda vez.
+  if (!auth.isLoggedIn()) {
+    return true;
+  }
+
   const confirmado = window.confirm('¿Seguro que quieres salir? Se cerrará tu sesión.');
 
   if (confirmado) {
-    inject(AuthService).logout();
+    auth.logout();
   }
 
   return confirmado;

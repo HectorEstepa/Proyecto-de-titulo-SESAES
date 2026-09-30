@@ -9,16 +9,67 @@ from app.models.usuario import Usuario
 from app.models.notificacion import Notificacion
 from app.models.solicitud_horario import SolicitudHorario
 from app.models.bloque_horario_semanal import BloqueHorarioSemanal
-from app.models.auditoria import Auditoria
-from app.auth_dependencies import get_current_user, verificar_acceso_profesional, verificar_rol
-from app.reglas_horario import validar_bloque_institucional, NOMBRES_DIA, RANGO_INSTITUCIONAL
+from app.auth_dependencies import get_current_user, verificar_acceso_profesional
+from app.rbac.dependencies import require_effective_permission
+from app.rbac.admin_authorization import (
+    obtener_alcance_administrativo_efectivo,
+    especialidad_permitida_por_alcance,
+    tiene_permiso_admin_en_especialidad,
+)
+from app.rbac.permissions import Permission, has_permission
+from app.auditoria import registrar_evento_auditoria
+from app import reglas_horario
 
 router = APIRouter(tags=["solicitudes-horario"])
 
+# SA-2: el helper local registrar_auditoria(...) se eliminó. Este router
+# usa ahora app.auditoria.registrar_evento_auditoria, que deriva el actor
+# (usuario_id, actor_rol) EXCLUSIVAMENTE de current_user y nunca hace
+# commit/rollback por sí mismo — ver docstring de app/auditoria.py.
 
-def registrar_auditoria(db, accion, detalle=None, entidad=None, entidad_id=None):
-    db.add(Auditoria(accion=accion, detalle=detalle, entidad=entidad, entidad_id=entidad_id))
 
+def _exigir_agenda_gestionar_propia_y_ownership(current_user: dict, prof_id: int, db) -> None:
+    """
+    RBAC + ownership para las 4 operaciones "propias" del profesional en
+    este módulo (Fase 3.5F, mismo criterio que
+    profesionales._exigir_permiso_y_ownership_propio):
+
+      - que el usuario autenticado tenga Permission.AGENDA_GESTIONAR_PROPIA, Y
+      - que sea el profesional dueño de `prof_id` (verificar_acceso_profesional,
+        sin bypass admin/superadmin).
+
+    Un profesional sin este permiso recibe 403 aunque sea dueño del recurso.
+    Un profesional con el permiso pero sobre un prof_id ajeno también recibe
+    403. Las rutas administrativas de este módulo siguen usando
+    Permission.AGENDA_GESTIONAR vía require_permission, sin pasar por aquí.
+    """
+    if not has_permission(current_user, Permission.AGENDA_GESTIONAR_PROPIA):
+        raise HTTPException(status_code=403, detail="No tienes permiso para acceder a este recurso.")
+    verificar_acceso_profesional(current_user, prof_id, db, roles_permitidos=["profesional"])
+
+
+
+def _ids_profesionales_en_alcance(
+    db: Session,
+    alcance,
+) -> list[int]:
+    """
+    Devuelve los IDs de profesionales visibles para un alcance
+    administrativo limitado.
+
+    El alcance institucional no necesita filtro por IDs.
+    """
+    if alcance is None or alcance.institucional:
+        return []
+
+    return [
+        profesional.id
+        for profesional in db.query(Profesional).all()
+        if especialidad_permitida_por_alcance(
+            alcance,
+            profesional.especialidad,
+        )
+    ]
 
 def _hora_a_minutos(hora_str: str) -> int:
     """Convierte 'HH:MM AM/PM' o 'HH:MM' a minutos desde medianoche."""
@@ -32,10 +83,46 @@ def _hora_a_minutos(hora_str: str) -> int:
     return -1
 
 
-def _notificar_admin(db, mensaje: str, tipo: str = "info"):
-    admin = db.query(Usuario).filter(Usuario.rol == "admin").first()
-    if admin:
-        db.add(Notificacion(usuario_id=admin.id, mensaje=mensaje, tipo=tipo))
+def _notificar_admin(
+    db,
+    especialidad: str,
+    mensaje: str,
+    tipo: str = "info",
+):
+    """
+    Notifica a usuarios administrativos activos con capacidad real
+    agenda.gestionar para la especialidad de la solicitud.
+
+    ADMIN requiere configuracion valida, permiso persistido y alcance.
+    SUPERADMIN conserva su permiso explicito definido por rol.
+    """
+    for u in db.query(Usuario).all():
+        if not getattr(u, "activo", True):
+            continue
+
+        if u.rol == "admin":
+            autorizado = tiene_permiso_admin_en_especialidad(
+                db,
+                u.id,
+                Permission.AGENDA_GESTIONAR,
+                especialidad,
+            )
+        else:
+            autorizado = has_permission(
+                u.rol,
+                Permission.AGENDA_GESTIONAR,
+            )
+
+        if not autorizado:
+            continue
+
+        db.add(
+            Notificacion(
+                usuario_id=u.id,
+                mensaje=mensaje,
+                tipo=tipo,
+            )
+        )
 
 
 def _notificar_profesional(db, prof: Profesional, mensaje: str, tipo: str = "info"):
@@ -54,7 +141,7 @@ def solicitar_colacion(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_agenda_gestionar_propia_y_ownership(current_user, prof_id, db)
     prof = db.query(Profesional).filter(Profesional.id == prof_id).first()
     if not prof:
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
@@ -69,15 +156,6 @@ def solicitar_colacion(
 
     fin_min = inicio_min + 60
     hora_fin = f"{(fin_min // 60) % 24:02d}:{fin_min % 60:02d}"
-
-    # Esta jornada/colación "simple" aplica de Lunes a Viernes por igual, así
-    # que se valida contra el rango institucional más corto en común entre
-    # todos los días (el de Viernes: 09:00-16:30). Si el profesional necesita
-    # un horario más largo un día y más corto otro (ej. Viernes distinto),
-    # debe usar la solicitud por bloques semanales en su lugar.
-    error = validar_bloque_institucional(4, hora_inicio, hora_fin)  # 4 = Viernes
-    if error:
-        raise HTTPException(status_code=400, detail=error)
 
     # Si ya hay una solicitud pendiente del mismo tipo, la reemplazamos por la nueva
     pendiente = db.query(SolicitudHorario).filter(
@@ -94,9 +172,10 @@ def solicitar_colacion(
     )
     db.add(solicitud)
 
-    _notificar_admin(db, f"{prof.nombre} solicitó horario de colación: {hora_inicio} - {hora_fin}.")
-    registrar_auditoria(db, "Profesional solicitó horario de colación",
-                        f"{prof.nombre}: {hora_inicio} - {hora_fin}", "profesional", prof_id)
+    _notificar_admin(db, prof.especialidad, f"{prof.nombre} solicitó horario de colación: {hora_inicio} - {hora_fin}.")
+    registrar_evento_auditoria(db, current_user, "Profesional solicitó horario de colación",
+                                entidad="profesional", entidad_id=prof_id,
+                                detalle=f"{prof.nombre}: {hora_inicio} - {hora_fin}")
     db.commit()
     return {"message": "Solicitud de colación enviada. Queda pendiente de aprobación del administrador.",
             "hora_inicio": hora_inicio, "hora_fin": hora_fin}
@@ -109,7 +188,7 @@ def solicitar_jornada(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_agenda_gestionar_propia_y_ownership(current_user, prof_id, db)
     prof = db.query(Profesional).filter(Profesional.id == prof_id).first()
     if not prof:
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
@@ -123,12 +202,6 @@ def solicitar_jornada(
     fin_min = _hora_a_minutos(hora_fin)
     if ini_min < 0 or fin_min < 0 or ini_min >= fin_min:
         raise HTTPException(status_code=400, detail="Rango de horas inválido")
-
-    # Igual que en colación: la jornada simple es de Lunes a Viernes, así que
-    # se valida contra el rango institucional más corto en común (Viernes).
-    error = validar_bloque_institucional(4, hora_inicio, hora_fin)  # 4 = Viernes
-    if error:
-        raise HTTPException(status_code=400, detail=error)
 
     pendiente = db.query(SolicitudHorario).filter(
         SolicitudHorario.profesional_id == prof_id,
@@ -144,9 +217,10 @@ def solicitar_jornada(
     )
     db.add(solicitud)
 
-    _notificar_admin(db, f"{prof.nombre} solicitó horario de jornada: {hora_inicio} - {hora_fin}.")
-    registrar_auditoria(db, "Profesional solicitó horario de jornada",
-                        f"{prof.nombre}: {hora_inicio} - {hora_fin}", "profesional", prof_id)
+    _notificar_admin(db, prof.especialidad, f"{prof.nombre} solicitó horario de jornada: {hora_inicio} - {hora_fin}.")
+    registrar_evento_auditoria(db, current_user, "Profesional solicitó horario de jornada",
+                                entidad="profesional", entidad_id=prof_id,
+                                detalle=f"{prof.nombre}: {hora_inicio} - {hora_fin}")
     db.commit()
     return {"message": "Solicitud de jornada enviada. Queda pendiente de aprobación del administrador.",
             "hora_inicio": hora_inicio, "hora_fin": hora_fin}
@@ -160,11 +234,11 @@ def solicitar_bloques_horario(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Solicitud de agenda semanal interactiva: el profesional envía la lista
-    completa de bloques que quiere tener disponibles (y cuáles son colación),
-    día por día. Reemplaza en un solo paquete cualquier solicitud de bloques
-    pendiente anterior. El admin aprueba/rechaza el paquete completo — ver
-    aprobar_solicitud más abajo.
+    Solicitud de agenda semanal interactiva: el profesional envía la
+    lista completa de bloques que quiere tener disponibles (y cuáles
+    son colación), día por día. Reemplaza en un solo paquete cualquier
+    solicitud de bloques pendiente anterior. El admin aprueba/rechaza
+    el paquete completo — ver aprobar_solicitud más abajo.
 
     body = {
       "bloques": [
@@ -175,7 +249,7 @@ def solicitar_bloques_horario(
     }
     dia_semana: 0=Lunes ... 4=Viernes (nunca 5/6 — sábado/domingo se rechazan).
     """
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_agenda_gestionar_propia_y_ownership(current_user, prof_id, db)
     prof = db.query(Profesional).filter(Profesional.id == prof_id).first()
     if not prof:
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
@@ -195,20 +269,21 @@ def solicitar_bloques_horario(
         if not isinstance(dia_semana, int) or dia_semana < 0 or dia_semana > 4:
             raise HTTPException(
                 status_code=400,
-                detail="Solo se pueden solicitar bloques de Lunes a Viernes."
+                detail="Solo se pueden solicitar bloques de Lunes a Viernes.",
             )
-        error = validar_bloque_institucional(dia_semana, hora_inicio, hora_fin)
+        error = reglas_horario.validar_bloque_institucional(dia_semana, hora_inicio, hora_fin)
         if error:
-            raise HTTPException(status_code=400, detail=f"{NOMBRES_DIA[dia_semana]}: {error}")
+            raise HTTPException(status_code=400, detail=f"{reglas_horario.NOMBRES_DIA[dia_semana]}: {error}")
         normalizados.append({
-            "dia_semana": dia_semana, "hora_inicio": hora_inicio, "hora_fin": hora_fin, "tipo": tipo
+            "dia_semana": dia_semana, "hora_inicio": hora_inicio, "hora_fin": hora_fin, "tipo": tipo,
         })
 
     if not any(b["tipo"] == "disponible" for b in normalizados):
         raise HTTPException(status_code=400, detail="Debes incluir al menos un bloque disponible.")
 
-    # Si ya hay un paquete de bloques pendiente, se reemplaza por el nuevo
-    # (mismo criterio que colación/jornada: la última solicitud manda).
+    # Si ya hay un paquete de bloques pendiente, se reemplaza por el
+    # nuevo (mismo criterio que colación/jornada: la última solicitud
+    # manda).
     pendiente = db.query(SolicitudHorario).filter(
         SolicitudHorario.profesional_id == prof_id,
         SolicitudHorario.tipo == "bloques",
@@ -225,28 +300,28 @@ def solicitar_bloques_horario(
     )
     db.add(solicitud)
 
-    _notificar_admin(db, f"{prof.nombre} solicitó una nueva agenda semanal por bloques ({len(normalizados)} bloques).")
-    registrar_auditoria(db, "Profesional solicitó agenda semanal por bloques",
-                        f"{prof.nombre}: {len(normalizados)} bloques", "profesional", prof_id)
+    _notificar_admin(db, prof.especialidad, f"{prof.nombre} solicitó una nueva agenda semanal por bloques ({len(normalizados)} bloques).")
+    registrar_evento_auditoria(db, current_user, "Profesional solicitó agenda semanal por bloques",
+                                entidad="profesional", entidad_id=prof_id,
+                                detalle=f"{prof.nombre}: {len(normalizados)} bloques")
     db.commit()
     return {"message": "Solicitud de agenda semanal enviada. Queda pendiente de aprobación del administrador.",
             "bloques": normalizados}
 
 
-
+@router.get("/profesional/{prof_id}/solicitudes-horario")
 def get_mis_solicitudes(
     prof_id: int,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_agenda_gestionar_propia_y_ownership(current_user, prof_id, db)
     solicitudes = db.query(SolicitudHorario).filter(
         SolicitudHorario.profesional_id == prof_id
     ).order_by(SolicitudHorario.fecha_solicitud.desc()).all()
     return [
         {
             "id": s.id, "tipo": s.tipo, "hora_inicio": s.hora_inicio, "hora_fin": s.hora_fin,
-            "bloques": json.loads(s.bloques_json) if s.bloques_json else None,
             "estado": s.estado, "motivo_rechazo": s.motivo_rechazo,
             "fecha_solicitud": s.fecha_solicitud.isoformat() if s.fecha_solicitud else None
         }
@@ -264,7 +339,7 @@ def eliminar_solicitud(
     if not solicitud:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
 
-    verificar_acceso_profesional(current_user, solicitud.profesional_id, db)
+    _exigir_agenda_gestionar_propia_y_ownership(current_user, solicitud.profesional_id, db)
 
     db.delete(solicitud)
     db.commit()
@@ -279,25 +354,92 @@ def eliminar_solicitud(
 def get_solicitudes_admin(
     estado: str = "pendiente",
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        require_effective_permission(
+            Permission.AGENDA_GESTIONAR
+        )
+    ),
 ):
-    verificar_rol(current_user, roles_permitidos=["admin"])
+    alcance = obtener_alcance_administrativo_efectivo(
+        db,
+        current_user,
+    )
+
+    if alcance is None:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes acceso al alcance solicitado.",
+        )
+
     query = db.query(SolicitudHorario)
+
+    if not alcance.institucional:
+        ids_profesionales = _ids_profesionales_en_alcance(
+            db,
+            alcance,
+        )
+
+        if not ids_profesionales:
+            return []
+
+        query = query.filter(
+            SolicitudHorario.profesional_id.in_(
+                ids_profesionales
+            )
+        )
+
     if estado and estado != "todas":
-        query = query.filter(SolicitudHorario.estado == estado)
-    solicitudes = query.order_by(SolicitudHorario.fecha_solicitud.desc()).all()
+        query = query.filter(
+            SolicitudHorario.estado == estado
+        )
+
+    solicitudes = (
+        query
+        .order_by(
+            SolicitudHorario.fecha_solicitud.desc()
+        )
+        .all()
+    )
+
     result = []
+
     for s in solicitudes:
-        prof = db.query(Profesional).filter(Profesional.id == s.profesional_id).first()
+        prof = (
+            db.query(Profesional)
+            .filter(
+                Profesional.id == s.profesional_id
+            )
+            .first()
+        )
+
         result.append({
-            "id": s.id, "profesional_id": s.profesional_id,
-            "profesional_nombre": prof.nombre if prof else "—",
-            "especialidad": prof.especialidad if prof else "—",
-            "tipo": s.tipo, "hora_inicio": s.hora_inicio, "hora_fin": s.hora_fin,
-            "bloques": json.loads(s.bloques_json) if s.bloques_json else None,
-            "estado": s.estado, "motivo_rechazo": s.motivo_rechazo,
-            "fecha_solicitud": s.fecha_solicitud.isoformat() if s.fecha_solicitud else None
+            "id": s.id,
+            "profesional_id": s.profesional_id,
+            "profesional_nombre": (
+                prof.nombre
+                if prof
+                else "?"
+            ),
+            "especialidad": (
+                prof.especialidad
+                if prof
+                else "?"
+            ),
+            "tipo": s.tipo,
+            "hora_inicio": s.hora_inicio,
+            "hora_fin": s.hora_fin,
+            "bloques": (
+                json.loads(s.bloques_json) if s.bloques_json else None
+            ),
+            "estado": s.estado,
+            "motivo_rechazo": s.motivo_rechazo,
+            "fecha_solicitud": (
+                s.fecha_solicitud.isoformat()
+                if s.fecha_solicitud
+                else None
+            ),
         })
+
     return result
 
 
@@ -305,51 +447,135 @@ def get_solicitudes_admin(
 def aprobar_solicitud(
     solicitud_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        require_effective_permission(
+            Permission.AGENDA_GESTIONAR
+        )
+    ),
 ):
-    verificar_rol(current_user, roles_permitidos=["admin"])
-    solicitud = db.query(SolicitudHorario).filter(SolicitudHorario.id == solicitud_id).first()
-    if not solicitud:
-        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    if solicitud.estado != "pendiente":
-        raise HTTPException(status_code=400, detail="Esta solicitud ya fue resuelta")
+    alcance = obtener_alcance_administrativo_efectivo(
+        db,
+        current_user,
+    )
 
-    prof = db.query(Profesional).filter(Profesional.id == solicitud.profesional_id).first()
-    if not prof:
-        raise HTTPException(status_code=404, detail="Profesional no encontrado")
+    if alcance is None:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes acceso al alcance solicitado.",
+        )
+
+    solicitud = (
+        db.query(SolicitudHorario)
+        .filter(
+            SolicitudHorario.id == solicitud_id
+        )
+        .first()
+    )
+
+    if not solicitud:
+        raise HTTPException(
+            status_code=404,
+            detail="Solicitud no encontrada",
+        )
+
+    prof = (
+        db.query(Profesional)
+        .filter(
+            Profesional.id == solicitud.profesional_id
+        )
+        .first()
+    )
+
+    if (
+        not prof
+        or not especialidad_permitida_por_alcance(
+            alcance,
+            prof.especialidad,
+        )
+    ):
+        # La misma respuesta para una solicitud inexistente
+        # y para una existente fuera del alcance.
+        raise HTTPException(
+            status_code=404,
+            detail="Solicitud no encontrada",
+        )
+
+    if solicitud.estado != "pendiente":
+        raise HTTPException(
+            status_code=400,
+            detail="Esta solicitud ya fue resuelta",
+        )
 
     if solicitud.tipo == "colacion":
         prof.hora_almuerzo_inicio = solicitud.hora_inicio
-        prof.hora_almuerzo_fin    = solicitud.hora_fin
-        mensaje_prof = f"Tu solicitud de colación ({solicitud.hora_inicio} - {solicitud.hora_fin}) fue aprobada."
+        prof.hora_almuerzo_fin = solicitud.hora_fin
+
+        mensaje_prof = (
+            f"Tu solicitud de colaci?n "
+            f"({solicitud.hora_inicio} - "
+            f"{solicitud.hora_fin}) fue aprobada."
+        )
     elif solicitud.tipo == "bloques":
         bloques = json.loads(solicitud.bloques_json) if solicitud.bloques_json else []
-        # Reemplaza TODA la agenda semanal por bloques previamente aprobada
-        # de este profesional por el paquete nuevo (es una foto completa de
-        # la semana, no un incremental).
-        db.query(BloqueHorarioSemanal).filter(
-            BloqueHorarioSemanal.profesional_id == prof.id
-        ).delete()
+        # Reemplaza TODA la agenda semanal por bloques previamente
+        # aprobada de este profesional por el paquete nuevo (es una
+        # foto completa de la semana, no un incremental).
+        for existente in (
+            db.query(BloqueHorarioSemanal)
+            .filter(BloqueHorarioSemanal.profesional_id == prof.id)
+            .all()
+        ):
+            db.delete(existente)
         for b in bloques:
             db.add(BloqueHorarioSemanal(
                 profesional_id=prof.id, dia_semana=b["dia_semana"],
-                hora_inicio=b["hora_inicio"], hora_fin=b["hora_fin"], tipo=b.get("tipo", "disponible")
+                hora_inicio=b["hora_inicio"], hora_fin=b["hora_fin"],
+                tipo=b.get("tipo", "disponible"),
             ))
-        mensaje_prof = f"Tu nueva agenda semanal por bloques ({len(bloques)} bloques) fue aprobada."
-    else:  # jornada
+
+        mensaje_prof = (
+            f"Tu nueva agenda semanal por bloques "
+            f"({len(bloques)} bloques) fue aprobada."
+        )
+    else:
         prof.horario_inicio = solicitud.hora_inicio
-        prof.horario_fin    = solicitud.hora_fin
-        mensaje_prof = f"Tu solicitud de horario de jornada ({solicitud.hora_inicio} - {solicitud.hora_fin}) fue aprobada."
+        prof.horario_fin = solicitud.hora_fin
+
+        mensaje_prof = (
+            f"Tu solicitud de horario de jornada "
+            f"({solicitud.hora_inicio} - "
+            f"{solicitud.hora_fin}) fue aprobada."
+        )
 
     solicitud.estado = "aprobado"
     solicitud.fecha_resolucion = datetime.utcnow()
 
-    _notificar_profesional(db, prof, mensaje_prof, tipo="info")
-    registrar_auditoria(db, "Admin aprobó solicitud de horario",
-                        f"{prof.nombre} — {solicitud.tipo}: {solicitud.hora_inicio} - {solicitud.hora_fin}",
-                        "solicitud_horario", solicitud_id)
+    _notificar_profesional(
+        db,
+        prof,
+        mensaje_prof,
+        tipo="info",
+    )
+
+    registrar_evento_auditoria(
+        db,
+        current_user,
+        "Admin aprob? solicitud de horario",
+        entidad="solicitud_horario",
+        entidad_id=solicitud_id,
+        detalle=(
+            f"{prof.nombre} ? "
+            f"{solicitud.tipo}: "
+            f"{solicitud.hora_inicio} - "
+            f"{solicitud.hora_fin}"
+        ),
+    )
+
     db.commit()
-    return {"message": "Solicitud aprobada correctamente"}
+
+    return {
+        "message": "Solicitud aprobada correctamente"
+    }
 
 
 @router.patch("/admin/solicitudes-horario/{solicitud_id}/rechazar")
@@ -357,31 +583,109 @@ def rechazar_solicitud(
     solicitud_id: int,
     body: dict,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(
+        require_effective_permission(
+            Permission.AGENDA_GESTIONAR
+        )
+    ),
 ):
-    verificar_rol(current_user, roles_permitidos=["admin"])
-    solicitud = db.query(SolicitudHorario).filter(SolicitudHorario.id == solicitud_id).first()
-    if not solicitud:
-        raise HTTPException(status_code=404, detail="Solicitud no encontrada")
-    if solicitud.estado != "pendiente":
-        raise HTTPException(status_code=400, detail="Esta solicitud ya fue resuelta")
+    alcance = obtener_alcance_administrativo_efectivo(
+        db,
+        current_user,
+    )
 
-    prof = db.query(Profesional).filter(Profesional.id == solicitud.profesional_id).first()
-    motivo = body.get("motivo") or "Sin motivo especificado"
+    if alcance is None:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes acceso al alcance solicitado.",
+        )
+
+    solicitud = (
+        db.query(SolicitudHorario)
+        .filter(
+            SolicitudHorario.id == solicitud_id
+        )
+        .first()
+    )
+
+    if not solicitud:
+        raise HTTPException(
+            status_code=404,
+            detail="Solicitud no encontrada",
+        )
+
+    prof = (
+        db.query(Profesional)
+        .filter(
+            Profesional.id == solicitud.profesional_id
+        )
+        .first()
+    )
+
+    if (
+        not prof
+        or not especialidad_permitida_por_alcance(
+            alcance,
+            prof.especialidad,
+        )
+    ):
+        # No revelar estado ni existencia de solicitudes
+        # pertenecientes a otra especialidad.
+        raise HTTPException(
+            status_code=404,
+            detail="Solicitud no encontrada",
+        )
+
+    if solicitud.estado != "pendiente":
+        raise HTTPException(
+            status_code=400,
+            detail="Esta solicitud ya fue resuelta",
+        )
+
+    motivo = (
+        body.get("motivo")
+        or "Sin motivo especificado"
+    )
 
     solicitud.estado = "rechazado"
     solicitud.motivo_rechazo = motivo
     solicitud.fecha_resolucion = datetime.utcnow()
 
-    if prof:
-        tipo_desc = {"colacion": "colación", "jornada": "jornada", "bloques": "agenda semanal por bloques"}.get(solicitud.tipo, solicitud.tipo)
-        detalle_horario = "" if solicitud.tipo == "bloques" else f" ({solicitud.hora_inicio} - {solicitud.hora_fin})"
-        _notificar_profesional(
-            db, prof,
-            f"Tu solicitud de {tipo_desc}{detalle_horario} fue rechazada. Motivo: {motivo}",
-            tipo="advertencia"
-        )
-        registrar_auditoria(db, "Admin rechazó solicitud de horario",
-                            f"{prof.nombre} — {solicitud.tipo}: {motivo}", "solicitud_horario", solicitud_id)
+    tipo_desc = {
+        "colacion": "colación",
+        "bloques": "agenda semanal por bloques",
+    }.get(solicitud.tipo, "jornada")
+
+    detalle_horario = (
+        "" if solicitud.tipo == "bloques"
+        else f" ({solicitud.hora_inicio} - {solicitud.hora_fin})"
+    )
+
+    _notificar_profesional(
+        db,
+        prof,
+        (
+            f"Tu solicitud de horario de {tipo_desc}"
+            f"{detalle_horario} fue rechazada. "
+            f"Motivo: {motivo}"
+        ),
+        tipo="advertencia",
+    )
+
+    registrar_evento_auditoria(
+        db,
+        current_user,
+        "Admin rechaz? solicitud de horario",
+        entidad="solicitud_horario",
+        entidad_id=solicitud_id,
+        detalle=(
+            f"{prof.nombre} ? "
+            f"{solicitud.tipo}: {motivo}"
+        ),
+    )
+
     db.commit()
-    return {"message": "Solicitud rechazada"}
+
+    return {
+        "message": "Solicitud rechazada"
+    }

@@ -12,28 +12,28 @@ export const routes: Routes = [
     path: 'dashboard/estudiante',
     canActivate: [authGuard, rolGuard],
     canDeactivate: [leaveDashboardGuard],
-    data: { rol: 'estudiante' },
+    data: { roles: ['estudiante'] },
     loadComponent: () =>
       import('./dashboard-estudiante/dashboard-estudiante')
-      .then(m => m.DashboardEstudianteComponent)
+        .then(m => m.DashboardEstudianteComponent)
   },
   {
     path: 'dashboard/profesional',
     canActivate: [authGuard, rolGuard],
     canDeactivate: [leaveDashboardGuard],
-    data: { rol: 'profesional' },
+    data: { roles: ['profesional'] },
     loadComponent: () =>
       import('./dashboard-profesional/dashboard-profesional')
-      .then(m => m.DashboardProfesionalComponent)
+        .then(m => m.DashboardProfesionalComponent)
   },
   {
     path: 'dashboard/admin',
     canActivate: [authGuard, rolGuard],
     canDeactivate: [leaveDashboardGuard],
-    data: { rol: 'admin' },
+    data: { roles: ['admin', 'superadmin'] },
     loadComponent: () =>
       import('./dashboard-admin/dashboard-admin')
-      .then(m => m.DashboardAdminComponent)
+        .then(m => m.DashboardAdminComponent)
   },
 
   { path: '**', redirectTo: 'login' }

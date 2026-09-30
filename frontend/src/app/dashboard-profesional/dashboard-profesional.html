@@ -1,5 +1,5 @@
 <!-- dashboard-profesional.html -->
-<div class="dashboard-prof" [class.tema-oscuro]="temaOscuro" [class.sidebar-movil-abierto]="sidebarMovilAbierto">
+<div class="dashboard-prof profesional-shell" [class.tema-oscuro]="temaOscuro" [class.sidebar-movil-abierto]="sidebarMovilAbierto">
 
   <!-- ═══════════ SIDEBAR ═══════════ -->
   <div class="sidebar-backdrop" *ngIf="sidebarMovilAbierto" (click)="toggleSidebarMovil()"></div>
@@ -65,9 +65,6 @@
     </nav>
 
     <div class="sidebar-footer">
-      <button class="btn-ausencia" (click)="abrirModalAusencia()">
-        📅 Reportar ausencia
-      </button>
       <button class="logout-btn" (click)="cerrarSesion()">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -197,7 +194,7 @@
           </div>
           <div class="inicio-hero-acciones-prof">
             <button class="btn-hero-secundario-prof" (click)="navegarA('horario')">Ver agenda</button>
-            <button class="btn-hero-primario-prof" (click)="accionNuevaAtencion()">{{ etiquetaAccionAtencion }}</button>
+            <button class="btn-hero-primario-prof" (click)="navegarA('historial-clinico')">Buscar paciente</button>
           </div>
         </div>
 
@@ -245,7 +242,6 @@
               <span class="agenda-vacia-icono-prof">📅</span>
               <p>No tienes citas programadas para hoy</p>
               <div class="agenda-vacia-acciones-prof">
-                <button class="btn-hero-primario-prof" (click)="accionNuevaAtencion()">{{ etiquetaAccionAtencion }}</button>
                 <button class="btn-hero-secundario-prof" (click)="navegarA('horario')">Ver agenda completa</button>
                 <button class="btn-hero-secundario-prof" (click)="navegarA('horario'); horarioTab='configuracion'">Ver mi horario</button>
               </div>
@@ -364,9 +360,6 @@
             <h3 class="card-title-prof">⚡ Acciones rápidas</h3>
           </div>
           <div class="acciones-rapidas-grid-prof">
-            <button (click)="accionNuevaAtencion()">{{ etiquetaAccionAtencion }}</button>
-            <button (click)="navegarA('historial-clinico')">🔍 Buscar paciente</button>
-            <button (click)="navegarA('horario')">📅 Ver agenda</button>
             <button (click)="navegarA('horario'); horarioTab='configuracion'">🕐 Mi horario</button>
             <button (click)="navegarA('solicitudes')">📥 Solicitudes</button>
           </div>
@@ -423,181 +416,39 @@
 
         <!-- Sub-vista: agenda semanal -->
         <div *ngIf="horarioTab==='agenda'">
-          <div class="semana-nav">
-            <button class="cal-nav-btn" (click)="semanaAnterior()">‹</button>
-            <span class="semana-label">{{ semanaLabel }}</span>
-            <button class="cal-nav-btn" (click)="semanaSiguiente()">›</button>
-            <button class="btn-hoy-prof" (click)="irAHoy()">Hoy</button>
-          </div>
-
-          <div class="leyenda-prof">
-            <span class="leyenda-item-prof libre">🟩 Disponible</span>
-            <span class="leyenda-item-prof ocupado">🟦 Cita habitual</span>
-            <span class="leyenda-item-prof urgente">🟥 Urgente</span>
-            <span class="leyenda-item-prof">⬜ Fuera de horario</span>
-            <span class="leyenda-item-prof">🟠 Feriado</span>
-          </div>
-
-          <div class="alerta-estado" *ngIf="!perfil.bloques_semanales?.length && !perfil.horario_inicio">
-            ⚠️ Todavía no tienes ningún horario configurado (ni por bloques ni jornada simple),
-            por eso toda la semana se ve igual, sin distinción de colores. Ve a la pestaña
-            <strong>"Jornada y colación"</strong> para configurar tu horario y que la grilla
-            refleje tu disponibilidad real.
-          </div>
-
-          <div class="agenda-layout">
-            <div class="card-prof horario-card-prof">
-              <div class="semana-grilla-prof">
-                <div class="hora-col-prof">
-                  <div class="hora-celda-prof header"></div>
-                  <div class="hora-celda-prof" *ngFor="let h of horasGrilla">{{ h }}</div>
-                </div>
-                <div class="dia-col-prof" *ngFor="let dia of semanaActual" [class.dia-pasado-prof]="esFechaPasada(dia.fecha)">
-                  <div class="dia-header-prof" [class.hoy]="dia.esHoy" [class.feriado]="esFeriado(dia.fecha)" [title]="nombreFeriado(dia.fecha)">
-                    <span class="dia-nombre-prof">{{ dia.nombre }}</span>
-                    <span class="dia-num-prof">{{ dia.num }}</span>
-                  </div>
-                  <div class="bloque-prof" *ngFor="let h of horasGrilla"
-                       [class.libre]="getBloqueEstado(dia.fecha, h) === 'libre'"
-                       [class.ocupado]="getBloqueEstado(dia.fecha, h) === 'ocupado'"
-                       [class.urgente-bloque]="getBloqueEstado(dia.fecha, h) === 'urgente'"
-                       [class.bloqueado-bloque]="getBloqueEstado(dia.fecha, h) === 'bloqueado'"
-                       [class.cerrado-centro-bloque-prof]="getBloqueEstado(dia.fecha, h) === 'cerrado-centro'"
-                       [class.fuera-horario-bloque-prof]="getBloqueEstado(dia.fecha, h) === 'fuera-horario'"
-                       [title]="getBloqueEstado(dia.fecha, h) === 'cerrado-centro' ? 'El centro no atiende este día' : (getBloqueEstado(dia.fecha, h) === 'fuera-horario' ? 'Fuera de tu horario configurado' : '')"
-                       (click)="clickBloque(dia.fecha, h)">
-                    <span *ngIf="getBloqueInfo(dia.fecha, h) as info" class="bloque-info-prof">{{ info }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Panel detalle del día -->
-            <div class="card-prof detalle-dia-prof" *ngIf="diaSeleccionado">
-              <div class="detalle-header-prof">
-                <h4>{{ formatearDiaSeleccionado(diaSeleccionado) }}</h4>
-                <button class="detalle-cerrar-prof" (click)="diaSeleccionado=null">✕</button>
-              </div>
-              <div *ngIf="citasDiaSeleccionado.length === 0" class="tabla-vacia-prof">Sin citas este día</div>
-              <div *ngFor="let cita of citasDiaSeleccionado" class="detalle-cita-prof detalle-cita-clickeable-prof" [class.urgente]="cita.urgente" (click)="irAFichaDesdeAgenda(cita)" title="Ver historial completo de este paciente">
-                <span class="detalle-hora-prof">{{ cita.hora }}</span>
-                <div class="detalle-info-prof">
-                  <strong>{{ cita.estudiante }}</strong>
-                  <span>{{ cita.rut }}</span>
-                  <span *ngIf="cita.urgente" class="urgente-tag">URGENTE</span>
-                </div>
-                <span class="estado-badge-prof" [ngClass]="cita.estado">{{ cita.estado }}</span>
-                <div class="cita-hoy-acciones" *ngIf="cita.estado === 'pendiente'" (click)="$event.stopPropagation()">
-                  <button class="btn-completar" (click)="aceptarCita(cita)">✓ Aceptar</button>
-                  <button class="btn-inasistencia" (click)="abrirModalRechazarCita(cita)">✗ Rechazar</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Modal: rechazar cita pendiente (requiere motivo) -->
-        <div class="modal-overlay-prof" *ngIf="modalRechazarCitaAbierto" (click)="cerrarModalRechazarCita()">
-          <div class="modal-content-prof" (click)="$event.stopPropagation()">
-            <div class="modal-header-prof">
-              <h3>Rechazar cita</h3>
-              <button class="modal-cerrar-prof" (click)="cerrarModalRechazarCita()">✕</button>
-            </div>
-            <p class="modal-desc">
-              Vas a rechazar la cita de <strong>{{ citaARechazar?.estudiante }}</strong> del
-              {{ citaARechazar?.fecha }} a las {{ citaARechazar?.hora }}. El estudiante y el
-              administrador verán el motivo que indiques.
-            </p>
-            <div class="campo-grupo-prof">
-              <label>Motivo del rechazo</label>
-              <input [(ngModel)]="motivoRechazoCita" placeholder="Ej: Corresponde a otra especialidad, horario mal agendado..." />
-            </div>
-            <div class="modal-footer-prof">
-              <button class="btn-cancelar-modal-prof" (click)="cerrarModalRechazarCita()">Cancelar</button>
-              <button class="btn-reportar" [disabled]="!motivoRechazoCita || enviandoRechazoCita" (click)="confirmarRechazoCita()">{{ enviandoRechazoCita ? 'Enviando…' : 'Rechazar cita' }}</button>
-            </div>
-          </div>
+          <app-admin-horario
+            [ocultarFiltros]="true"
+            [puedeGestionarAgenda]="false"
+            [puedeAceptarRechazarPropio]="true"
+            [filtroProfesionalId]="profDbId"
+            [profesionalActual]="perfil"
+            [citasHorario]="citasSemana"
+            [semanaActual]="semanaActual"
+            [semanaLabel]="semanaLabel"
+            [horasGrilla]="horasGrilla"
+            [(diaSeleccionado)]="diaSeleccionado"
+            [citasDiaSeleccionado]="citasDiaSeleccionado"
+            [diasCerrados]="diasCerrados"
+            [bloqueEstadoFn]="agendaBloqueEstadoFn"
+            [bloqueInfoFn]="agendaBloqueInfoFn"
+            [bloqueCitasFn]="agendaBloqueCitasFn"
+            [bloqueSobrecupoDisponibleFn]="sinSobrecupoFn"
+            [formatearFechaFn]="agendaFormatearFechaFn"
+            [esFeriadoFn]="agendaEsFeriadoFn"
+            [nombreFeriadoFn]="agendaNombreFeriadoFn"
+            (anterior)="semanaAnterior()"
+            (siguiente)="semanaSiguiente()"
+            (hoy)="irAHoy()"
+            (bloqueClick)="clickBloque($event.fecha, $event.hora)"
+            (imprimir)="imprimirAgenda()"
+            (aceptarCita)="aceptarCitaPropia($event)"
+            (rechazarCita)="rechazarCitaPropia($event)"
+          ></app-admin-horario>
         </div>
 
         <!-- Sub-vista: jornada y colación -->
         <div *ngIf="horarioTab==='configuracion'">
           <div class="perfil-layout">
-
-            <!-- Jornada Laboral -->
-            <div class="card-prof">
-              <div class="card-header-prof">
-                <h3 class="card-title-prof">🕐 Jornada Laboral</h3>
-              </div>
-              <p class="modal-desc" style="margin-bottom:16px">
-                Define tu hora de entrada y salida del centro. Los estudiantes no podrán agendar
-                citas fuera de este rango. Queda pendiente de aprobación del administrador.
-              </p>
-
-              <div class="alerta-estado" *ngIf="solicitudJornadaPendiente">
-                ⏳ Tienes una solicitud de jornada pendiente: {{ solicitudJornadaPendiente.hora_inicio }} – {{ solicitudJornadaPendiente.hora_fin }}, esperando aprobación del administrador.
-              </div>
-
-              <ng-container *ngIf="!solicitudJornadaPendiente">
-                <div class="form-grid">
-                  <div class="campo-grupo-prof">
-                    <label>Hora de entrada</label>
-                    <input type="time" [(ngModel)]="jornadaHoraInicio" />
-                  </div>
-                  <div class="campo-grupo-prof">
-                    <label>Hora de salida</label>
-                    <input type="time" [(ngModel)]="jornadaHoraFin" />
-                  </div>
-                </div>
-
-                <div class="campo-grupo-prof" *ngIf="perfil.horario_inicio">
-                  <label>Jornada aprobada actualmente</label>
-                  <input type="text" [value]="perfil.horario_inicio + ' – ' + perfil.horario_fin" disabled />
-                </div>
-                <div class="campo-grupo-prof" *ngIf="!perfil.horario_inicio">
-                  <span class="texto-gris">Aún no tienes una jornada aprobada (se asume 08:00–18:00 por defecto).</span>
-                </div>
-
-                <div class="perfil-acciones-edicion">
-                  <button class="btn-guardar-prof" [disabled]="!jornadaFormularioValido" (click)="solicitarJornada()">Enviar solicitud</button>
-                </div>
-              </ng-container>
-            </div>
-
-            <!-- Horario de Almuerzo -->
-            <div class="card-prof">
-              <div class="card-header-prof">
-                <h3 class="card-title-prof">🍽️ Horario de Almuerzo</h3>
-                <button class="btn-editar-perfil" *ngIf="!horarioAlmuerzoEnEdicion && !solicitudColacionPendiente" (click)="habilitarEdicionAlmuerzo()">✎ Editar</button>
-              </div>
-              <p class="modal-desc" style="margin-bottom:16px">
-                Define tu hora de almuerzo. Al enviarla, queda pendiente de aprobación del administrador
-                antes de bloquearse en tu agenda.
-              </p>
-              <div class="alerta-estado" *ngIf="solicitudColacionPendiente">
-                ⏳ Tienes una solicitud de colación pendiente: {{ solicitudColacionPendiente.hora_inicio }} – {{ solicitudColacionPendiente.hora_fin }}, esperando aprobación del administrador.
-              </div>
-              <ng-container *ngIf="!solicitudColacionPendiente">
-                <div class="campo-grupo-prof">
-                  <label>Hora de inicio</label>
-                  <input type="time" [(ngModel)]="almuerzoHoraInicio" [disabled]="!horarioAlmuerzoEnEdicion" />
-                </div>
-                <div class="campo-grupo-prof" *ngIf="almuerzoHoraInicio">
-                  <label>Rango a solicitar (1 hora exacta)</label>
-                  <input type="text" [value]="almuerzoHoraInicio + ' – ' + almuerzoHoraFinPreview" disabled />
-                </div>
-                <div class="campo-grupo-prof" *ngIf="!horarioAlmuerzoEnEdicion && perfil.hora_almuerzo_inicio">
-                  <label>Horario aprobado actualmente</label>
-                  <input type="text" [value]="perfil.hora_almuerzo_inicio + ' – ' + perfil.hora_almuerzo_fin" disabled />
-                </div>
-                <div class="campo-grupo-prof" *ngIf="!horarioAlmuerzoEnEdicion && !perfil.hora_almuerzo_inicio">
-                  <span class="texto-gris">Aún no tienes un horario de almuerzo aprobado.</span>
-                </div>
-                <div class="perfil-acciones-edicion" *ngIf="horarioAlmuerzoEnEdicion">
-                  <button class="btn-cancelar-modal-prof" (click)="cancelarEdicionAlmuerzo()">Cancelar</button>
-                  <button class="btn-guardar-prof" [disabled]="!almuerzoHoraInicio || enviandoAlmuerzo" (click)="guardarHorarioAlmuerzo()">{{ enviandoAlmuerzo ? 'Enviando…' : 'Enviar solicitud' }}</button>
-                </div>
-              </ng-container>
-            </div>
 
             <!-- Agenda Semanal por Bloques -->
             <div class="card-prof card-bloques-semanales">
@@ -607,7 +458,7 @@
               <p class="modal-desc" style="margin-bottom:16px">
                 Marca directamente en la grilla los bloques de media hora en que atenderás
                 (verde) y tu colación (naranja), día por día. Reemplaza a la jornada simple
-                de arriba si necesitas un horario distinto cada día (ej. salir antes el viernes).
+                de abajo si necesitas un horario distinto cada día (ej. salir antes el viernes).
                 Al enviar, el paquete completo queda pendiente de aprobación del administrador.
               </p>
 
@@ -629,6 +480,29 @@
                   </button>
                   <button type="button" class="btn-cancelar-modal-prof" (click)="limpiarSeleccionBloques()" [disabled]="bloquesSeleccionVacia">Limpiar todo</button>
                 </div>
+
+                <div class="bloques-colacion-rapida">
+                  <span class="bloques-colacion-rapida-label">
+                    <span class="bloques-swatch bloques-swatch-disponible"></span> Horario normal todos los días:
+                  </span>
+                  <input type="time" [ngModel]="horarioRapidoInicio" (ngModelChange)="onHorarioRapidoInicioChange($event)" min="09:00" max="17:00" />
+                  <span>a</span>
+                  <input type="time" [ngModel]="horarioRapidoFin" (ngModelChange)="onHorarioRapidoFinChange($event)" min="09:30" max="17:30" />
+                  <button type="button" class="btn-cancelar-modal-prof" (click)="aplicarHorarioRapido()">Aplicar a Lun-Vie</button>
+                </div>
+
+                <div class="bloques-colacion-rapida">
+                  <span class="bloques-colacion-rapida-label">
+                    <span class="bloques-swatch bloques-swatch-colacion"></span> Colación todos los días:
+                  </span>
+                  <input type="time" [ngModel]="colacionRapidaInicio" (ngModelChange)="onColacionRapidaInicioChange($event)" min="09:00" max="16:00" />
+                  <span>a</span>
+                  <input type="time" [ngModel]="colacionRapidaFin" (ngModelChange)="onColacionRapidaFinChange($event)" min="09:30" max="16:30" />
+                  <button type="button" class="btn-cancelar-modal-prof" (click)="aplicarColacionRapida()">Aplicar a Lun-Vie</button>
+                </div>
+                <p class="texto-gris" style="margin:0 0 14px">
+                  Tip: aplica primero el horario normal y después la colación — así el segundo recorta al primero, no al revés.
+                </p>
 
                 <div class="bloques-grilla-wrap">
                   <table class="bloques-grilla">
@@ -663,6 +537,49 @@
                   </button>
                 </div>
               </ng-container>
+            </div>
+
+            <!-- Horario de Almuerzo, en la misma columna donde antes
+                 iba también la Jornada Laboral simple (retirada: la
+                 agenda por bloques ya cubre jornada + colación juntas
+                 y de forma más flexible, así que dejó de tener sentido
+                 mantener dos maneras distintas de pedir lo mismo). -->
+            <div class="card-prof-stack">
+            <!-- Horario de Almuerzo -->
+            <div class="card-prof">
+              <div class="card-header-prof">
+                <h3 class="card-title-prof">🍽️ Horario de Almuerzo</h3>
+                <button class="btn-editar-perfil" *ngIf="!horarioAlmuerzoEnEdicion && !solicitudColacionPendiente" (click)="habilitarEdicionAlmuerzo()">✎ Editar</button>
+              </div>
+              <p class="modal-desc" style="margin-bottom:16px">
+                Define tu hora de almuerzo. Al enviarla, queda pendiente de aprobación del administrador
+                antes de bloquearse en tu agenda.
+              </p>
+              <div class="alerta-estado" *ngIf="solicitudColacionPendiente">
+                ⏳ Tienes una solicitud de colación pendiente: {{ solicitudColacionPendiente.hora_inicio }} – {{ solicitudColacionPendiente.hora_fin }}, esperando aprobación del administrador.
+              </div>
+              <ng-container *ngIf="!solicitudColacionPendiente">
+                <div class="campo-grupo-prof">
+                  <label>Hora de inicio</label>
+                  <input type="time" [ngModel]="almuerzoHoraInicio" (ngModelChange)="onAlmuerzoHoraInicioChange($event)" [disabled]="!horarioAlmuerzoEnEdicion" min="09:00" max="15:30" />
+                </div>
+                <div class="campo-grupo-prof" *ngIf="almuerzoHoraInicio">
+                  <label>Rango a solicitar (1 hora exacta)</label>
+                  <input type="text" [value]="almuerzoHoraInicio + ' – ' + almuerzoHoraFinPreview" disabled />
+                </div>
+                <div class="campo-grupo-prof" *ngIf="!horarioAlmuerzoEnEdicion && perfil.hora_almuerzo_inicio">
+                  <label>Horario aprobado actualmente</label>
+                  <input type="text" [value]="perfil.hora_almuerzo_inicio + ' – ' + perfil.hora_almuerzo_fin" disabled />
+                </div>
+                <div class="campo-grupo-prof" *ngIf="!horarioAlmuerzoEnEdicion && !perfil.hora_almuerzo_inicio">
+                  <span class="texto-gris">Aún no tienes un horario de almuerzo aprobado.</span>
+                </div>
+                <div class="perfil-acciones-edicion" *ngIf="horarioAlmuerzoEnEdicion">
+                  <button class="btn-cancelar-modal-prof" (click)="cancelarEdicionAlmuerzo()">Cancelar</button>
+                  <button class="btn-guardar-prof" [disabled]="!almuerzoHoraInicio || enviandoAlmuerzo" (click)="guardarHorarioAlmuerzo()">{{ enviandoAlmuerzo ? 'Enviando…' : 'Enviar solicitud' }}</button>
+                </div>
+              </ng-container>
+            </div>
             </div>
 
           </div>
@@ -794,114 +711,10 @@
       </div>
 
       <!-- ══ AYUDA ══ -->
-      <div *ngIf="seccionActiva==='ayuda'">
-
-        <h2 class="patient-nombre-prof" style="margin-bottom:4px">Ayuda</h2>
-        <p class="inicio-mini-sub-prof" style="margin-bottom:20px">Soporte, guías y respuestas para el uso de SESAES</p>
-
-        <!-- Banner -->
-        <div class="card-prof ayuda-banner-prof" *ngIf="!ayudaBannerCerrado">
-          <button class="ayuda-banner-cerrar-prof" (click)="ayudaBannerCerrado = true" title="Cerrar">✕</button>
-          <div class="ayuda-banner-icono-prof">📖</div>
-          <div class="ayuda-banner-texto-prof">
-            <h3>¿En qué te podemos ayudar?</h3>
-            <p>Encuentra aquí toda la información que necesitas para resolver tus dudas y aprovechar al máximo las funcionalidades de SESAES.</p>
-          </div>
-          <a class="btn-hero-primario-prof ayuda-banner-btn-prof" href="mailto:soporte@sesaes.cl">✉️ Contactar a soporte</a>
-        </div>
-
-        <div class="ayuda-layout-prof">
-          <div>
-
-            <!-- Explora por temas -->
-            <h3 class="card-title-prof" style="margin-bottom:2px">Explora por temas</h3>
-            <p class="inicio-mini-sub-prof" style="margin-bottom:12px">Accede rápidamente a la información que necesitas</p>
-            <div class="ayuda-temas-grid-prof">
-              <button class="ayuda-tema-card-prof morado" (click)="navegarA('perfil')">
-                <span class="ayuda-tema-icono-prof">👤</span>
-                <strong>Gestión de cuenta</strong>
-                <span>Accesos, permisos y perfil</span>
-              </button>
-              <button class="ayuda-tema-card-prof azul" (click)="navegarA('horario')">
-                <span class="ayuda-tema-icono-prof">📅</span>
-                <strong>Agenda y citas</strong>
-                <span>Cómo revisar y gestionar tu horario</span>
-              </button>
-              <button class="ayuda-tema-card-prof verde" (click)="navegarA('historial-clinico')">
-                <span class="ayuda-tema-icono-prof">📁</span>
-                <strong>Historial clínico</strong>
-                <span>Consulta y registro de atenciones</span>
-              </button>
-              <button class="ayuda-tema-card-prof naranjo" (click)="navegarA('solicitudes')">
-                <span class="ayuda-tema-icono-prof">💬</span>
-                <strong>Solicitudes</strong>
-                <span>Citas por confirmar y horario</span>
-              </button>
-              <button class="ayuda-tema-card-prof rojo" (click)="navegarA('perfil')">
-                <span class="ayuda-tema-icono-prof">⚙️</span>
-                <strong>Configuración</strong>
-                <span>Preferencias y ajustes</span>
-              </button>
-              <a class="ayuda-tema-card-prof lila" href="mailto:soporte@sesaes.cl">
-                <span class="ayuda-tema-icono-prof">❓</span>
-                <strong>Preguntas frecuentes</strong>
-                <span>Resuelve tus dudas comunes</span>
-              </a>
-            </div>
-
-            <!-- Guías y recursos -->
-            <div class="card-prof" style="margin-top:20px">
-              <h3 class="card-title-prof">Guías y recursos</h3>
-              <p class="inicio-mini-sub-prof" style="margin-bottom:10px">Material de apoyo para tu trabajo en SESAES</p>
-
-              <a class="ayuda-guia-item-prof" href="mailto:soporte@sesaes.cl">
-                <span class="ayuda-guia-icono-prof">📄</span>
-                <div><strong>Manual de uso para profesionales</strong><span>Conoce todas las funcionalidades del sistema</span></div>
-                <span class="ayuda-guia-flecha-prof">›</span>
-              </a>
-              <a class="ayuda-guia-item-prof" href="mailto:soporte@sesaes.cl">
-                <span class="ayuda-guia-icono-prof">❓</span>
-                <div><strong>Preguntas frecuentes</strong><span>Respuestas a las dudas más comunes</span></div>
-                <span class="ayuda-guia-flecha-prof">›</span>
-              </a>
-              <a class="ayuda-guia-item-prof" href="mailto:soporte@sesaes.cl">
-                <span class="ayuda-guia-icono-prof">📣</span>
-                <div><strong>Novedades del sistema</strong><span>Mantente al día con las actualizaciones</span></div>
-                <span class="ayuda-guia-flecha-prof">›</span>
-              </a>
-              <a class="ayuda-guia-item-prof" href="mailto:soporte@sesaes.cl">
-                <span class="ayuda-guia-icono-prof">🔒</span>
-                <div><strong>Política de privacidad</strong><span>Información sobre el tratamiento de datos</span></div>
-                <span class="ayuda-guia-flecha-prof">›</span>
-              </a>
-            </div>
-          </div>
-
-          <!-- Sidebar -->
-          <aside>
-            <div class="card-prof side-card-prof ayuda-personalizada-prof">
-              <span class="ayuda-guia-icono-prof">🎧</span>
-              <h3 class="card-title-prof">¿Necesitas ayuda personalizada?</h3>
-              <p class="inicio-mini-sub-prof">Nuestro equipo de soporte está disponible para orientarte y resolver tus consultas.</p>
-              <a class="ayuda-contacto-item-prof" href="mailto:soporte@sesaes.cl">
-                <span>✉️</span>
-                <div><strong>Escríbenos</strong><span>soporte&#64;sesaes.cl</span></div>
-              </a>
-              <div class="ayuda-contacto-item-prof">
-                <span>🕐</span>
-                <div><strong>Horario de atención</strong><span>Lunes a viernes, 08:00 – 18:00 hrs.</span></div>
-              </div>
-            </div>
-
-            <div class="card-prof side-card-prof">
-              <h3 class="card-title-prof">Enlaces útiles</h3>
-              <p class="inicio-mini-sub-prof" style="margin-bottom:8px">Acceso directo a herramientas importantes</p>
-              <a class="ayuda-enlace-item-prof" href="https://www.utem.cl" target="_blank" rel="noopener">🏛️ Portal institucional UTEM</a>
-              <a class="ayuda-enlace-item-prof" href="mailto:soporte@sesaes.cl">✉️ Correo institucional</a>
-            </div>
-          </aside>
-        </div>
-      </div>
+      <app-professional-ayuda
+        *ngIf="seccionActiva==='ayuda'"
+        (navegar)="navegarA($event)">
+      </app-professional-ayuda>
 
       <!-- ══ HISTORIAL CLÍNICO ══ -->
       <div *ngIf="seccionActiva==='historial-clinico'">
@@ -1022,7 +835,7 @@
             </div>
             <div class="patient-head-acciones-prof">
               <button class="btn-hero-secundario-prof" (click)="fichaTab='ficha'">Ver ficha</button>
-              <button class="btn-hero-primario-prof" (click)="registrarNuevaAtencionDesdeFicha()">✓ Registrar atención</button>
+              <button class="btn-hero-primario-prof" (click)="registrarNuevaAtencionDesdeFicha()">Registrar atención</button>
             </div>
           </div>
 
@@ -1075,7 +888,7 @@
                 <span class="timeline-vacio-icono-prof">📋</span>
                 <p><strong>Aún no hay atenciones completadas</strong></p>
                 <p>El historial aparecerá aquí después de registrar la primera atención del paciente.</p>
-                <button class="btn-hero-primario-prof" (click)="registrarNuevaAtencionDesdeFicha()">+ Registrar nueva atención</button>
+                <button class="btn-hero-primario-prof" (click)="registrarNuevaAtencionDesdeFicha()">Registrar atención</button>
               </div>
 
               <ng-container *ngFor="let grupo of fichaCitasCompletadasPorAnio">
@@ -1124,7 +937,6 @@
               <div class="card-prof side-card-prof">
                 <h3 class="card-title-prof">Acciones rápidas</h3>
                 <div class="acciones-rapidas-prof">
-                  <button (click)="registrarNuevaAtencionDesdeFicha()">✚ Registrar nueva atención</button>
                   <button (click)="fichaTab='citas'">🗓️ Ver todas las citas</button>
                   <button (click)="imprimirHistorial()">⎙ Imprimir historial</button>
                 </div>
@@ -1328,12 +1140,6 @@
                   </svg>
                 </button>
               </div>
-              <ul class="password-checklist-prof" *ngIf="passwordEnEdicion">
-                <li [class.ok]="checklistPasswordProf.longitud">Al menos 8 caracteres</li>
-                <li [class.ok]="checklistPasswordProf.mayuscula">Una letra mayúscula</li>
-                <li [class.ok]="checklistPasswordProf.numero">Un número</li>
-                <li [class.ok]="checklistPasswordProf.especial">Un carácter especial</li>
-              </ul>
             </div>
 
             <div class="campo-grupo-prof">
@@ -1354,81 +1160,13 @@
 
             <div class="perfil-acciones-edicion" *ngIf="passwordEnEdicion">
               <button class="btn-cancelar-modal-prof" (click)="cancelarEdicionPassword()">Cancelar</button>
-              <button class="btn-guardar-prof" [disabled]="!passwordProfListaParaGuardar" (click)="cambiarPassword()">Cambiar contraseña</button>
+              <button class="btn-guardar-prof" [disabled]="!passwordModificada" (click)="cambiarPassword()">Cambiar contraseña</button>
             </div>
           </div>
         </div>
       </div>
 
     </main>
-  </div>
-
-  <!-- MODAL: REPORTAR AUSENCIA -->
-  <div class="modal-overlay-prof" *ngIf="modalAusenciaAbierto" (click)="cerrarModalAusencia()">
-    <div class="modal-prof" (click)="$event.stopPropagation()">
-      <div class="modal-header-prof">
-        <h3>⚠️ Reportar ausencia</h3>
-        <button class="modal-cerrar-prof" (click)="cerrarModalAusencia()">✕</button>
-      </div>
-      <p class="modal-desc">Las citas afectadas se cancelarán automáticamente y se notificará a los estudiantes.</p>
-
-      <!-- Selector segmentado -->
-      <label class="ausencia-selector-label">Tipo de ausencia</label>
-      <div class="ausencia-tipos-selector">
-        <button *ngFor="let t of ausenciaTipos"
-                type="button"
-                class="ausencia-tipo-btn"
-                [class.selected]="ausenciaTipo === t.valor"
-                (click)="ausenciaTipo = t.valor">
-          <span class="ausencia-tipo-icono">{{ t.icono }}</span>
-          <span class="ausencia-tipo-label">{{ t.label }}</span>
-        </button>
-      </div>
-
-      <!-- Panel de campos según el tipo elegido -->
-      <div class="ausencia-panel-campos">
-        <span class="ausencia-panel-desc">{{ ausenciaTipoActual?.desc }}</span>
-
-        <div class="form-grid" *ngIf="ausenciaTipo === 'temporal'">
-          <div class="campo-grupo-prof">
-            <label>Desde</label>
-            <input type="time" [(ngModel)]="ausenciaHoraInicio" />
-          </div>
-          <div class="campo-grupo-prof">
-            <label>Hasta</label>
-            <input type="time" [(ngModel)]="ausenciaHoraFin" />
-          </div>
-        </div>
-
-        <div class="form-grid" *ngIf="ausenciaTipo === 'licencia'">
-          <div class="campo-grupo-prof">
-            <label>Desde</label>
-            <input type="date" [(ngModel)]="ausenciaFechaInicio" />
-          </div>
-          <div class="campo-grupo-prof">
-            <label>Hasta</label>
-            <input type="date" [(ngModel)]="ausenciaFechaFin" />
-          </div>
-        </div>
-
-        <div class="form-grid" *ngIf="ausenciaTipo === 'dia_completo'">
-          <div class="campo-grupo-prof">
-            <label>Fecha</label>
-            <input type="date" [(ngModel)]="ausenciaFechaDiaCompleto" [min]="hoyStr()" />
-          </div>
-        </div>
-      </div>
-
-      <div class="campo-grupo-prof">
-        <label>Motivo <span class="opcional">(opcional)</span></label>
-        <input [(ngModel)]="ausenciaMotivo" placeholder="Ej: Malestar general, cita médica..." />
-      </div>
-
-      <div class="modal-footer-prof">
-        <button class="btn-cancelar-modal-prof" (click)="cerrarModalAusencia()">Cancelar</button>
-        <button class="btn-reportar" [disabled]="!ausenciaFormularioValido || enviandoAusencia" (click)="reportarAusencia()">{{ enviandoAusencia ? 'Enviando…' : '⚠️ Reportar y notificar' }}</button>
-      </div>
-    </div>
   </div>
 
   <!-- MODAL: COMPLETAR ATENCIÓN -->

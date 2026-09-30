@@ -5,6 +5,37 @@ from jose import jwt, JWTError
 
 _HASH_PREFIXES = ("$2a$", "$2b$", "$2y$")
 
+PASSWORD_POLICY_MESSAGE = (
+    "La nueva contraseña debe tener al menos 8 caracteres, "
+    "una mayúscula, una minúscula, un número y un carácter especial, "
+    "sin espacios."
+)
+
+
+def evaluar_politica_password(password) -> dict[str, bool]:
+    """
+    Evalúa la política única de contraseñas SESAES.
+
+    Mantener esta función como fuente de verdad del backend. El frontend
+    replica estas reglas únicamente para dar feedback inmediato; el backend
+    siempre vuelve a validarlas antes de persistir un cambio.
+    """
+    value = password if isinstance(password, str) else ""
+    checks = {
+        "minimo8": len(value) >= 8,
+        "mayuscula": any(c.isupper() for c in value),
+        "minuscula": any(c.islower() for c in value),
+        "numero": any(c.isdigit() for c in value),
+        "especial": any((not c.isalnum()) and (not c.isspace()) for c in value),
+        "sin_espacios": not any(c.isspace() for c in value),
+    }
+    return checks
+
+
+def password_cumple_politica(password) -> bool:
+    """True solo cuando la contraseña cumple todas las reglas SESAES."""
+    return all(evaluar_politica_password(password).values())
+
 # ══════════════════════════════════════════════════════════
 # JWT
 # ══════════════════════════════════════════════════════════
@@ -66,34 +97,3 @@ def verify_password(plain_password: str, stored_password: str) -> bool:
         return bcrypt.checkpw(plain_password.encode("utf-8"), stored_password.encode("utf-8"))
     except ValueError:
         return False
-
-
-# ══════════════════════════════════════════════════════════
-# POLÍTICA DE COMPLEJIDAD DE CONTRASEÑA
-# ══════════════════════════════════════════════════════════
-# Política única para toda cuenta que cambia su propia contraseña
-# (Estudiante, Profesional): mínimo 8 caracteres, una mayúscula, un
-# número y un carácter especial, con verificación en vivo del lado del
-# frontend (ver shared/password-validation.ts) y re-validación acá en
-# el backend — el frontend nunca es la única barrera de seguridad.
-_CARACTERES_ESPECIALES = "!@#$%^&*()_+-=[]{}|;:'\",.<>/?`~\\"
-
-
-def errores_password(password: str) -> list[str]:
-    """Devuelve la lista de requisitos de complejidad que NO cumple la
-    contraseña dada. Lista vacía = contraseña válida."""
-    password = password or ""
-    errores = []
-    if len(password) < 8:
-        errores.append("Debe tener al menos 8 caracteres")
-    if not any(c.isupper() for c in password):
-        errores.append("Debe incluir al menos una letra mayúscula")
-    if not any(c.isdigit() for c in password):
-        errores.append("Debe incluir al menos un número")
-    if not any(c in _CARACTERES_ESPECIALES for c in password):
-        errores.append("Debe incluir al menos un carácter especial")
-    return errores
-
-
-def es_password_segura(password: str) -> bool:
-    return len(errores_password(password)) == 0

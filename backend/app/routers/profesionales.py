@@ -1,26 +1,118 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import date, datetime
+from datetime import date
+from pydantic import BaseModel
 
 from app.database import get_db
-from app.security import verify_password, hash_password, errores_password
+from app.security import (
+    PASSWORD_POLICY_MESSAGE,
+    hash_password,
+    password_cumple_politica,
+    verify_password,
+)
 from app.models.cita import Cita
 from app.models.profesional import Profesional
 from app.models.usuario import Usuario
 from app.models.notificacion import Notificacion
-from app.models.auditoria import Auditoria
-from app.models.historial_estado_profesional import HistorialEstadoProfesional
-from app.models.ausencia_profesional import AusenciaProfesional
 from app.models.bloque_horario_semanal import BloqueHorarioSemanal
 from app.routers.correos import simular_envio_correo
 from app.auth_dependencies import get_current_user, verificar_acceso_profesional
-from app.reglas_horario import calcular_dias_disponibles
+from app.rbac.permissions import Permission, has_permission
+from app.rbac.admin_authorization import (
+    tiene_permiso_admin_en_especialidad,
+)
+from app.rbac.clinical_capabilities import ClinicalCapability
+from app.services.clinical_capabilities_service import resolver_capacidades_efectivas
+from app.schemas import CompletarCitaBody
+from app.auditoria import registrar_evento_auditoria
+from app import reglas_horario
 
 router = APIRouter(tags=["profesionales"])
 
 
-def registrar_auditoria(db, accion, detalle=None, entidad=None, entidad_id=None):
-    db.add(Auditoria(accion=accion, detalle=detalle, entidad=entidad, entidad_id=entidad_id))
+class CambiarPasswordProfesionalIn(BaseModel):
+    contrasena_actual: str
+    contrasena_nueva: str
+
+# SA-2: el helper local registrar_auditoria(...) se eliminó. Este router
+# usa ahora app.auditoria.registrar_evento_auditoria, que deriva el actor
+# (usuario_id, actor_rol) EXCLUSIVAMENTE de current_user y nunca hace
+# commit/rollback por sí mismo — ver docstring de app/auditoria.py.
+
+
+def _exigir_permiso_y_ownership_propio(
+    current_user: dict, prof_id: int, db, permission: Permission
+) -> None:
+    """
+    RBAC + ownership para endpoints "propios" del profesional (Fase 3.5F).
+
+    Exige explícitamente:
+      - que el usuario autenticado tenga `permission` (has_permission), Y
+      - que sea el profesional dueño de `prof_id` (verificar_acceso_profesional,
+        sin bypass admin/superadmin — ver auth_dependencies.py).
+
+    Un profesional sin `permission` recibe 403 aunque sea dueño del recurso.
+    Un profesional con `permission` pero sobre un prof_id ajeno también
+    recibe 403. Ningún rol tiene atajo aquí: ROLE + PERMISSION + OWNERSHIP.
+    """
+    if not has_permission(current_user, permission):
+        raise HTTPException(status_code=403, detail="No tienes permiso para acceder a este recurso.")
+    verificar_acceso_profesional(current_user, prof_id, db, roles_permitidos=["profesional"])
+
+
+def _notificar_con_agenda_gestionar(
+    db,
+    especialidad: str,
+    mensaje: str,
+    tipo: str = "info",
+    email_asunto: str = None,
+    email_cuerpo: str = None,
+    email_referencia_id: int = None,
+) -> None:
+    """
+    Notifica a usuarios administrativos activos con capacidad real
+    agenda.gestionar para la especialidad del evento.
+
+    ADMIN requiere configuracion valida, permiso persistido y alcance.
+    SUPERADMIN conserva su permiso explicito definido por rol.
+    """
+    for u in db.query(Usuario).all():
+        if not getattr(u, "activo", True):
+            continue
+
+        if u.rol == "admin":
+            autorizado = tiene_permiso_admin_en_especialidad(
+                db,
+                u.id,
+                Permission.AGENDA_GESTIONAR,
+                especialidad,
+            )
+        else:
+            autorizado = has_permission(
+                u.rol,
+                Permission.AGENDA_GESTIONAR,
+            )
+
+        if not autorizado:
+            continue
+
+        db.add(
+            Notificacion(
+                usuario_id=u.id,
+                mensaje=mensaje,
+                tipo=tipo,
+            )
+        )
+
+        if email_asunto:
+            simular_envio_correo(
+                db,
+                destinatario=u.correo or "",
+                asunto=email_asunto,
+                cuerpo=email_cuerpo or mensaje,
+                tipo=tipo,
+                referencia_id=email_referencia_id,
+            )
 
 
 # ══════════════════════════════════════
@@ -29,10 +121,19 @@ def registrar_auditoria(db, accion, detalle=None, entidad=None, entidad_id=None)
 
 @router.get("/profesionales")
 def get_profesionales(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    resultado = []
-    for p in db.query(Profesional).filter(Profesional.estado == "activo").all():
-        dias_bloque = {b.dia_semana for b in p.bloques_semanales if b.tipo == "disponible"}
-        resultado.append({
+    # dias_con_bloque_disponible: un solo query para TODOS los
+    # profesionales, agrupado por profesional_id — evita N+1 (un query
+    # de BloqueHorarioSemanal por profesional dentro del for de abajo).
+    dias_por_profesional: dict[int, set[int]] = {}
+    for bloque in (
+        db.query(BloqueHorarioSemanal)
+        .filter(BloqueHorarioSemanal.tipo == "disponible")
+        .all()
+    ):
+        dias_por_profesional.setdefault(bloque.profesional_id, set()).add(bloque.dia_semana)
+
+    return [
+        {
             "id":           p.id,
             "nombre":       p.nombre,
             "especialidad": p.especialidad,
@@ -41,16 +142,22 @@ def get_profesionales(db: Session = Depends(get_db), current_user: dict = Depend
             "foto_url":     p.foto_url,
             "duracion_min": p.duracion_min,
             "estado":       p.estado or "activo",
-            "correo":       p.correo,   # ← necesario para login del profesional
-            "usuario_id":   p.usuario_id,
-            # Para que el estudiante no pueda ni siquiera seleccionar, en el
-            # mini-calendario, un día de semana en que este profesional no
-            # atiende (ver dias_disponibles en calcular_dias_disponibles).
-            "dias_disponibles": calcular_dias_disponibles(
-                dias_bloque, bool(p.horario_inicio and p.horario_fin)
+            # Días de semana (0=Lunes...4=Viernes) en que el profesional
+            # ofrece horas — para que el estudiante no pueda ni
+            # seleccionar en el calendario un día que este profesional
+            # no atiende (ver app.reglas_horario.calcular_dias_disponibles).
+            # None si el profesional no tiene ningún horario configurado
+            # todavía (no bloquear de más algo que no se ha cargado).
+            "dias_disponibles": reglas_horario.calcular_dias_disponibles(
+                dias_por_profesional.get(p.id, set()),
+                tiene_jornada_simple=bool(p.horario_inicio and p.horario_fin),
             ),
-        })
-    return resultado
+            # Fase 3.5F: correo y usuario_id ya no se exponen en este catálogo
+            # autenticado. El login resuelve el profesional vía
+            # /profesional/buscar-por-usuario/{usuario_id} (ownership estricto).
+        }
+        for p in db.query(Profesional).filter(Profesional.estado == "activo").all()
+    ]
 
 
 # ══════════════════════════════════════
@@ -63,7 +170,8 @@ def buscar_profesional_por_usuario(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    if current_user["rol"] != "admin" and current_user["id"] != usuario_id:
+    # Fase 3.5F: ownership estricto, sin bypass administrativo inline.
+    if current_user["id"] != usuario_id:
         raise HTTPException(status_code=403, detail="No tienes permiso para acceder a este recurso.")
     prof = db.query(Profesional).filter(Profesional.usuario_id == usuario_id).first()
     if not prof:
@@ -107,10 +215,18 @@ def get_perfil(
         "hora_almuerzo_fin":    prof.hora_almuerzo_fin,
         "horario_inicio": prof.horario_inicio,
         "horario_fin":    prof.horario_fin,
+        # Agenda semanal por bloques ya APROBADA (no la solicitud
+        # pendiente, que se obtiene aparte vía GET
+        # /profesional/{id}/solicitudes-horario) — para que el
+        # frontend precargue la grilla de bloques con lo que ya está
+        # vigente en vez de partir siempre en blanco.
         "bloques_semanales": [
-            {"dia_semana": b.dia_semana, "hora_inicio": b.hora_inicio, "hora_fin": b.hora_fin, "tipo": b.tipo}
-            for b in prof.bloques_semanales
-        ]
+            {"dia_semana": b.dia_semana, "hora_inicio": b.hora_inicio,
+             "hora_fin": b.hora_fin, "tipo": b.tipo}
+            for b in db.query(BloqueHorarioSemanal)
+                .filter(BloqueHorarioSemanal.profesional_id == prof_id)
+                .all()
+        ],
     }
 
 @router.patch("/profesional/{prof_id}/perfil")
@@ -136,14 +252,15 @@ def actualizar_perfil(
         if usuario:
             usuario.tema_oscuro = body["tema_oscuro"]
 
-    registrar_auditoria(db, "Profesional actualizó su perfil", None, "profesional", prof_id)
+    registrar_evento_auditoria(db, current_user, "Profesional actualizó su perfil",
+                                entidad="profesional", entidad_id=prof_id)
     db.commit()
     return {"message": "Perfil actualizado correctamente"}
 
 @router.patch("/profesional/{prof_id}/cambiar-password")
 def cambiar_password(
     prof_id: int,
-    body: dict,
+    body: CambiarPasswordProfesionalIn,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
@@ -151,15 +268,46 @@ def cambiar_password(
     prof = db.query(Profesional).filter(Profesional.id == prof_id).first()
     if not prof:
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
+
     usuario = db.query(Usuario).filter(Usuario.id == prof.usuario_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    if not verify_password(body.get("contrasena_actual"), usuario.password):
-        raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta")
-    errores = errores_password(body.get("contrasena_nueva") or "")
-    if errores:
-        raise HTTPException(status_code=400, detail="; ".join(errores))
-    usuario.password = hash_password(body.get("contrasena_nueva"))
+
+    # FastAPI entrega CambiarPasswordProfesionalIn; se tolera dict en llamadas
+    # directas de tests unitarios antiguos para no romper cobertura de ownership.
+    if isinstance(body, dict):
+        contrasena_actual = body.get("contrasena_actual")
+        contrasena_nueva = body.get("contrasena_nueva")
+    else:
+        contrasena_actual = body.contrasena_actual
+        contrasena_nueva = body.contrasena_nueva
+
+    if not contrasena_actual or not contrasena_nueva:
+        raise HTTPException(
+            status_code=400,
+            detail="Debes ingresar la contraseña actual y la nueva.",
+        )
+
+    if not password_cumple_politica(contrasena_nueva):
+        raise HTTPException(
+            status_code=400,
+            detail=PASSWORD_POLICY_MESSAGE,
+        )
+
+    if not verify_password(contrasena_actual, usuario.password):
+        raise HTTPException(
+            status_code=400,
+            detail="La contraseña actual es incorrecta.",
+        )
+
+    if verify_password(contrasena_nueva, usuario.password):
+        raise HTTPException(
+            status_code=400,
+            detail="La nueva contraseña debe ser diferente a la actual.",
+        )
+
+    usuario.password = hash_password(contrasena_nueva)
+    usuario.debe_cambiar_password = False
     db.commit()
     return {"message": "Contraseña actualizada correctamente"}
 
@@ -174,7 +322,7 @@ def get_estadisticas_dia(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_permiso_y_ownership_propio(current_user, prof_id, db, Permission.AGENDA_VER_PROFESIONAL)
     hoy = date.today().isoformat()
     citas_hoy = db.query(Cita).filter(Cita.profesional_id == prof_id, Cita.fecha == hoy).all()
     return {
@@ -197,7 +345,7 @@ def get_citas_sin_cerrar(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_permiso_y_ownership_propio(current_user, prof_id, db, Permission.AGENDA_VER_PROFESIONAL)
     hoy = date.today().isoformat()
     citas = db.query(Cita).filter(
         Cita.profesional_id == prof_id,
@@ -230,7 +378,7 @@ def get_citas_profesional(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_permiso_y_ownership_propio(current_user, prof_id, db, Permission.ATENCIONES_VER_ASIGNADAS)
     query = db.query(Cita).filter(Cita.profesional_id == prof_id)
     if fecha:  query = query.filter(Cita.fecha == fecha)
     if estado: query = query.filter(Cita.estado == estado)
@@ -253,9 +401,7 @@ def get_citas_profesional(
             "sobrecupo":              c.sobrecupo or False,
             "observaciones":          c.observaciones,
             "medicamento":            c.medicamento,
-            "observaciones_atencion": c.observaciones_atencion,
-            "motivo_cancelacion":     c.motivo_cancelacion,
-            "rechazada_por_profesional": c.rechazada_por_profesional or False
+            "observaciones_atencion": c.observaciones_atencion
         })
     return result
 
@@ -268,23 +414,55 @@ def get_citas_profesional(
 def completar_cita(
     prof_id: int,
     cita_id: int,
-    body: dict,
+    body: CompletarCitaBody,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    # Orden obligatorio (SA-11.3B): autenticación (get_current_user, ya
+    # resuelta por la dependencia) -> ATENCIONES_REGISTRAR -> ownership
+    # -> normalizar body -> si hay medicamento real, resolver capability
+    # -> si falta la capability, 403 SIN mutar la cita -> recién ahí se
+    # modifica `cita` -> commit. No debe existir ninguna asignación a
+    # cita.estado/medicamento/observaciones_atencion antes de superar el
+    # chequeo de capability.
+    _exigir_permiso_y_ownership_propio(current_user, prof_id, db, Permission.ATENCIONES_REGISTRAR)
     cita = db.query(Cita).filter(Cita.id == cita_id, Cita.profesional_id == prof_id).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
     if cita.fecha > date.today().isoformat():
         raise HTTPException(status_code=400, detail="No puedes completar una cita que todavía no ocurre")
+
+    # Normalización (SA-11.3B): None, "" y strings de solo espacios se
+    # tratan como "sin medicamento" tanto para decidir si se exige la
+    # capability como para lo que finalmente se persiste — un valor de
+    # solo espacios NUNCA debe esquivar el chequeo ni quedar guardado
+    # tal cual en Cita.medicamento. `observaciones_atencion` conserva el
+    # mismo criterio de compatibilidad que ya tenía el `dict.get(...) or
+    # None` anterior (ya trataba "" como None); acá se extiende el mismo
+    # strip() por consistencia, sin agregar ninguna regla de negocio
+    # nueva (p.ej. longitudes máximas siguen fuera de alcance).
+    medicamento = body.medicamento.strip() if body.medicamento else None
+    medicamento = medicamento or None
+    observaciones_atencion = body.observaciones_atencion.strip() if body.observaciones_atencion else None
+    observaciones_atencion = observaciones_atencion or None
+
+    if medicamento is not None:
+        prof = db.query(Profesional).filter(Profesional.id == prof_id).first()
+        especialidad = prof.especialidad if prof else None
+        capacidades = resolver_capacidades_efectivas(especialidad, db)
+        if ClinicalCapability.REGISTRAR_MEDICAMENTO_SUMINISTRADO.value not in capacidades:
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes la capacidad clínica para registrar medicamento suministrado.",
+            )
+
     cita.estado                 = "completada"
-    cita.medicamento            = body.get("medicamento") or None
-    cita.observaciones_atencion = body.get("observaciones_atencion") or None
+    cita.medicamento            = medicamento
+    cita.observaciones_atencion = observaciones_atencion
     est = db.query(Usuario).filter(Usuario.id == cita.estudiante_id).first()
-    registrar_auditoria(db, "Profesional completó cita",
-                        f"Estudiante: {est.nombre if est else '—'} — {cita.fecha} {cita.hora}",
-                        "cita", cita_id)
+    registrar_evento_auditoria(db, current_user, "Profesional completó cita",
+                                entidad="cita", entidad_id=cita_id,
+                                detalle=f"Estudiante: {est.nombre if est else '—'} — {cita.fecha} {cita.hora}")
     db.commit()
     return {"message": "Cita marcada como completada"}
 
@@ -300,7 +478,21 @@ def marcar_inasistencia(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_permiso_y_ownership_propio(current_user, prof_id, db, Permission.AGENDA_GESTIONAR_PROPIA)
+    prof = (
+        db.query(Profesional)
+        .filter(
+            Profesional.id == prof_id
+        )
+        .first()
+    )
+
+    if not prof:
+        raise HTTPException(
+            status_code=404,
+            detail="Profesional no encontrado",
+        )
+
     cita = db.query(Cita).filter(Cita.id == cita_id, Cita.profesional_id == prof_id).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
@@ -308,16 +500,15 @@ def marcar_inasistencia(
         raise HTTPException(status_code=400, detail="No puedes marcar inasistencia de una cita que todavía no ocurre")
     est = db.query(Usuario).filter(Usuario.id == cita.estudiante_id).first()
     cita.estado = "inasistencia"
-    admin = db.query(Usuario).filter(Usuario.rol == "admin").first()
-    if admin:
-        db.add(Notificacion(
-            usuario_id=admin.id,
-            mensaje=f"Inasistencia: {est.nombre if est else '—'} no asistió a su cita del {cita.fecha} a las {cita.hora}.",
-            tipo="info"
-        ))
-    registrar_auditoria(db, "Profesional marcó inasistencia",
-                        f"Estudiante: {est.nombre if est else '—'} — {cita.fecha} {cita.hora}",
-                        "cita", cita_id)
+    _notificar_con_agenda_gestionar(
+        db,
+        prof.especialidad,
+        mensaje=f"Inasistencia: {est.nombre if est else '—'} no asistió a su cita del {cita.fecha} a las {cita.hora}.",
+        tipo="info",
+    )
+    registrar_evento_auditoria(db, current_user, "Profesional marcó inasistencia",
+                                entidad="cita", entidad_id=cita_id,
+                                detalle=f"Estudiante: {est.nombre if est else '—'} — {cita.fecha} {cita.hora}")
     db.commit()
     return {"message": "Inasistencia registrada"}
 
@@ -325,15 +516,17 @@ def marcar_inasistencia(
 # ══════════════════════════════════════
 # ACEPTAR / RECHAZAR CITA PENDIENTE
 # ══════════════════════════════════════
-# El profesional revisa cada cita "pendiente" solicitada por un estudiante:
-#   - Aceptar: confirma la hora. NO cambia Cita.estado (sigue "pendiente"
-#     hasta el día de la atención — ver regla de negocio "Cita ≠ Atención"
-#     en el Documento Maestro sección 4: solo "completada" cuenta como
-#     atención real). Solo deja registro/notificación de que fue revisada.
-#   - Rechazar: requiere motivo. Reutiliza el estado "cancelada" (mismo
-#     color/semántica que cualquier otra cancelación) + el flag
-#     rechazada_por_profesional para que quede trazable en el panel Admin
-#     que fue el profesional quien la rechazó, y por qué.
+#
+# "Aceptar" y "rechazar" son sobre la CITA (el compromiso de horario),
+# no sobre la ATENCIÓN — por eso no tocan completar_cita/marcar_inasistencia
+# más arriba, que sí son sobre lo clínico. Aceptar es deliberadamente
+# "manso": solo confirma y notifica, NO cambia cita.estado — sigue
+# "pendiente" hasta el día de la atención, respetando la regla
+# "Cita ≠ Atención" del Documento Maestro (una cita aceptada todavía
+# tiene que pasar por completar/inasistencia ese día). Rechazar sí
+# muta el estado: reutiliza "cancelada" + el flag
+# rechazada_por_profesional, para no inventar un 5º estado con color
+# propio — mismo patrón que cancelada_por_admin.
 
 @router.patch("/profesional/{prof_id}/citas/{cita_id}/aceptar")
 def aceptar_cita(
@@ -342,7 +535,7 @@ def aceptar_cita(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_permiso_y_ownership_propio(current_user, prof_id, db, Permission.AGENDA_GESTIONAR_PROPIA)
     cita = db.query(Cita).filter(Cita.id == cita_id, Cita.profesional_id == prof_id).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
@@ -354,11 +547,11 @@ def aceptar_cita(
         db.add(Notificacion(
             usuario_id=est.id,
             mensaje=f"Tu cita del {cita.fecha} a las {cita.hora} fue confirmada por el profesional.",
-            tipo="info"
+            tipo="info",
         ))
-    registrar_auditoria(db, "Profesional aceptó cita",
-                        f"Estudiante: {est.nombre if est else '—'} — {cita.fecha} {cita.hora}",
-                        "cita", cita_id)
+    registrar_evento_auditoria(db, current_user, "Profesional aceptó cita",
+                                entidad="cita", entidad_id=cita_id,
+                                detalle=f"Estudiante: {est.nombre if est else '—'} — {cita.fecha} {cita.hora}")
     db.commit()
     return {"message": "Cita aceptada y confirmada"}
 
@@ -371,7 +564,7 @@ def rechazar_cita(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, prof_id, db)
+    _exigir_permiso_y_ownership_propio(current_user, prof_id, db, Permission.AGENDA_GESTIONAR_PROPIA)
     cita = db.query(Cita).filter(Cita.id == cita_id, Cita.profesional_id == prof_id).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
@@ -391,151 +584,21 @@ def rechazar_cita(
         db.add(Notificacion(
             usuario_id=est.id,
             mensaje=f"Tu cita del {cita.fecha} a las {cita.hora} fue rechazada por el profesional. Motivo: {motivo}",
-            tipo="advertencia"
+            tipo="advertencia",
         ))
-    admin = db.query(Usuario).filter(Usuario.rol == "admin").first()
-    if admin:
-        db.add(Notificacion(
-            usuario_id=admin.id,
-            mensaje=f"{est.nombre if est else '—'}: cita del {cita.fecha} {cita.hora} fue rechazada por el profesional. Motivo: {motivo}",
-            tipo="info"
-        ))
-    registrar_auditoria(db, "Profesional rechazó cita",
-                        f"Estudiante: {est.nombre if est else '—'} — {cita.fecha} {cita.hora} — Motivo: {motivo}",
-                        "cita", cita_id)
+    prof = db.query(Profesional).filter(Profesional.id == prof_id).first()
+    _notificar_con_agenda_gestionar(
+        db,
+        prof.especialidad if prof else None,
+        mensaje=f"{est.nombre if est else '—'}: cita del {cita.fecha} {cita.hora} fue rechazada por el profesional. Motivo: {motivo}",
+        tipo="info",
+    )
+    registrar_evento_auditoria(db, current_user, "Profesional rechazó cita",
+                                entidad="cita", entidad_id=cita_id,
+                                detalle=f"Estudiante: {est.nombre if est else '—'} — {cita.fecha} {cita.hora} — Motivo: {motivo}")
     db.commit()
     return {"message": "Cita rechazada"}
 
-
-
-# Tres modos, según "tipo":
-#   - "temporal":     mismo día, cancela solo las citas dentro de [hora_inicio, hora_fin]
-#   - "dia_completo":  cancela todas las citas pendientes del día indicado
-#   - "licencia":      cancela todas las citas pendientes entre fecha_inicio y fecha_fin
-#
-# En los tres casos: se cancelan las citas afectadas, se notifica a cada estudiante
-# y al admin, y se registra en el historial de estado. La reactivación del profesional
-# (volver a "activo") queda a criterio manual del admin — no hay reactivación automática.
-
-def _hora_a_minutos(hora_str: str) -> int:
-    """Convierte 'HH:MM AM/PM' o 'HH:MM' a minutos desde medianoche, para poder comparar rangos."""
-    hora_str = (hora_str or "").strip()
-    for fmt in ("%I:%M %p", "%H:%M"):
-        try:
-            t = datetime.strptime(hora_str, fmt)
-            return t.hour * 60 + t.minute
-        except ValueError:
-            continue
-    return -1
-
-
-@router.post("/profesional/{prof_id}/reportar-ausencia")
-def reportar_ausencia(
-    prof_id: int,
-    body: dict,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-):
-    verificar_acceso_profesional(current_user, prof_id, db)
-    prof = db.query(Profesional).filter(Profesional.id == prof_id).first()
-    if not prof:
-        raise HTTPException(status_code=404, detail="Profesional no encontrado")
-
-    tipo   = body.get("tipo", "dia_completo")
-    motivo = body.get("motivo") or "Sin motivo especificado"
-    estado_anterior = prof.estado or "activo"
-
-    if tipo == "temporal":
-        fecha       = body.get("fecha", date.today().isoformat())
-        hora_inicio = _hora_a_minutos(body.get("hora_inicio"))
-        hora_fin    = _hora_a_minutos(body.get("hora_fin"))
-        if hora_inicio < 0 or hora_fin < 0 or hora_inicio >= hora_fin:
-            raise HTTPException(status_code=400, detail="Rango de horas inválido")
-        citas_afectadas = [
-            c for c in db.query(Cita).filter(
-                Cita.profesional_id == prof_id, Cita.fecha == fecha, Cita.estado == "pendiente"
-            ).all()
-            if hora_inicio <= _hora_a_minutos(c.hora) < hora_fin
-        ]
-        estado_nuevo = estado_anterior  # una salida temporal no cambia el estado general del profesional
-        rango_desc = f"el {fecha} entre {body.get('hora_inicio')} y {body.get('hora_fin')}"
-
-    elif tipo == "licencia":
-        fecha_inicio = body.get("fecha_inicio", date.today().isoformat())
-        fecha_fin    = body.get("fecha_fin", fecha_inicio)
-        citas_afectadas = db.query(Cita).filter(
-            Cita.profesional_id == prof_id, Cita.estado == "pendiente",
-            Cita.fecha >= fecha_inicio, Cita.fecha <= fecha_fin
-        ).all()
-        estado_nuevo = "licencia"
-        rango_desc = f"del {fecha_inicio} al {fecha_fin}"
-
-    else:  # dia_completo
-        fecha = body.get("fecha", date.today().isoformat())
-        citas_afectadas = db.query(Cita).filter(
-            Cita.profesional_id == prof_id, Cita.fecha == fecha, Cita.estado == "pendiente"
-        ).all()
-        # Si la ausencia es para HOY, refleja de inmediato que el profesional
-        # no está disponible. Si es para una fecha futura, NO se debe tocar
-        # el estado general del profesional todavía (seguiría trabajando
-        # normalmente hasta ese día) — solo se cancelan las citas pendientes
-        # de esa fecha puntual y se deja registro en el historial de estados.
-        estado_nuevo = "inasistencia" if fecha == date.today().isoformat() else estado_anterior
-        rango_desc = f"el {fecha}"
-        # Bloquea nuevos agendamientos en esa fecha exacta (no solo cancela
-        # las citas que ya existían). Si ya había una ausencia registrada
-        # para el mismo día, se reemplaza (evita duplicados si el profesional
-        # reporta dos veces la misma fecha).
-        db.query(AusenciaProfesional).filter(
-            AusenciaProfesional.profesional_id == prof_id,
-            AusenciaProfesional.fecha == fecha
-        ).delete()
-        db.add(AusenciaProfesional(profesional_id=prof_id, fecha=fecha, motivo=motivo))
-
-    prof.estado = estado_nuevo
-
-    for cita in citas_afectadas:
-        cita.estado = "cancelada"
-        est = db.query(Usuario).filter(Usuario.id == cita.estudiante_id).first()
-        if est:
-            db.add(Notificacion(
-                usuario_id=est.id,
-                mensaje=f"Tu cita del {cita.fecha} a las {cita.hora} fue cancelada por fuerza mayor. "
-                        f"Puedes reagendar tu hora cuando lo desees desde tu dashboard.",
-                tipo="cancelacion"
-            ))
-            simular_envio_correo(db,
-                destinatario=est.correo or "",
-                asunto="SESAES — Tu cita fue cancelada",
-                cuerpo=f"Tu cita del {cita.fecha} a las {cita.hora} con {prof.nombre} fue cancelada por fuerza mayor.",
-                tipo="cancelacion", referencia_id=cita.id
-            )
-
-    db.add(HistorialEstadoProfesional(
-        profesional_id=prof_id, estado_anterior=estado_anterior,
-        estado_nuevo=estado_nuevo, motivo=motivo, registrado_por=None
-    ))
-
-    admin = db.query(Usuario).filter(Usuario.rol == "admin").first()
-    if admin:
-        db.add(Notificacion(
-            usuario_id=admin.id,
-            mensaje=f"{prof.nombre} reportó ausencia {rango_desc}. Motivo: {motivo}. "
-                    f"Se cancelaron {len(citas_afectadas)} cita(s) automáticamente.",
-            tipo="advertencia"
-        ))
-        simular_envio_correo(db,
-            destinatario=admin.correo or "admin@utem.cl",
-            asunto=f"SESAES — {prof.nombre} reportó ausencia",
-            cuerpo=f"{prof.nombre} ({prof.especialidad}) reportó ausencia {rango_desc}. Motivo: {motivo}.",
-            tipo="advertencia", referencia_id=prof_id
-        )
-
-    registrar_auditoria(db, "Profesional reportó ausencia",
-                        f"{prof.nombre} — {tipo} — {rango_desc}: {motivo} ({len(citas_afectadas)} citas canceladas)",
-                        "profesional", prof_id)
-    db.commit()
-    return {"message": f"Ausencia reportada. {len(citas_afectadas)} cita(s) cancelada(s) y notificadas."}
 
 
 # ══════════════════════════════════════

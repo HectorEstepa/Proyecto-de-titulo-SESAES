@@ -16,6 +16,9 @@ from app.routers.configuracion_centro import router as configuracion_centro_rout
 from app.routers.correos import router as correos_router
 from app.routers.solicitudes_horario import router as solicitudes_horario_router
 from app.routers.historial_clinico import router as historial_clinico_router
+from app.routers.agenda import router as agenda_router
+from app.routers.usuarios import router as usuarios_router
+from app.routers.capacidades_clinicas import router as capacidades_clinicas_router
 
 import os
 
@@ -65,6 +68,9 @@ app.include_router(configuracion_centro_router)
 app.include_router(correos_router)
 app.include_router(solicitudes_horario_router)
 app.include_router(historial_clinico_router)
+app.include_router(agenda_router)
+app.include_router(usuarios_router)
+app.include_router(capacidades_clinicas_router)  # SA-11.2
 
 @app.get("/")
 def home():

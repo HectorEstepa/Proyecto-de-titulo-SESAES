@@ -10,6 +10,7 @@ from app.models.usuario import Usuario
 from app.models.historial_plantilla_pregunta import HistorialPlantillaPregunta
 from app.models.historial_paciente import HistorialPaciente
 from app.auth_dependencies import get_current_user, verificar_acceso_profesional
+from app.rbac.permissions import Permission, has_permission
 
 router = APIRouter(prefix="/historial-clinico", tags=["historial-clinico"])
 
@@ -55,6 +56,66 @@ def _get_profesional_o_404(profesional_id: int, db: Session) -> Profesional:
     if not prof:
         raise HTTPException(status_code=404, detail="Profesional no encontrado")
     return prof
+
+
+# Estados de Cita que constituyen una relación clínica vigente entre un
+# profesional y un estudiante. "cancelada" e "inasistencia" NO cuentan:
+# nunca llegó a existir un vínculo clínico real por esa cita.
+_ESTADOS_RELACION_VALIDA = ("pendiente", "completada")
+
+
+def _tiene_relacion_clinica(profesional_id: int, estudiante_id: int, db: Session) -> bool:
+    """
+    Determina si existe una RELACIÓN CLÍNICA CONCRETA entre este profesional
+    y este estudiante (Prioridad 1, Fase 3.5F).
+
+    Existe relación válida si:
+      1. ya existe una HistorialPaciente para ese par profesional+estudiante
+         (ficha ya iniciada, sin importar el estado de las citas actuales), O
+      2. existe al menos una Cita entre ese profesional y ese estudiante con
+         estado "pendiente" o "completada".
+
+    Una cita "cancelada" o "inasistencia" NUNCA crea relación por sí sola.
+    No se autoriza por especialidad, por nombre, ni porque otro profesional
+    haya atendido al mismo estudiante — la relación es siempre el par
+    (profesional_id, estudiante_id) concreto.
+    """
+    from app.models.cita import Cita
+
+    ficha = db.query(HistorialPaciente).filter(
+        HistorialPaciente.profesional_id == profesional_id,
+        HistorialPaciente.estudiante_id == estudiante_id,
+    ).first()
+    if ficha:
+        return True
+
+    cita_valida = db.query(Cita).filter(
+        Cita.profesional_id == profesional_id,
+        Cita.estudiante_id == estudiante_id,
+        Cita.estado.in_(_ESTADOS_RELACION_VALIDA),
+    ).first()
+    return cita_valida is not None
+
+
+def _exigir_acceso_clinico(
+    current_user: dict, profesional_id: int, estudiante_id: int, db: Session, permission: Permission
+) -> None:
+    """
+    Acceso a un recurso clínico concreto (ficha de UN estudiante) exige las
+    tres condiciones a la vez (Prioridad 1, Fase 3.5F):
+
+      PERMISSION + OWNERSHIP PROFESIONAL + RELACIÓN CLÍNICA CONCRETA = ACCESO
+
+    Si falta cualquiera de las tres: 403. Sin bypass para ADMIN ni
+    SUPERADMIN — ninguno de los dos recibe permisos clínicos por defecto
+    (ver ROLE_DEFAULT_PERMISSIONS) y verificar_acceso_profesional exige
+    además rol "profesional" + ownership real.
+    """
+    if not has_permission(current_user, permission):
+        raise HTTPException(status_code=403, detail="No tienes permiso para acceder a este recurso.")
+    verificar_acceso_profesional(current_user, profesional_id, db, roles_permitidos=["profesional"])
+    if not _tiene_relacion_clinica(profesional_id, estudiante_id, db):
+        raise HTTPException(status_code=403, detail="No tienes permiso para acceder a este recurso.")
 
 
 def _asegurar_plantilla_base(prof: Profesional, db: Session) -> None:
@@ -193,8 +254,18 @@ def cuestionarios_pendientes(
     antes de que existiera este cuestionario y nunca lo respondieron.
     El dashboard del estudiante usa esto para mostrar la tarea pendiente.
     """
+    # Fase 3.5F (corrección final): recurso propio del estudiante dentro
+    # del dominio clínico — mismo criterio de ownership estricto que
+    # estudiante.py. Se retira "admin" de roles_permitidos por defensa en
+    # profundidad (verificar_acceso ya exige current_user["id"] ==
+    # estudiante_id, así que un ADMIN/SUPERADMIN solo podía "colarse" si
+    # su propio Usuario.id coincidiera por accidente con el
+    # estudiante_id solicitado). Acceso administrativo a este dato, si
+    # corresponde, se resuelve con un permiso RBAC explícito en un
+    # endpoint dedicado, nunca como atajo de rol dentro de este helper
+    # de ownership.
     from app.auth_dependencies import verificar_acceso
-    verificar_acceso(current_user, id_esperado=estudiante_id, roles_permitidos=["estudiante", "admin"])
+    verificar_acceso(current_user, id_esperado=estudiante_id, roles_permitidos=["estudiante"])
 
     from app.models.cita import Cita
 
@@ -249,7 +320,8 @@ def obtener_cuestionario_para_estudiante(
     from app.models.cita import Cita
     tiene_cita = db.query(Cita).filter(
         Cita.profesional_id == profesional_id,
-        Cita.estudiante_id == estudiante_id
+        Cita.estudiante_id == estudiante_id,
+        Cita.estado.in_(_ESTADOS_RELACION_VALIDA),
     ).first()
     if not tiene_cita:
         raise HTTPException(status_code=403, detail="Solo puedes responder el cuestionario de un profesional con el que tengas una cita.")
@@ -298,7 +370,8 @@ def responder_cuestionario_estudiante(
     from app.models.cita import Cita
     tiene_cita = db.query(Cita).filter(
         Cita.profesional_id == profesional_id,
-        Cita.estudiante_id == estudiante_id
+        Cita.estudiante_id == estudiante_id,
+        Cita.estado.in_(_ESTADOS_RELACION_VALIDA),
     ).first()
     if not tiene_cita:
         raise HTTPException(status_code=403, detail="Solo puedes responder el cuestionario de un profesional con el que tengas una cita.")
@@ -341,11 +414,21 @@ def listar_pacientes_atendidos(
       - busqueda: coincidencia parcial en nombre o RUT
       - carrera: coincidencia parcial en carrera
     """
-    verificar_acceso_profesional(current_user, profesional_id, db)
+    if not has_permission(current_user, Permission.FICHA_VER_ASIGNADA):
+        raise HTTPException(status_code=403, detail="No tienes permiso para acceder a este recurso.")
+    verificar_acceso_profesional(current_user, profesional_id, db, roles_permitidos=["profesional"])
     from app.models.cita import Cita
     from datetime import date as date_cls
 
-    query_citas = db.query(Cita).filter(Cita.profesional_id == profesional_id)
+    # Solo citas que constituyen relación clínica vigente (pendiente o
+    # completada) determinan qué estudiantes aparecen en este listado —
+    # una cancelada o una inasistencia no crean, por sí solas, un
+    # "paciente" del profesional. Se incluyen pendientes para que el
+    # profesional pueda prepararse antes de la consulta.
+    query_citas = db.query(Cita).filter(
+        Cita.profesional_id == profesional_id,
+        Cita.estado.in_(_ESTADOS_RELACION_VALIDA),
+    )
     if anio:
         query_citas = query_citas.filter(Cita.fecha.startswith(str(anio)))
     todas_las_citas = query_citas.all()
@@ -380,16 +463,22 @@ def listar_pacientes_atendidos(
     hoy = date_cls.today()
     resultado = []
     for e in estudiantes:
-        citas = sorted(citas_por_estudiante.get(e.id, []), key=lambda c: c.fecha)
-        fechas_validas = []
-        for c in citas:
+        citas = citas_por_estudiante.get(e.id, [])
+        # Métricas de "atención" cuentan SOLO citas completadas: una
+        # pendiente todavía no ocurrió, así que no suma atención ni
+        # mueve la última visita. total_atenciones cuenta TODAS las
+        # completadas aunque alguna tenga fecha inválida/legacy — sigue
+        # siendo una atención real, solo que no aporta a ultima_visita.
+        citas_completadas = [c for c in citas if c.estado == "completada"]
+        fechas_completadas = []
+        for c in citas_completadas:
             try:
-                fechas_validas.append(datetime.strptime(c.fecha, "%Y-%m-%d").date())
+                fechas_completadas.append(datetime.strptime(c.fecha, "%Y-%m-%d").date())
             except (ValueError, TypeError):
                 continue
 
-        ultima_visita = max(fechas_validas).isoformat() if fechas_validas else None
-        dias_desde_ultima = (hoy - max(fechas_validas)).days if fechas_validas else None
+        ultima_visita = max(fechas_completadas).isoformat() if fechas_completadas else None
+        dias_desde_ultima = (hoy - max(fechas_completadas)).days if fechas_completadas else None
 
         resultado.append({
             "estudiante_id":          e.id,
@@ -400,7 +489,7 @@ def listar_pacientes_atendidos(
             "foto_url":               e.foto_url,
             "tiene_ficha":            e.id in ids_con_ficha,
             "pendiente_revision":     e.id in ids_pendiente_revision,
-            "total_atenciones":       len(citas),
+            "total_atenciones":       len(citas_completadas),
             "ultima_visita":          ultima_visita,
             "dias_desde_ultima_visita": dias_desde_ultima,
         })
@@ -419,7 +508,7 @@ def obtener_historial(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, profesional_id, db)
+    _exigir_acceso_clinico(current_user, profesional_id, estudiante_id, db, Permission.FICHA_VER_ASIGNADA)
     prof = _get_profesional_o_404(profesional_id, db)
     estudiante = db.query(Usuario).filter(Usuario.id == estudiante_id).first()
     if not estudiante:
@@ -438,16 +527,26 @@ def obtener_historial(
 
     # Todas las citas que este estudiante ha tenido con este profesional
     # (para la vista "ver todas sus atenciones" al hacer clic en el paciente).
+    # Se muestran TODAS (incluidas canceladas/inasistencia) como registro
+    # informativo, pero las MÉTRICAS de abajo (total_atenciones, última
+    # visita, etc.) cuentan únicamente citas "completada": solo una
+    # atención realmente ocurrida cuenta como atención.
     from app.models.cita import Cita
     citas = db.query(Cita).filter(
         Cita.profesional_id == profesional_id,
         Cita.estudiante_id  == estudiante_id
     ).order_by(Cita.fecha.desc(), Cita.hora.desc()).all()
 
-    fechas_validas = []
-    for c in citas:
+    # total_atenciones cuenta TODAS las citas completadas, aunque alguna
+    # tenga una fecha inválida/legacy que no se pueda parsear — sigue
+    # siendo una atención real. fechas_completadas (para ultima_visita y
+    # dias_desde_ultima_visita) solo puede usar las fechas que sí se
+    # lograron convertir.
+    citas_completadas = [c for c in citas if c.estado == "completada"]
+    fechas_completadas = []
+    for c in citas_completadas:
         try:
-            fechas_validas.append(datetime.strptime(c.fecha, "%Y-%m-%d").date())
+            fechas_completadas.append(datetime.strptime(c.fecha, "%Y-%m-%d").date())
         except (ValueError, TypeError):
             continue
 
@@ -480,9 +579,9 @@ def obtener_historial(
             }
             for c in citas
         ],
-        "total_atenciones":         len(citas),
-        "ultima_visita":            max(fechas_validas).isoformat() if fechas_validas else None,
-        "dias_desde_ultima_visita": (datetime.now().date() - max(fechas_validas)).days if fechas_validas else None,
+        "total_atenciones":         len(citas_completadas),
+        "ultima_visita":            max(fechas_completadas).isoformat() if fechas_completadas else None,
+        "dias_desde_ultima_visita": (datetime.now().date() - max(fechas_completadas)).days if fechas_completadas else None,
     }
 
 
@@ -494,7 +593,7 @@ def guardar_historial(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    verificar_acceso_profesional(current_user, profesional_id, db)
+    _exigir_acceso_clinico(current_user, profesional_id, estudiante_id, db, Permission.FICHA_EDITAR_ASIGNADA)
     prof = _get_profesional_o_404(profesional_id, db)
     estudiante = db.query(Usuario).filter(Usuario.id == estudiante_id).first()
     if not estudiante:

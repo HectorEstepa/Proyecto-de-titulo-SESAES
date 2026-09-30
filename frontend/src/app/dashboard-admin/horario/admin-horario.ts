@@ -18,6 +18,31 @@ export class AdminHorarioComponent {
   @Input() puedeGestionarAgenda = false;
   @Input() solicitudesHorarioAdmin: any[] = [];
 
+  // Reutilización en "Mi Agenda" del profesional (dashboard-profesional):
+  // oculta el selector de profesional/especialidad, que no tiene sentido
+  // cuando la vista ya está fija a un solo profesional (uno mismo).
+  @Input() ocultarFiltros = false;
+
+  // Reutilización en "Mi Agenda" del profesional: a diferencia del admin
+  // (que cancela), el propio profesional acepta/rechaza sus citas
+  // pendientes — ver PATCH /profesional/{id}/citas/{id}/aceptar|rechazar.
+  // Independiente de puedeGestionarAgenda (que sigue gateando SOLO las
+  // acciones administrativas: nueva cita, cancelar, aprobar/rechazar
+  // solicitudes de horario).
+  @Input() puedeAceptarRechazarPropio = false;
+  @Output() aceptarCita = new EventEmitter<any>();
+  @Output() rechazarCita = new EventEmitter<any>();
+
+  onAceptarCita(cita: any): void {
+    if (!this.puedeAceptarRechazarPropio) return;
+    this.aceptarCita.emit(cita);
+  }
+
+  onRechazarCita(cita: any): void {
+    if (!this.puedeAceptarRechazarPropio) return;
+    this.rechazarCita.emit(cita);
+  }
+
   @Input() especialidades: string[] = [];
   @Input() profesionalesFiltrados: any[] = [];
 
@@ -43,10 +68,50 @@ export class AdminHorarioComponent {
   @Input() diasCerrados: any[] = [];
 
   @Input() bloqueEstadoFn: (fecha: string, hora: string) => string =
-    () => 'disponible';
+    () => 'sin-datos';
 
   @Input() bloqueInfoFn: (fecha: string, hora: string) => string =
     () => '';
+
+  // A.4.7A.1 — la grilla necesita el arreglo completo de citas del
+  // bloque (no un solo resumen en texto) para poder pintar cada una por
+  // separado cuando hay más de una en el mismo slot (p. ej. una cita
+  // normal + una sobrecupo forzada encima).
+  @Input() bloqueCitasFn: (fecha: string, hora: string) => any[] =
+    () => [];
+
+  // A.4.7A v2 — capacidad de sobrecupo real (unificada para ocupado,
+  // colación y fuera de jornada). El dominio de bloqueEstadoFn no
+  // cambia; esto es presentación pura: informa si ADEMÁS existe la
+  // posibilidad de un sobrecupo real sobre ese slot.
+  @Input() bloqueSobrecupoDisponibleFn: (fecha: string, hora: string) => boolean =
+    () => false;
+
+  // A.4.7A v2 — título/aria comprensible por estado. Para colación y
+  // fuera de jornada, el texto ahora depende de si el usuario realmente
+  // tiene capacidad de sobrecupo (bloqueSobrecupoDisponibleFn, unificado
+  // en dashboard-admin.ts): antes siempre decía "clic para forzar
+  // sobrecupo" aunque a la cuenta le faltara agenda.sobrecupo, prometiendo
+  // una acción que clickBloque() ya no permite ejecutar.
+  bloqueTitulo(fecha: string, hora: string): string {
+    const estado = this.bloqueEstadoFn(fecha, hora);
+    if (estado === 'sin-datos') return 'Disponibilidad aún no disponible';
+    if (estado === 'cerrado-centro') return 'El centro no atiende este día';
+    if (estado === 'fuera-horario') {
+      return this.bloqueSobrecupoDisponibleFn(fecha, hora)
+        ? 'Fuera del horario habitual — clic para solicitar sobrecupo'
+        : 'Fuera del horario habitual del profesional';
+    }
+    if (estado === 'colacion') {
+      return this.bloqueSobrecupoDisponibleFn(fecha, hora)
+        ? 'Hora de colación — clic para solicitar sobrecupo'
+        : 'Hora de colación del profesional';
+    }
+    if (estado === 'ocupado' && this.bloqueSobrecupoDisponibleFn(fecha, hora)) {
+      return 'Horario ocupado — clic para solicitar sobrecupo';
+    }
+    return '';
+  }
 
   @Input() formatearFechaFn: (fecha: string) => string =
     fecha => fecha;

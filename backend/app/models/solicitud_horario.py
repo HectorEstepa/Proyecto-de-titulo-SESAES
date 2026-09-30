@@ -11,9 +11,9 @@ class SolicitudHorario(Base):
     profesional_id = Column(Integer, ForeignKey("profesional.id"), nullable=False)
     tipo = Column(String, nullable=False)          # "colacion" | "jornada" | "bloques"
     # Para tipo "colacion"/"jornada" (legado): un único rango horario.
-    # Para tipo "bloques": estos dos quedan vacíos y se usa hora_inicio del
-    # primer bloque solo como referencia de listado; el detalle real vive en
-    # bloques_json.
+    # Para tipo "bloques": estos dos quedan igual (se guarda el rango del
+    # primer bloque solo como referencia de listado); el detalle real vive
+    # en bloques_json.
     hora_inicio = Column(String, nullable=False)
     hora_fin = Column(String, nullable=False)
     # Para tipo "bloques": JSON con la lista completa de bloques solicitados,

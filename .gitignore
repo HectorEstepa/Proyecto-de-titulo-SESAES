@@ -1,12 +1,24 @@
-inicio de sesion/
-
 # Python / backend
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
 venv/
+.venv/
+
+# Environment
 .env
 
-# Angular / frontend
+# Angular / Node
 node_modules/
 .angular/
 dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

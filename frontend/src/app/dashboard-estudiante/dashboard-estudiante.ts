@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewEncapsulation, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -11,23 +11,23 @@ import { PhotoViewerComponent } from '../shared/photo-viewer/photo-viewer';
 import { obtenerFeriado } from '../shared/feriados-chile';
 import { obtenerDiasInternacionales } from '../shared/dias-internacionales';
 import { ToastService } from '../shared/toast/toast.service';
+import { EstudianteHistorialComponent } from './historial/estudiante-historial';
+import { EstudianteCitasProximasComponent } from './citas-proximas/estudiante-citas-proximas';
+import { evaluarPassword, type PasswordChecklist } from '../shared/password-validation';
 import { coincideBusqueda } from '../shared/text-normalization';
-import { evaluarPassword, ChecklistPassword } from '../shared/password-validation';
 const API = environment.apiUrl;
 
 @Component({
   selector: 'app-dashboard-estudiante',
   standalone: true,
-  imports: [CommonModule, FormsModule, PhotoCropperComponent, PhotoViewerComponent],
+  imports: [CommonModule, FormsModule, PhotoCropperComponent, PhotoViewerComponent, EstudianteHistorialComponent, EstudianteCitasProximasComponent],
   templateUrl: './dashboard-estudiante.html',
-  styleUrl: './dashboard-estudiante.css',
-  encapsulation: ViewEncapsulation.None
+  styleUrl: './dashboard-estudiante.css'
 })
 export class DashboardEstudianteComponent implements OnInit {
-
   seccionActiva  = 'inicio';
   sidebarMovilAbierto = false;
-  toggleSidebarMovil(): void {  
+  toggleSidebarMovil(): void {
   this.sidebarMovilAbierto = !this.sidebarMovilAbierto;
 }
   pasoAgendar    = 1;
@@ -35,9 +35,6 @@ export class DashboardEstudianteComponent implements OnInit {
   filtroArea     = '';
   horaSeleccionada   = '';
   observaciones      = '';
-  filtroProfesional  = '';
-  filtroEspecialidad = '';
-  filtroFecha        = '';
   profesionalSeleccionado: any = null;
   cargando       = false;
 
@@ -73,7 +70,6 @@ export class DashboardEstudianteComponent implements OnInit {
     return map[this.citasTab] ?? 'Mis Citas';
   }
   const map: Record<string, string> = {
-    documentos:    'Mis Documentos',
     configuracion: 'Mi Perfil',
     ayuda:         'Ayuda'
   };
@@ -91,8 +87,7 @@ get subtituloSeccionEst(): string {
   }
   const map: Record<string, string> = {
     inicio:        'Gestiona tus atenciones en SESAES.',
-    documentos:    'Certificados, indicaciones y documentos compartidos contigo.',
-    configuracion: 'Gestiona tu información personal y preferencias del portal.',
+    configuracion: 'Gestiona tu información personal y seguridad de tu cuenta.',
     ayuda:         'Mapa de SESAES, preguntas frecuentes y contacto.'
   };
   return map[this.seccionActiva] ?? '';
@@ -120,8 +115,6 @@ get subtituloSeccionEst(): string {
     this.cargarInfoCentro();
     this.cargarCuestionariosPendientes();
     this.cargarDiasCerrados();
-    this.cargarProximasCitas();
-    this.cargarHistorial();
 
     // Cuenta creada con contraseña temporal (ej. carga masiva) — se le
     // pide cambiarla o mantenerla antes de dejarlo usar el resto del sistema.
@@ -167,78 +160,17 @@ get subtituloSeccionEst(): string {
   }
 
   cambiarPasswordPrimerAcceso(): void {
-    const nueva = this.nuevaPasswordPrimerAcceso.trim();
-    if (nueva.length < 6) {
-      this.errorPrimerAcceso = 'La contraseña debe tener al menos 6 caracteres.';
+    const nueva = this.nuevaPasswordPrimerAcceso;
+    if (!evaluarPassword(nueva).valida) {
+      this.errorPrimerAcceso =
+        'La nueva contraseña no cumple todos los requisitos de seguridad.';
       return;
     }
-    if (nueva !== this.confirmarPasswordPrimerAcceso.trim()) {
+    if (nueva !== this.confirmarPasswordPrimerAcceso) {
       this.errorPrimerAcceso = 'Las contraseñas no coinciden.';
       return;
     }
     this.resolverPrimerAcceso(nueva);
-  }
-
-  // ══════════════════════════════════════
-  // CAMBIAR CONTRASEÑA (autoservicio, desde Perfil/Seguridad)
-  // ══════════════════════════════════════
-  // Distinto del flujo de primer-acceso de arriba: este es el que el
-  // estudiante usa normalmente para cambiar su clave cuando quiera, con
-  // el mismo patrón de seguridad que adopta Profesional (checklist en
-  // vivo + validación real en backend). Ver security.errores_password.
-  passwordCuentaEnEdicion = false;
-  passwordCuenta = { actual: '', nueva: '', confirmar: '' };
-  mostrarPasswordCuentaActual = false;
-  mostrarPasswordCuentaNueva = false;
-  mostrarPasswordCuentaConf = false;
-  errorPasswordCuenta = '';
-  guardandoPasswordCuenta = false;
-
-  get checklistPasswordCuenta(): ChecklistPassword {
-    return evaluarPassword(this.passwordCuenta.nueva);
-  }
-
-  get passwordCuentaListaParaGuardar(): boolean {
-    return !!this.passwordCuenta.actual
-      && this.checklistPasswordCuenta.valida
-      && this.passwordCuenta.nueva === this.passwordCuenta.confirmar;
-  }
-
-  habilitarEdicionPasswordCuenta(): void {
-    this.passwordCuentaEnEdicion = true;
-    this.errorPasswordCuenta = '';
-  }
-
-  cancelarEdicionPasswordCuenta(): void {
-    this.passwordCuentaEnEdicion = false;
-    this.passwordCuenta = { actual: '', nueva: '', confirmar: '' };
-    this.errorPasswordCuenta = '';
-  }
-
-  guardarPasswordCuenta(): void {
-    if (!this.passwordCuentaListaParaGuardar || this.guardandoPasswordCuenta) return;
-    if (this.passwordCuenta.nueva !== this.passwordCuenta.confirmar) {
-      this.errorPasswordCuenta = 'Las contraseñas no coinciden.';
-      return;
-    }
-    this.guardandoPasswordCuenta = true;
-    this.http.patch(`${API}/estudiante/${this.estudianteId}/cambiar-password`, {
-      contrasena_actual: this.passwordCuenta.actual,
-      contrasena_nueva: this.passwordCuenta.nueva,
-    }).subscribe({
-      next: () => {
-        this.guardandoPasswordCuenta = false;
-        this.cancelarEdicionPasswordCuenta();
-        this.mensajeExito = 'Contraseña actualizada correctamente.';
-        this.cdr.detectChanges();
-        setTimeout(() => { this.mensajeExito = ''; this.cdr.detectChanges(); }, 3000);
-      },
-      error: (err) => {
-        this.guardandoPasswordCuenta = false;
-        this.errorPasswordCuenta = err?.error?.detail || 'No se pudo cambiar la contraseña.';
-        this.cdr.detectChanges();
-      }
-    });
   }
 
   // ══════════════════════════════════════
@@ -320,10 +252,10 @@ get subtituloSeccionEst(): string {
 
   infoCentro: any = {
     nombre_centro:    'SESAES',
-    direccion:        'José Pedro Alessandri 1200, Ñuñoa',
+    direccion:        '',
     telefono:         '',
     correo_contacto:  '',
-    horario_atencion: 'Lunes a Viernes 08:00–18:00'
+    horario_atencion: ''
   };
 
   cargarInfoCentro(): void {
@@ -455,12 +387,10 @@ get subtituloSeccionEst(): string {
   cargarProfesionales(): void {
     this.http.get<any[]>(`${API}/profesionales`).subscribe({
       next: (data) => {
-        if (data?.length) {
-          this.profesionales = data.map(p => ({
-            ...p,
-            iniciales: p.iniciales ?? this.calcularIniciales(p.nombre)
-          }));
-        }
+        this.profesionales = (data ?? []).map(p => ({
+          ...p,
+          iniciales: p.iniciales ?? this.calcularIniciales(p.nombre)
+        }));
         this.cdr.detectChanges();
       },
       error: () => {}
@@ -517,10 +447,10 @@ get subtituloSeccionEst(): string {
 
   // Filtrado + paginación de profesionales
   get profesionalesFiltradosTotal(): any[] {
-    return this.profesionales.filter(p => {
-      const coincideTexto = coincideBusqueda(p.nombre, this.busqueda) || coincideBusqueda(p.especialidad, this.busqueda);
-      return coincideTexto && (this.filtroArea === '' || p.especialidad === this.filtroArea);
-    });
+    return this.profesionales.filter(p =>
+      coincideBusqueda(this.busqueda, p.nombre, p.especialidad)
+      && (this.filtroArea === '' || p.especialidad === this.filtroArea)
+    );
   }
 
   profesionalesFiltrados(): any[] {
@@ -588,47 +518,30 @@ get subtituloSeccionEst(): string {
     const ultimoDia = new Date(this.anioVisible, this.mesVisible + 1, 0);
     const hoyStr    = this.hoyStr();
     const offset    = (primerDia.getDay() + 6) % 7;
-    // Ventana real de agendamiento: hoy + 7 días (igual al límite que ya
-    // aplica el backend en GET /disponibilidad — ver reglas_horario.py /
-    // horarios.py). Antes el calendario dejaba elegir cualquier día del
-    // mes, y días fuera de esta ventana (ej. 8+ días adelante) SIEMPRE
-    // devolvían "sin horas disponibles" sin importar el horario del
-    // profesional, porque el backend los rechaza de entrada.
-    const hoyDate = new Date();
-    hoyDate.setHours(0, 0, 0, 0);
-    const ventanaMaximaDate = new Date(hoyDate);
-    ventanaMaximaDate.setDate(hoyDate.getDate() + 7);
-    const ventanaMaximaStr = this.toDateStrLocal(ventanaMaximaDate);
-    // Días de semana (0=Lunes...4=Viernes) en que el profesional seleccionado
-    // SÍ atiende. null = sin restricción conocida (no se deshabilita nada extra).
-    const diasDisponibles: number[] | null = this.profesionalSeleccionado?.dias_disponibles ?? null;
     const celdas: any[] = [];
     for (let i = 0; i < offset; i++) celdas.push(null);
     for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
-      const fecha       = new Date(this.anioVisible, this.mesVisible, dia);
-      const fechaStr    = `${this.anioVisible}-${String(this.mesVisible+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-      const jsDay       = fecha.getDay();             // 0=Dom ... 6=Sáb
-      const diaSemanaBk = (jsDay + 6) % 7;             // 0=Lun ... 6=Dom (convención backend)
-      const esFinde     = jsDay === 0 || jsDay === 6;
-      const esPasado    = fechaStr < hoyStr;
-      const fueraDeVentana = fechaStr > ventanaMaximaStr;
+      const fecha     = new Date(this.anioVisible, this.mesVisible, dia);
+      const fechaStr  = `${this.anioVisible}-${String(this.mesVisible+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+      const diaSemana = fecha.getDay();
+      const esFinde   = diaSemana === 0 || diaSemana === 6;
+      const esPasado  = fechaStr < hoyStr;
       const diaCerradoInfo = this.diasCerrados.find(d => d.fecha === fechaStr);
-      const profNoAtiendeEseDia = !esFinde && !!diasDisponibles && !diasDisponibles.includes(diaSemanaBk);
+      // Días que el profesional no atiende habitualmente (dias_disponibles,
+      // 0=Lunes...4=Viernes — igual que app.reglas_horario en el backend).
+      // null significa "profesional sin horario configurado todavía": no se
+      // restringe nada para no bloquear de más algo que no se ha cargado.
+      const diasDisp = this.profesionalSeleccionado?.dias_disponibles;
+      const diaSemanaBackend = (diaSemana + 6) % 7; // JS: 0=Dom...6=Sáb → 0=Lun...6=Dom
+      const noAtiendeEsteDia = !esFinde && Array.isArray(diasDisp) && !diasDisp.includes(diaSemanaBackend);
       celdas.push({
         num: dia, fecha: fechaStr, esFinde, esPasado, esHoy: fechaStr === hoyStr,
         esCerrado: !!diaCerradoInfo,
-        motivoCerrado: diaCerradoInfo?.motivo || '',
-        profNoAtiendeEseDia,
-        fueraDeVentana,
-        deshabilitado: esFinde || esPasado || !!diaCerradoInfo || profNoAtiendeEseDia || fueraDeVentana
+        motivoCerrado: diaCerradoInfo?.motivo || (noAtiendeEsteDia ? 'El profesional no atiende este día' : ''),
+        deshabilitado: esFinde || esPasado || !!diaCerradoInfo || noAtiendeEsteDia
       });
     }
     this.diasMes = celdas;
-  }
-
-  /** Igual formato que toDateStr/hoyStr pero recibe un Date ya construido (evita duplicar el formateo). */
-  private toDateStrLocal(d: Date): string {
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
 
   diasCerrados: any[] = [];
@@ -756,41 +669,11 @@ get subtituloSeccionEst(): string {
 
   proximasCitas: any[] = [];
 
-  private diffHorasParaCancelar(cita: any): number | null {
-    if (!cita.fecha_raw || !cita.hora) return null;
-    const horaMatch = cita.hora.match(/(\d{1,2}):(\d{2})/);
-    if (!horaMatch) return null;
-    const fechaHora = new Date(`${cita.fecha_raw}T${horaMatch[1].padStart(2,'0')}:${horaMatch[2]}:00`);
-    return (fechaHora.getTime() - Date.now()) / (1000 * 60 * 60);
-  }
-
-  puedeCancelar(cita: any): boolean {
-    const diff = this.diffHorasParaCancelar(cita);
-    if (diff === null) return true;
-    // Igual que el backend: la restricción de "mínimo 5 horas antes" solo
-    // aplica si la cita todavía está por venir. Si ya pasó (diff negativo)
-    // y sigue "pendiente" porque el profesional no la cerró, el estudiante
-    // debe poder cancelarla o reagendar sin quedar atrapado.
-    return diff < 0 || diff > 5;
-  }
-
-  // true si la cita ya pasó su fecha/hora pero el profesional todavía no
-  // la marcó como completada/inasistencia/cancelada — para mostrar un
-  // aviso claro en vez de dejarla ahí como si nada, dando a entender que
-  // "no asistió" cuando en realidad solo falta que el profesional la cierre.
-  citaPendienteVencida(cita: any): boolean {
-    const diff = this.diffHorasParaCancelar(cita);
-    return diff !== null && diff <= 0;
-  }
-
-  avisoCancelacion(cita: any): string {
-    const diff = this.diffHorasParaCancelar(cita);
-    if (diff === null || diff <= 0) return '';
-    const horas = Math.floor(diff); const minutos = Math.round((diff - horas) * 60);
-    if (horas === 0) return `Faltan ${minutos} min, no se puede cancelar`;
-    if (minutos === 0) return `Faltan ${horas}h, no se puede cancelar`;
-    return `Faltan ${horas}h ${minutos}min, no se puede cancelar`;
-  }
+  // NOTA (Fase 5B): puedeCancelar / citaPendienteVencida / avisoCancelacion /
+  // diffHorasParaCancelar se relocalizaron a EstudianteCitasProximasComponent
+  // (frontend/src/app/dashboard-estudiante/citas-proximas/). Son lógica
+  // puramente visual, sin HTTP, exclusiva de la pestaña "Próximas" — el shell
+  // sigue siendo dueño de proximasCitas y de todo lo que implica HTTP/modal.
 
   // ══════════════════════════════════════
   // MODAL: CANCELAR CITA (con opción de reagendar)
@@ -866,7 +749,27 @@ get subtituloSeccionEst(): string {
     }
   }
 
-  descargarPdf(citaId: number): void { window.open(`${API}/citas/${citaId}/pdf`, '_blank'); }
+  descargarPdf(citaId: number): void {
+    this.http.get(`${API}/citas/${citaId}/pdf`, {
+      responseType: 'blob'
+    }).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const enlace = document.createElement('a');
+
+        enlace.href = url;
+        enlace.target = '_blank';
+        enlace.rel = 'noopener';
+        enlace.click();
+
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      },
+      error: () => {
+        this.mensajeError = 'No se pudo descargar el documento.';
+        setTimeout(() => this.mensajeError = '', 3000);
+      }
+    });
+  }
 
   // ══════════════════════════════════════
   // HISTORIAL
@@ -906,62 +809,10 @@ get subtituloSeccionEst(): string {
     this.cdr.detectChanges();
   }
 
-  historialResumen() {
-    return this.historialCompleto.slice(0, 3);
-  }
-
-  historialFiltrado() {
-    this.historialMostrado = this.historialCompleto.filter(h => {
-      const matchProf  = coincideBusqueda(h.profesional, this.filtroProfesional);
-      const matchEsp   = !this.filtroEspecialidad || h.especialidad === this.filtroEspecialidad;
-      const matchFecha = !this.filtroFecha         || h.fechaRaw === this.filtroFecha;
-      return matchProf && matchEsp && matchFecha;
-    });
-    this.cdr.detectChanges();
-  }
-
-  limpiarFiltros(): void {
-    this.filtroProfesional = '';
-    this.filtroEspecialidad = '';
-    this.filtroFecha = '';
-    this.historialMostrado = this.historialCompleto;
-    this.cdr.detectChanges();
-  }
 
   get totalCitas()       { return this.historialCompleto.length; }
   get citasCompletadas() { return this.historialCompleto.filter(h => h.estado === 'completada').length; }
   get citasCanceladas()  { return this.historialCompleto.filter(h => h.estado === 'cancelada').length; }
-
-  // "¿Cómo estás hoy?" — cada opción dispara una acción real.
-  animoHoy: 'bien' | 'regular' | 'mal' | 'orientacion' | null = null;
-  registrarAnimo(estado: 'bien' | 'regular' | 'mal' | 'orientacion'): void {
-    this.animoHoy = estado;
-    switch (estado) {
-      case 'bien':
-        this.mensajeExito = '¡Qué bueno! Aquí tienes recursos preventivos para ti 💚';
-        this.irARecursos();
-        break;
-      case 'regular':
-        this.mensajeExito = 'Gracias por contarnos. Aquí tienes recursos y servicios que pueden ayudarte.';
-        this.irARecursos();
-        break;
-      case 'mal':
-        this.navegarA('citas', 'solicitar');
-        this.mensajeExito = 'Vamos a ayudarte a agendar una hora cuanto antes.';
-        break;
-      case 'orientacion':
-        this.navegarA('ayuda');
-        this.tabAyuda = 'contacto';
-        this.mensajeExito = 'Te dejamos el contacto y las preguntas frecuentes de SESAES.';
-        break;
-    }
-  }
-
-  // Bien / Regular se quedan en Inicio y desplazan la vista hasta
-  // "Recursos para ti", en vez de sacar al estudiante de la pantalla.
-  private irARecursos(): void {
-    document.getElementById('recursos-para-ti')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 
   // ══════════════════════════════════════
   // CONFIGURACIÓN
@@ -978,7 +829,7 @@ get subtituloSeccionEst(): string {
   imagenParaRecortar: string | null = null;
   verFotoAmpliada = false;
   temaOscuro           = false;
-  
+
 faqs = [
   { pregunta: '¿Cómo cancelar una cita?', respuesta: 'Ve a "Mis Citas", busca la cita que deseas cancelar y presiona el botón "Cancelar". Puedes cancelar hasta 5 horas antes de la hora agendada.', abierta: false },
   { pregunta: '¿Cómo reprogramar una cita?', respuesta: 'En "Mis Citas", presiona el botón "Reagendar" junto a la cita. Esto te llevará al flujo de agendamiento con el mismo profesional para elegir una nueva fecha y hora.', abierta: false },
@@ -994,7 +845,7 @@ toggleFaq(faq: any): void {
   // ══════════════════════════════════════
   // AYUDA (Mapa de SESAES + Preguntas Frecuentes)
   // ══════════════════════════════════════
-  tabAyuda: 'faq' | 'mapa' | 'contacto' | 'soporte' = 'faq';
+  tabAyuda: 'faq' | 'mapa' | 'contacto' = 'faq';
   get perfilModificado(): boolean {
     return this.celularEditable !== this.celularOriginal
         || this.correoSecundarioEditable !== this.correoSecundarioOriginal
@@ -1004,6 +855,137 @@ toggleFaq(faq: any): void {
   get correoSecundarioValido(): boolean {
     if (!this.correoSecundarioEditable) return true; // opcional, vacío es válido
     return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(this.correoSecundarioEditable);
+  }
+
+  // ══════════════════════════════════════
+  // CAMBIO DE CONTRASEÑA
+  // ══════════════════════════════════════
+  modalCambiarPasswordAbierto = false;
+  passwordActual = '';
+  passwordNueva = '';
+  passwordConfirmacion = '';
+  errorCambioPassword = '';
+  guardandoCambioPassword = false;
+  modalConfirmarCambioPasswordAbierto = false;
+  mostrarPasswordActual = false;
+  mostrarPasswordNueva = false;
+  mostrarPasswordConfirmacion = false;
+
+  get passwordChecklist(): PasswordChecklist {
+    return evaluarPassword(this.passwordNueva);
+  }
+
+  get passwordMinimo8(): boolean {
+    return this.passwordChecklist.minimo8;
+  }
+
+  get passwordTieneMayuscula(): boolean {
+    return this.passwordChecklist.mayuscula;
+  }
+
+  get passwordTieneMinuscula(): boolean {
+    return this.passwordChecklist.minuscula;
+  }
+
+  get passwordTieneNumero(): boolean {
+    return this.passwordChecklist.numero;
+  }
+
+  get passwordTieneEspecial(): boolean {
+    return this.passwordChecklist.especial;
+  }
+
+  get passwordSinEspacios(): boolean {
+    return this.passwordChecklist.sinEspacios;
+  }
+
+  get passwordCumpleReglas(): boolean {
+    return this.passwordChecklist.valida;
+  }
+
+  abrirModalCambiarPassword(): void {
+    this.passwordActual = '';
+    this.passwordNueva = '';
+    this.passwordConfirmacion = '';
+    this.errorCambioPassword = '';
+    this.mostrarPasswordActual = false;
+    this.mostrarPasswordNueva = false;
+    this.mostrarPasswordConfirmacion = false;
+    this.modalConfirmarCambioPasswordAbierto = false;
+    this.modalCambiarPasswordAbierto = true;
+    this.cdr.detectChanges();
+  }
+
+  cerrarModalCambiarPassword(): void {
+    if (this.guardandoCambioPassword) return;
+    this.modalCambiarPasswordAbierto = false;
+    this.passwordActual = '';
+    this.passwordNueva = '';
+    this.passwordConfirmacion = '';
+    this.errorCambioPassword = '';
+    this.mostrarPasswordActual = false;
+    this.mostrarPasswordNueva = false;
+    this.mostrarPasswordConfirmacion = false;
+    this.modalConfirmarCambioPasswordAbierto = false;
+    this.cdr.detectChanges();
+  }
+
+  guardarCambioPassword(): void {
+    if (this.guardandoCambioPassword) return;
+
+    if (!this.passwordActual) {
+      this.errorCambioPassword = 'Ingresa tu contraseña actual.';
+      return;
+    }
+    if (!this.passwordCumpleReglas) {
+      this.errorCambioPassword =
+        'La nueva contraseña no cumple todos los requisitos de seguridad.';
+      return;
+    }
+    if (this.passwordNueva === this.passwordActual) {
+      this.errorCambioPassword =
+        'La nueva contraseña debe ser diferente a la contraseña actual.';
+      return;
+    }
+    if (this.passwordNueva !== this.passwordConfirmacion) {
+      this.errorCambioPassword = 'Las contraseñas nuevas no coinciden.';
+      return;
+    }
+
+    this.errorCambioPassword = '';
+    this.modalConfirmarCambioPasswordAbierto = true;
+    this.cdr.detectChanges();
+  }
+
+  cancelarConfirmacionCambioPassword(): void {
+    if (this.guardandoCambioPassword) return;
+    this.modalConfirmarCambioPasswordAbierto = false;
+    this.cdr.detectChanges();
+  }
+
+  confirmarCambioPassword(): void {
+    if (this.guardandoCambioPassword) return;
+
+    this.modalConfirmarCambioPasswordAbierto = false;
+    this.guardandoCambioPassword = true;
+
+    this.http.patch(`${API}/estudiante/${this.estudianteId}/cambiar-password`, {
+      contrasena_actual: this.passwordActual,
+      contrasena_nueva: this.passwordNueva
+    }).subscribe({
+      next: () => {
+        this.guardandoCambioPassword = false;
+        this.cerrarModalCambiarPassword();
+        this.mensajeExito = 'Contraseña actualizada correctamente.';
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        this.guardandoCambioPassword = false;
+        this.errorCambioPassword =
+          err?.error?.detail || 'No se pudo cambiar la contraseña.';
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   cargarDatosEstudiante(): void {
@@ -1086,10 +1068,6 @@ toggleFaq(faq: any): void {
     return info;
   }
 
-  // Placeholders de funciones aún sin backend (cambiar contraseña, sesiones, etc.)
-  mostrarProximamente(mensaje: string): void {
-    alert(mensaje);
-  }
 
   toggleTema(oscuro: boolean): void {
     this.temaOscuro = oscuro;
@@ -1137,12 +1115,17 @@ toggleFaq(faq: any): void {
   }
 
   abrirComoLlegar(): void {
-    const destino = encodeURIComponent(this.infoCentro.direccion || 'José Pedro Alessandri 1200, Ñuñoa, Chile');
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destino}`, '_blank');
+    const direccion = (this.infoCentro.direccion || '').trim();
+    if (!direccion) {
+      this.mensajeError = 'La ubicación de SESAES no está configurada actualmente.';
+      return;
+    }
+    const destino = encodeURIComponent(direccion);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destino}`, '_blank', 'noopener,noreferrer');
   }
 
   getMapaUrl(): SafeResourceUrl {
-    const q = encodeURIComponent(this.infoCentro.direccion || 'José Pedro Alessandri 1200, Ñuñoa, Chile');
+    const q = encodeURIComponent((this.infoCentro.direccion || '').trim());
     const url = `https://maps.google.com/maps?q=${q}&t=&z=16&ie=UTF8&iwloc=&output=embed`;
     return this.sanitizer.bypassSecurityTrustResourceUrl(url);
   }

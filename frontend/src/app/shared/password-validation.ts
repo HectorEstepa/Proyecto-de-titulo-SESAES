@@ -1,28 +1,39 @@
-/**
- * Checklist de complejidad de contraseña en vivo, compartido entre
- * Estudiante y Profesional (Documento Maestro §7.4: "adoptar el mismo
- * patrón funcional del Estudiante... checklist... con estilos propios").
- *
- * Es comportamiento puro, sin markup ni colores — cada dashboard renderiza
- * su propio checklist visual a partir de este resultado, con su propio CSS.
- * La misma política se re-valida en el backend (ver security.errores_password
- * en el backend) — esto es solo para feedback en vivo, nunca la única barrera.
- */
-export interface ChecklistPassword {
-  longitud: boolean;   // al menos 8 caracteres
-  mayuscula: boolean;  // al menos una letra mayúscula
-  numero: boolean;     // al menos un número
-  especial: boolean;   // al menos un carácter especial
-  valida: boolean;     // true solo si se cumplen los 4 anteriores
+export interface PasswordChecklist {
+  minimo8: boolean;
+  mayuscula: boolean;
+  minuscula: boolean;
+  numero: boolean;
+  especial: boolean;
+  sinEspacios: boolean;
+  valida: boolean;
 }
 
-const CARACTERES_ESPECIALES = /[!@#$%^&*()_+\-=[\]{}|;:'",.<>/?`~\\]/;
+/**
+ * Réplica de UX de la política de contraseñas SESAES.
+ *
+ * El backend sigue siendo la autoridad y vuelve a validar siempre antes de
+ * persistir. Esta función solo permite feedback inmediato y evita duplicar
+ * expresiones regulares entre dashboards.
+ */
+export function evaluarPassword(value: unknown): PasswordChecklist {
+  const password = String(value ?? '');
 
-export function evaluarPassword(password: string | null | undefined): ChecklistPassword {
-  const p = password || '';
-  const longitud = p.length >= 8;
-  const mayuscula = /[A-ZÁÉÍÓÚÑ]/.test(p);
-  const numero = /[0-9]/.test(p);
-  const especial = CARACTERES_ESPECIALES.test(p);
-  return { longitud, mayuscula, numero, especial, valida: longitud && mayuscula && numero && especial };
+  const minimo8 = Array.from(password).length >= 8;
+  const mayuscula = /\p{Lu}/u.test(password);
+  const minuscula = /\p{Ll}/u.test(password);
+  const numero = /\p{N}/u.test(password);
+  const especial = Array.from(password).some(
+    char => !/[\p{L}\p{N}\s]/u.test(char)
+  );
+  const sinEspacios = !/\s/u.test(password);
+
+  return {
+    minimo8,
+    mayuscula,
+    minuscula,
+    numero,
+    especial,
+    sinEspacios,
+    valida: minimo8 && mayuscula && minuscula && numero && especial && sinEspacios,
+  };
 }
