@@ -40,6 +40,9 @@ ENDPOINTS = [
     ("GET", "/admin/historial", Permission.REPORTES_VER),
     ("GET", "/admin/exportar/cgr", Permission.REPORTES_CGR_EXPORTAR),
     ("GET", "/admin/exportar/alumnos", Permission.REPORTES_CGR_EXPORTAR),
+    # CGR B2: datos JSON de las mismas exportaciones (el .xlsx se arma en el frontend).
+    ("GET", "/admin/exportar/cgr/datos", Permission.REPORTES_CGR_EXPORTAR),
+    ("GET", "/admin/exportar/alumnos/datos", Permission.REPORTES_CGR_EXPORTAR),
     ("GET", "/admin/auditoria", Permission.AUDITORIA_VER),
     ("GET", "/admin/configuracion", Permission.CONFIGURACION_GESTIONAR),
     ("PATCH", "/admin/configuracion", Permission.CONFIGURACION_GESTIONAR),

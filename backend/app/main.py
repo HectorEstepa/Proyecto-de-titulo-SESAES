@@ -11,6 +11,7 @@ from app.routers.citas import router as citas_router
 from app.routers.horarios import router as horarios_router
 from app.routers import estudiante
 from app.routers.admin import router as admin_router
+from app.routers.admin_inicio import router as admin_inicio_router
 from app.routers.notificaciones import router as notificaciones_router
 from app.routers.configuracion_centro import router as configuracion_centro_router
 from app.routers.correos import router as correos_router
@@ -63,6 +64,7 @@ app.include_router(citas_router)
 app.include_router(horarios_router)
 app.include_router(estudiante.router)
 app.include_router(admin_router)
+app.include_router(admin_inicio_router)  # Inicio institucional SUPERADMIN
 app.include_router(notificaciones_router)
 app.include_router(configuracion_centro_router)
 app.include_router(correos_router)

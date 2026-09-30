@@ -1,0 +1,473 @@
+<!-- Estado genérico de un bloque: cargando / vacío / error / sin permiso -->
+<ng-template #estadoTpl let-clave="clave" let-estado="estado" let-vacio="vacio">
+  <div class="sa-estado" [ngSwitch]="estado" [attr.data-estado]="estado" role="status">
+    <ng-container *ngSwitchCase="'cargando'">
+      <span class="sa-spinner" aria-hidden="true"></span>
+      <span>Cargando…</span>
+    </ng-container>
+
+    <ng-container *ngSwitchCase="'vacio'">
+      <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
+      <span>{{ vacio }}</span>
+    </ng-container>
+
+    <ng-container *ngSwitchCase="'sin_permiso'">
+      <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+      <span>No tienes permiso para ver este bloque.</span>
+    </ng-container>
+
+    <ng-container *ngSwitchDefault>
+      <span class="material-symbols-outlined err" aria-hidden="true">error</span>
+      <span>No se pudo cargar esta información.</span>
+      <button type="button" class="sa-reintentar" (click)="reintentar(clave)">Reintentar</button>
+    </ng-container>
+  </div>
+</ng-template>
+
+<!-- Acción de navegación hacia un módulo de detalle (solo si el shell la permite) -->
+<ng-template #accionTpl let-accion="accion">
+  <button
+    *ngIf="puedeIrA(accion.destino)"
+    type="button"
+    class="sa-accion"
+    [attr.data-accion]="accion.clave"
+    (click)="ir(accion.destino)"
+  >
+    {{ accion.etiqueta }}
+    <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+  </button>
+</ng-template>
+
+<div class="sa-inicio" data-testid="superadmin-inicio">
+
+  <!-- ══════════ KPIs ══════════ -->
+  <section class="sa-kpis" aria-label="Indicadores generales" [attr.aria-busy]="resumen.estado === 'cargando'">
+    <ng-container *ngIf="resumen.estado === 'listo'; else kpiSinDatos">
+      <article
+        class="sa-kpi"
+        *ngFor="let k of kpis; trackBy: trackPorClave"
+        [ngClass]="'tono-' + k.tono"
+        [class.no-disponible]="!k.disponible"
+        [attr.data-kpi]="k.clave"
+        [title]="k.definicion"
+      >
+        <span class="sa-kpi-icono" aria-hidden="true">
+          <span class="material-symbols-outlined">{{ k.icono }}</span>
+        </span>
+        <div class="sa-kpi-cuerpo">
+          <span class="sa-kpi-valor" data-testid="kpi-valor">{{ k.valor }}</span>
+          <span class="sa-kpi-etiqueta">{{ k.etiqueta }}</span>
+          <span class="sa-kpi-nota">{{ k.nota }}</span>
+        </div>
+      </article>
+    </ng-container>
+
+    <ng-template #kpiSinDatos>
+      <ng-container *ngIf="resumen.estado === 'cargando'; else kpiFallo">
+        <article class="sa-kpi sa-esqueleto" *ngFor="let i of [1, 2, 3, 4, 5, 6]" aria-hidden="true">
+          <span class="sa-skel sa-skel-icono"></span>
+          <div class="sa-kpi-cuerpo">
+            <span class="sa-skel sa-skel-valor"></span>
+            <span class="sa-skel sa-skel-linea"></span>
+          </div>
+        </article>
+      </ng-container>
+      <ng-template #kpiFallo>
+        <div class="sa-kpis-fallo">
+          <ng-container
+            *ngTemplateOutlet="estadoTpl; context: { clave: 'resumen', estado: resumen.estado, vacio: '' }"
+          ></ng-container>
+        </div>
+      </ng-template>
+    </ng-template>
+  </section>
+
+  <div class="sa-layout">
+    <!-- ══════════ Columna principal ══════════ -->
+    <div class="sa-principal">
+
+      <!-- Analítica -->
+      <section class="sa-fila sa-fila-analitica" aria-label="Análisis de citas">
+
+        <!-- Citas por mes -->
+        <article class="sa-card sa-card-linea" data-testid="card-citas-mes">
+          <header class="sa-card-cabecera">
+            <h3 class="sa-card-titulo">
+              <span class="material-symbols-outlined" aria-hidden="true">show_chart</span>
+              Citas por mes
+            </h3>
+            <span class="sa-card-sub">Últimos 12 meses</span>
+            <ng-container *ngTemplateOutlet="accionTpl; context: { accion: acciones.citasMes }"></ng-container>
+          </header>
+          <div class="sa-card-cuerpo" [ngSwitch]="estadoSerieMensual">
+            <ng-container *ngSwitchCase="'listo'">
+              <svg
+                *ngIf="graficoMes as g"
+                class="sa-linea"
+                [attr.viewBox]="'0 0 ' + g.ancho + ' ' + g.alto"
+                role="img"
+                [attr.aria-label]="'Citas por mes: ' + g.total + ' citas en los últimos 12 meses'"
+              >
+                <g class="sa-grilla">
+                  <ng-container *ngFor="let t of g.ejeY">
+                    <line x1="34" [attr.x2]="g.ancho - 14" [attr.y1]="t.y" [attr.y2]="t.y"></line>
+                    <text x="28" [attr.y]="t.y + 3.5" text-anchor="end">{{ t.valor }}</text>
+                  </ng-container>
+                </g>
+                <path class="sa-area" [attr.d]="g.area"></path>
+                <path class="sa-trazo" [attr.d]="g.path"></path>
+                <circle
+                  *ngFor="let p of g.puntos"
+                  class="sa-punto"
+                  r="3.5"
+                  [attr.cx]="p.x"
+                  [attr.cy]="p.y"
+                ><title>{{ p.titulo }}</title></circle>
+                <g class="sa-ejex">
+                  <text
+                    *ngFor="let e of g.ejeX"
+                    [attr.x]="e.x"
+                    [attr.y]="g.alto - 8"
+                    text-anchor="middle"
+                  >{{ e.etiqueta }}</text>
+                </g>
+              </svg>
+              <p class="sa-pie" *ngIf="graficoMes">
+                {{ graficoMes.total }} citas programadas y atendidas en el período.
+              </p>
+            </ng-container>
+            <ng-container *ngSwitchDefault>
+              <ng-container
+                *ngTemplateOutlet="estadoTpl; context: {
+                  clave: 'resumen',
+                  estado: estadoSerieMensual,
+                  vacio: 'Aún no hay citas registradas en los últimos 12 meses.'
+                }"
+              ></ng-container>
+            </ng-container>
+          </div>
+        </article>
+
+        <!-- Citas por especialidad -->
+        <article class="sa-card" data-testid="card-especialidad">
+          <header class="sa-card-cabecera">
+            <h3 class="sa-card-titulo">
+              <span class="material-symbols-outlined" aria-hidden="true">donut_large</span>
+              Citas por especialidad
+            </h3>
+            <span class="sa-card-sub">{{ periodoEspecialidades }}</span>
+            <ng-container *ngTemplateOutlet="accionTpl; context: { accion: acciones.especialidad }"></ng-container>
+          </header>
+          <div class="sa-card-cuerpo" [ngSwitch]="especialidades.estado">
+            <ng-container *ngSwitchCase="'listo'">
+              <div class="sa-donut-wrap" *ngIf="graficoDonut as d">
+                <svg
+                  class="sa-donut"
+                  viewBox="0 0 200 200"
+                  role="img"
+                  [attr.aria-label]="'Citas por especialidad: ' + d.total + ' citas'"
+                >
+                  <circle class="sa-donut-base" cx="100" cy="100" [attr.r]="d.radio" fill="none" stroke-width="26"></circle>
+                  <circle
+                    *ngFor="let s of d.segmentos"
+                    cx="100"
+                    cy="100"
+                    fill="none"
+                    stroke-width="26"
+                    transform="rotate(-90 100 100)"
+                    [attr.r]="d.radio"
+                    [attr.stroke]="s.color"
+                    [attr.stroke-dasharray]="s.dash"
+                    [attr.stroke-dashoffset]="s.offset"
+                  ><title>{{ s.etiqueta }}: {{ s.cantidad }} ({{ s.porcentaje }}%)</title></circle>
+                  <text x="100" y="99" text-anchor="middle" class="sa-donut-total">{{ d.total }}</text>
+                  <text x="100" y="118" text-anchor="middle" class="sa-donut-sub">citas</text>
+                </svg>
+                <ul class="sa-leyenda">
+                  <li *ngFor="let s of d.segmentos">
+                    <span class="sa-swatch" [style.background]="s.color"></span>
+                    <span class="sa-leyenda-nombre" [title]="s.etiqueta">{{ s.etiqueta }}</span>
+                    <span class="sa-leyenda-valor">{{ s.cantidad }} · {{ s.porcentaje }}%</span>
+                  </li>
+                </ul>
+              </div>
+            </ng-container>
+            <ng-container *ngSwitchDefault>
+              <ng-container
+                *ngTemplateOutlet="estadoTpl; context: {
+                  clave: 'especialidades',
+                  estado: especialidades.estado,
+                  vacio: 'No hay citas este mes para agrupar por especialidad.'
+                }"
+              ></ng-container>
+            </ng-container>
+          </div>
+        </article>
+
+        <!-- Profesionales más solicitados -->
+        <article class="sa-card" data-testid="card-top-profesionales">
+          <header class="sa-card-cabecera">
+            <h3 class="sa-card-titulo">
+              <span class="material-symbols-outlined" aria-hidden="true">leaderboard</span>
+              Profesionales más solicitados
+            </h3>
+          </header>
+          <div class="sa-card-cuerpo" [ngSwitch]="estadoTopProfesionales">
+            <ng-container *ngSwitchCase="'listo'">
+              <ol class="sa-barras">
+                <li *ngFor="let p of topProfesionales; let i = index" data-testid="top-profesional">
+                  <div class="sa-barra-fila">
+                    <span class="sa-barra-rank">{{ i + 1 }}</span>
+                    <div class="sa-barra-info">
+                      <span class="sa-barra-nombre" [title]="nombreProfesional(p)">{{ nombreProfesional(p) }}</span>
+                      <span class="sa-barra-esp">{{ p.especialidad || 'Sin especialidad' }}</span>
+                    </div>
+                    <span class="sa-barra-valor">{{ p.cantidad }}</span>
+                  </div>
+                  <div class="sa-barra-pista">
+                    <div class="sa-barra-relleno" [style.width.%]="(p.cantidad / maximoTop) * 100"></div>
+                  </div>
+                </li>
+              </ol>
+              <p class="sa-pie" data-testid="top-periodo">
+                {{ periodoTop }}. Cuenta citas pendientes y completadas.
+              </p>
+            </ng-container>
+            <ng-container *ngSwitchDefault>
+              <ng-container
+                *ngTemplateOutlet="estadoTpl; context: {
+                  clave: 'resumen',
+                  estado: estadoTopProfesionales,
+                  vacio: 'No hay citas en los últimos 90 días.'
+                }"
+              ></ng-container>
+            </ng-container>
+          </div>
+        </article>
+      </section>
+
+      <!-- Gestión -->
+      <section class="sa-fila sa-fila-gestion" aria-label="Gestión">
+
+        <!-- Últimos usuarios registrados -->
+        <article class="sa-card" data-testid="card-ultimos-usuarios">
+          <header class="sa-card-cabecera">
+            <h3 class="sa-card-titulo">
+              <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
+              Últimos usuarios registrados
+            </h3>
+          </header>
+          <div class="sa-card-cuerpo" [ngSwitch]="estadoUltimosUsuarios">
+            <ng-container *ngSwitchCase="'listo'">
+              <ul class="sa-lista">
+                <li class="sa-fila-item" *ngFor="let u of ultimosUsuarios" data-testid="ultimo-usuario">
+                  <span class="sa-avatar" aria-hidden="true">{{ inicial(u.nombre) }}</span>
+                  <div class="sa-item-info">
+                    <span class="sa-item-titulo" [title]="nombreUsuario(u)">{{ nombreUsuario(u) }}</span>
+                    <span class="sa-chip" [ngClass]="'rol-' + u.rol">{{ etiquetaRol(u.rol) }}</span>
+                  </div>
+                  <span
+                    class="sa-item-fecha"
+                    data-testid="usuario-fecha"
+                    [title]="u.fecha_creacion ? '' : 'Cuenta anterior al registro de fechas: no hay dato.'"
+                  >{{ fechaCreacionUsuario(u) }}</span>
+                </li>
+              </ul>
+            </ng-container>
+            <ng-container *ngSwitchDefault>
+              <ng-container
+                *ngTemplateOutlet="estadoTpl; context: {
+                  clave: 'gestion',
+                  estado: estadoUltimosUsuarios,
+                  vacio: 'Aún no hay usuarios registrados.'
+                }"
+              ></ng-container>
+            </ng-container>
+          </div>
+        </article>
+
+        <!-- Solicitudes de horario pendientes -->
+        <article class="sa-card" data-testid="card-solicitudes">
+          <header class="sa-card-cabecera">
+            <h3 class="sa-card-titulo">
+              <span class="material-symbols-outlined" aria-hidden="true">pending_actions</span>
+              Solicitudes de horario pendientes
+            </h3>
+            <ng-container *ngTemplateOutlet="accionTpl; context: { accion: acciones.solicitudes }"></ng-container>
+          </header>
+          <div class="sa-card-cuerpo" [ngSwitch]="estadoSolicitudes">
+            <ng-container *ngSwitchCase="'listo'">
+              <ul class="sa-lista">
+                <li class="sa-fila-item" *ngFor="let s of solicitudes" data-testid="solicitud-pendiente">
+                  <span class="sa-avatar" aria-hidden="true">{{ inicial(s.profesional_nombre) }}</span>
+                  <div class="sa-item-info">
+                    <span class="sa-item-titulo" [title]="s.profesional_nombre">{{ s.profesional_nombre || 'Profesional' }}</span>
+                    <span class="sa-item-sub">
+                      {{ s.especialidad || 'Sin especialidad' }} · {{ etiquetaTipoSolicitud(s.tipo) }}
+                    </span>
+                  </div>
+                  <div class="sa-item-lado">
+                    <span class="sa-badge pendiente">Pendiente</span>
+                    <span class="sa-item-fecha">{{ fechaSolicitud(s) }}</span>
+                  </div>
+                </li>
+              </ul>
+              <p class="sa-pie" *ngIf="solicitudesTotal > solicitudes.length" data-testid="solicitudes-total">
+                Mostrando {{ solicitudes.length }} de {{ solicitudesTotal }} solicitudes.
+              </p>
+            </ng-container>
+            <ng-container *ngSwitchDefault>
+              <ng-container
+                *ngTemplateOutlet="estadoTpl; context: {
+                  clave: 'gestion',
+                  estado: estadoSolicitudes,
+                  vacio: 'No hay solicitudes de horario pendientes.'
+                }"
+              ></ng-container>
+            </ng-container>
+          </div>
+        </article>
+
+        <!-- Administradores activos -->
+        <article class="sa-card" data-testid="card-administradores">
+          <header class="sa-card-cabecera">
+            <h3 class="sa-card-titulo">
+              <span class="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>
+              Administradores activos
+            </h3>
+            <ng-container *ngTemplateOutlet="accionTpl; context: { accion: acciones.administradores }"></ng-container>
+          </header>
+          <div class="sa-card-cuerpo" [ngSwitch]="administradores.estado">
+            <ng-container *ngSwitchCase="'listo'">
+              <ul class="sa-lista">
+                <li class="sa-fila-item" *ngFor="let a of adminsVisibles" data-testid="administrador-activo">
+                  <span class="sa-avatar" aria-hidden="true">{{ inicial(nombreAdministrador(a)) }}</span>
+                  <div class="sa-item-info">
+                    <span class="sa-item-titulo" [title]="nombreAdministrador(a)">{{ nombreAdministrador(a) }}</span>
+                    <span class="sa-item-sub" [title]="a.correo">{{ a.correo }}</span>
+                  </div>
+                  <span class="sa-chip" [ngClass]="'rol-' + a.rol">{{ etiquetaRol(a.rol) }}</span>
+                </li>
+              </ul>
+              <p class="sa-pie" *ngIf="adminsOcultos > 0" data-testid="admins-ocultos">
+                y {{ adminsOcultos }} más.
+              </p>
+              <p class="sa-pie">El último acceso aún no se registra: el inicio de sesión no queda auditado.</p>
+            </ng-container>
+            <ng-container *ngSwitchDefault>
+              <ng-container
+                *ngTemplateOutlet="estadoTpl; context: {
+                  clave: 'administradores',
+                  estado: administradores.estado,
+                  vacio: 'No hay administradores activos.'
+                }"
+              ></ng-container>
+            </ng-container>
+          </div>
+        </article>
+      </section>
+
+      <!-- Auditoría -->
+      <section class="sa-card sa-card-auditoria" data-testid="card-auditoria" aria-label="Últimas acciones en el sistema">
+        <header class="sa-card-cabecera">
+          <h3 class="sa-card-titulo">
+            <span class="material-symbols-outlined" aria-hidden="true">history</span>
+            Últimas acciones en el sistema
+          </h3>
+          <ng-container *ngTemplateOutlet="accionTpl; context: { accion: acciones.auditoria }"></ng-container>
+        </header>
+        <div class="sa-card-cuerpo" [ngSwitch]="auditoria.estado">
+          <ng-container *ngSwitchCase="'listo'">
+            <div class="sa-tabla-wrap">
+              <table class="sa-tabla">
+                <thead>
+                  <tr>
+                    <th scope="col">Usuario</th>
+                    <th scope="col">Acción</th>
+                    <th scope="col">Módulo</th>
+                    <th scope="col">Detalles</th>
+                    <th scope="col">Fecha y hora</th>
+                    <th scope="col">Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let e of eventosTabla" data-testid="evento-auditoria">
+                    <td class="col-usuario">{{ actorEvento(e) }}</td>
+                    <td>{{ e.accion }}</td>
+                    <td>{{ etiquetaModulo(e.entidad) }}</td>
+                    <td class="col-detalle" [title]="e.detalle || ''">{{ truncar(e.detalle, 80) || '—' }}</td>
+                    <td class="col-fecha">{{ formatearFechaHora(e.fecha) }}</td>
+                    <td>
+                      <span class="sa-badge" [ngClass]="claseResultado(e.resultado)">{{ etiquetaResultado(e.resultado) }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </ng-container>
+          <ng-container *ngSwitchDefault>
+            <ng-container
+              *ngTemplateOutlet="estadoTpl; context: {
+                clave: 'auditoria',
+                estado: auditoria.estado,
+                vacio: 'Aún no hay acciones registradas en la auditoría.'
+              }"
+            ></ng-container>
+          </ng-container>
+        </div>
+      </section>
+    </div>
+
+    <!-- ══════════ Panel derecho ══════════ -->
+    <aside class="sa-lateral" aria-label="Panel lateral">
+      <article class="sa-card" data-testid="card-calendario">
+        <app-superadmin-inicio-calendario></app-superadmin-inicio-calendario>
+      </article>
+
+      <article class="sa-card" data-testid="card-actividad">
+        <header class="sa-card-cabecera">
+          <h3 class="sa-card-titulo">
+            <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+            Actividad reciente
+          </h3>
+          <ng-container *ngTemplateOutlet="accionTpl; context: { accion: acciones.actividad }"></ng-container>
+        </header>
+        <div class="sa-card-cuerpo" [ngSwitch]="auditoria.estado">
+          <ng-container *ngSwitchCase="'listo'">
+            <ul class="sa-actividad">
+              <li *ngFor="let e of eventosActividad" data-testid="actividad-item">
+                <span class="sa-act-icono" [ngClass]="claseResultado(e.resultado)" aria-hidden="true">
+                  <span class="material-symbols-outlined">{{ iconoResultado(e.resultado) }}</span>
+                </span>
+                <div class="sa-act-texto">
+                  <span class="sa-act-titulo">{{ e.accion }}</span>
+                  <span class="sa-act-sub">{{ actorEvento(e) }} · {{ tiempoRelativo(e.fecha) }}</span>
+                </div>
+              </li>
+            </ul>
+          </ng-container>
+          <ng-container *ngSwitchDefault>
+            <ng-container
+              *ngTemplateOutlet="estadoTpl; context: {
+                clave: 'auditoria',
+                estado: auditoria.estado,
+                vacio: 'Sin actividad reciente.'
+              }"
+            ></ng-container>
+          </ng-container>
+        </div>
+      </article>
+
+      <article class="sa-card sa-institucional" data-testid="card-institucional">
+        <img class="sa-inst-logo" src="temporal.jpg" alt="Logo institucional" />
+        <div class="sa-inst-texto">
+          <h3 class="sa-inst-titulo">SESAES</h3>
+          <p class="sa-inst-sub">Salud Estudiantil</p>
+          <p class="sa-inst-desc">
+            Gestión institucional de la atención, los profesionales y la agenda del centro.
+          </p>
+        </div>
+      </article>
+    </aside>
+  </div>
+</div>

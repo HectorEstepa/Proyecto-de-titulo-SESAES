@@ -30,15 +30,39 @@
       <div class="agenda-view-field">
         <span class="agenda-filter-label">Vista temporal</span>
         <div class="agenda-view-switch" role="tablist" aria-label="Vista temporal de agenda">
-          <button type="button" disabled title="Disponible en una siguiente iteración">Día</button>
-          <button type="button" class="active" aria-selected="true">Semana</button>
-          <button type="button" disabled title="Disponible en una siguiente iteración">Mes</button>
+          <button
+            type="button"
+            role="tab"
+            [class.active]="vista === 'dia'"
+            [attr.aria-selected]="vista === 'dia'"
+            (click)="cambiarVista('dia')"
+          >Día</button>
+          <button
+            type="button"
+            role="tab"
+            [class.active]="vista === 'semana'"
+            [attr.aria-selected]="vista === 'semana'"
+            (click)="cambiarVista('semana')"
+          >Semana</button>
+          <button
+            type="button"
+            role="tab"
+            [class.active]="vista === 'mes'"
+            [attr.aria-selected]="vista === 'mes'"
+            (click)="cambiarVista('mes')"
+          >Mes</button>
         </div>
       </div>
     </div>
 
     <div class="agenda-toolbar-actions">
-      <button type="button" class="agenda-btn agenda-btn-secondary" (click)="imprimir.emit()">
+      <button
+        type="button"
+        class="agenda-btn agenda-btn-secondary"
+        [disabled]="!filtroProfesionalId"
+        [attr.title]="filtroProfesionalId ? null : 'Selecciona un profesional para imprimir su agenda'"
+        (click)="imprimir.emit()"
+      >
         <span class="material-symbols-outlined" aria-hidden="true">print</span>
         Imprimir
       </button>
@@ -66,14 +90,14 @@
 
   <div class="agenda-period-bar card">
     <div class="agenda-period-nav">
-      <button type="button" class="agenda-icon-btn" (click)="anterior.emit()" aria-label="Semana anterior">
+      <button type="button" class="agenda-icon-btn" (click)="anterior.emit()" [attr.aria-label]="navegacionAnteriorLabel">
         <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
       </button>
       <div class="agenda-period-label">
         <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
-        <span>{{ semanaLabel }}</span>
+        <span>{{ etiquetaPeriodo }}</span>
       </div>
-      <button type="button" class="agenda-icon-btn" (click)="siguiente.emit()" aria-label="Semana siguiente">
+      <button type="button" class="agenda-icon-btn" (click)="siguiente.emit()" [attr.aria-label]="navegacionSiguienteLabel">
         <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
       </button>
       <button type="button" class="agenda-today-btn" (click)="hoy.emit()">Hoy</button>
@@ -89,13 +113,13 @@
     </div>
   </div>
 
-  <div class="agenda-kpi-grid" aria-label="Resumen operativo de la semana">
+  <div class="agenda-kpi-grid" [attr.aria-label]="'Resumen operativo de ' + periodoNombre">
     <article class="agenda-kpi-card agenda-kpi-programadas">
       <div class="agenda-kpi-icon"><span class="material-symbols-outlined" aria-hidden="true">event_available</span></div>
       <div>
         <strong>{{ citasProgramadasSemana ?? '—' }}</strong>
         <span>Citas programadas</span>
-        <small>{{ tieneProfesionalSeleccionado ? 'Semana visible' : 'Selecciona un profesional' }}</small>
+        <small>{{ tieneProfesionalSeleccionado ? periodoVisibleTexto : 'Selecciona un profesional' }}</small>
       </div>
     </article>
 
@@ -149,7 +173,7 @@
       <div class="agenda-calendar-heading">
         <div>
           <span class="agenda-eyebrow">Calendario clínico</span>
-          <h3>Vista semanal</h3>
+          <h3>{{ tituloVista }}</h3>
         </div>
         <div class="agenda-profesional-chip" *ngIf="profesionalActual">
           <span class="material-symbols-outlined" aria-hidden="true">person</span>
@@ -157,12 +181,24 @@
         </div>
       </div>
 
-      <div class="semana-grilla agenda-week-grid">
+      <!-- Vista Día: si el endpoint de disponibilidad no informó este día
+           no se infiere nada; las celdas quedan neutras (sin-datos-bloque). -->
+      <div
+        *ngIf="vista === 'dia' && diaActual && resumenDia(diaActual.fecha).estado === 'sin-datos'"
+        class="agenda-day-sindatos"
+        role="status"
+      >Sin datos de disponibilidad para este día.</div>
+
+      <div
+        *ngIf="vista !== 'mes'"
+        class="semana-grilla agenda-week-grid"
+        [class.agenda-day-grid]="vista === 'dia'"
+      >
         <div class="hora-col">
           <div class="hora-celda header">Hora</div>
           <div class="hora-celda" *ngFor="let h of horasGrilla">{{ h }}</div>
         </div>
-        <div class="dia-col" *ngFor="let dia of semanaActual">
+        <div class="dia-col" *ngFor="let dia of diasGrilla">
           <div
             class="dia-header"
             [class.hoy]="dia.esHoy"
@@ -211,6 +247,54 @@
           </div>
         </div>
       </div>
+
+      <!-- Vista Mes: resumen por día. No repite la grilla horaria; muestra
+           cuántas citas hay y si el día tiene cupos según la disponibilidad
+           real que entrega backend. Un día sin datos NUNCA se muestra como
+           disponible. -->
+      <div *ngIf="vista === 'mes'" class="agenda-month" role="grid" aria-label="Vista mensual de la agenda">
+        <div class="agenda-month-weekdays" role="row">
+          <span *ngFor="let nombre of nombresDiasSemana" role="columnheader">{{ nombre }}</span>
+        </div>
+        <div class="agenda-month-body">
+          <button
+            *ngFor="let celda of mesCeldas"
+            type="button"
+            role="gridcell"
+            class="agenda-month-cell"
+            [class.fuera-mes]="!celda.enMes"
+            [class.hoy]="celda.esHoy"
+            [class.seleccionado]="celda.enMes && diaSeleccionado === celda.fecha"
+            [class.feriado]="celda.enMes && esFeriadoFn(celda.fecha)"
+            [disabled]="!celda.enMes"
+            [attr.aria-label]="celda.enMes ? formatearFechaFn(celda.fecha) : null"
+            [attr.aria-pressed]="celda.enMes ? diaSeleccionado === celda.fecha : null"
+            (click)="onSeleccionarDiaMes(celda)"
+            (dblclick)="celda.enMes && onAbrirDia(celda.fecha)"
+          >
+            <span class="agenda-month-num">{{ celda.num }}</span>
+            <span *ngIf="celda.enMes && esFeriadoFn(celda.fecha)" class="agenda-month-feriado" [title]="nombreFeriadoFn(celda.fecha)">Feriado</span>
+
+            <ng-container *ngIf="celda.enMes && resumenDia(celda.fecha) as resumen">
+              <span class="agenda-month-chips">
+                <span *ngIf="resumen.citas > 0" class="agenda-month-chip reservada">{{ resumen.citas }} {{ resumen.citas === 1 ? 'cita' : 'citas' }}</span>
+                <span *ngIf="resumen.sobrecupos > 0" class="agenda-month-chip sobrecupo">{{ resumen.sobrecupos }} {{ resumen.sobrecupos === 1 ? 'sobrecupo' : 'sobrecupos' }}</span>
+                <span *ngIf="resumen.urgencias > 0" class="agenda-month-chip urgencia">{{ resumen.urgencias }} {{ resumen.urgencias === 1 ? 'urgencia' : 'urgencias' }}</span>
+                <span *ngIf="resumen.multicitaHorarios > 0" class="agenda-month-chip multicita">{{ resumen.multicitaHorarios }} {{ resumen.multicitaHorarios === 1 ? 'horario con varias citas' : 'horarios con varias citas' }}</span>
+              </span>
+              <span class="agenda-month-estado" [ngClass]="'estado-' + resumen.estado">
+                <ng-container [ngSwitch]="resumen.estado">
+                  <ng-container *ngSwitchCase="'con-cupos'">{{ resumen.disponibles }} {{ resumen.disponibles === 1 ? 'disponible' : 'disponibles' }}</ng-container>
+                  <ng-container *ngSwitchCase="'sin-cupos'">Sin cupos</ng-container>
+                  <ng-container *ngSwitchCase="'cerrado'">Centro cerrado</ng-container>
+                  <ng-container *ngSwitchCase="'bloqueado'">Agenda bloqueada</ng-container>
+                  <ng-container *ngSwitchCase="'sin-datos'">Sin datos</ng-container>
+                </ng-container>
+              </span>
+            </ng-container>
+          </button>
+        </div>
+      </div>
     </div>
 
     <aside class="card detalle-dia-card agenda-context-panel">
@@ -238,6 +322,16 @@
             <span>{{ nombreFeriadoFn(diaSeleccionado) }}</span>
           </div>
         </div>
+
+        <button
+          *ngIf="vista === 'mes'"
+          type="button"
+          class="agenda-btn agenda-btn-secondary agenda-ver-dia"
+          (click)="onAbrirDia(diaSeleccionado)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">calendar_view_day</span>
+          Ver agenda del día
+        </button>
 
         <div class="agenda-day-summary">
           <div><span>Citas programadas</span><strong>{{ citasProgramadasDia }}</strong></div>

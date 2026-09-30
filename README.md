@@ -1,6 +1,7 @@
 <div align="center">
 
 # SESAES
+
 ### Sistema de Agendamiento Estudiantil de Salud
 
 **Proyecto de Título · UTEM**
@@ -22,18 +23,18 @@ SESAES centraliza la gestión de estudiantes, profesionales de salud, agenda, ci
 
 ## Estado actual
 
-| Área | Estado |
-|---|---|
-| Autenticación y sesión | ✅ Operativo |
-| Dashboard Estudiante | ✅ Integrado en `main` |
-| Dashboard Profesional | ✅ Integrado en `main` |
-| ADMIN / SUPERADMIN | 🚧 En evolución |
-| Permisos y alcance de ADMIN | ✅ Implementado |
-| Agenda clínica semanal V2 | 🚧 En desarrollo |
-| Citas | ✅ Base operativa |
-| Auditoría / gobernanza | 🚧 En evolución |
+| Área                          | Estado                 |
+| ----------------------------- | ---------------------- |
+| Autenticación y sesión        | ✅ Operativo           |
+| Dashboard Estudiante          | ✅ Integrado en `main` |
+| Dashboard Profesional         | ✅ Integrado en `main` |
+| ADMIN / SUPERADMIN            | 🚧 En evolución        |
+| Permisos y alcance de ADMIN   | ✅ Implementado        |
+| Agenda clínica semanal V2     | 🚧 En desarrollo       |
+| Citas                         | ✅ Base operativa      |
+| Auditoría / gobernanza        | 🚧 En evolución        |
 | Documentos clínicos avanzados | ⏳ Pendiente por fases |
-| Responsive | 🚧 En progreso |
+| Responsive                    | 🚧 En progreso         |
 
 > El proyecto está en desarrollo activo. No todos los módulos se consideran cerrados aunque ya tengan una base funcional.
 
@@ -58,12 +59,12 @@ Backend  → http://127.0.0.1:8080
 
 ## Roles
 
-| Rol | Responsabilidad general |
-|---|---|
-| `ESTUDIANTE` | Gestiona sus citas y consulta información propia permitida |
-| `PROFESIONAL` | Gestiona agenda y atenciones dentro de su ámbito |
-| `ADMIN` | Operación administrativa según permisos y alcance asignados |
-| `SUPERADMIN` | Gobernanza institucional, roles, permisos y configuración administrativa |
+| Rol           | Responsabilidad general                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| `ESTUDIANTE`  | Gestiona sus citas y consulta información propia permitida               |
+| `PROFESIONAL` | Gestiona agenda y atenciones dentro de su ámbito                         |
+| `ADMIN`       | Operación administrativa según permisos y alcance asignados              |
+| `SUPERADMIN`  | Gobernanza institucional, roles, permisos y configuración administrativa |
 
 ### Principios de autorización
 
@@ -231,11 +232,6 @@ Evitar reutilizar ramas antiguas para tareas nuevas.
 - No utilizar contraseñas genéricas de producción.
 - Evitar pruebas destructivas contra bases compartidas.
 - Los cambios de esquema de base de datos deben coordinarse antes de integrarse.
-
-## Equipo
-
-- **Sandra García** — desarrollo e integración.
-- **Héctor Estepa** — desarrollo en áreas de Estudiante y Profesional.
 
 ---
 

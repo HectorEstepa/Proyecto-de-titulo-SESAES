@@ -530,11 +530,17 @@ def crear_cita(
         db.flush()
     except IntegrityError:
         # A.3 — esta red de seguridad NO es (nunca lo fue) la
-        # protección real contra doble reserva: Cita no tiene, ni tuvo
-        # nunca, ningún UniqueConstraint/Index único sobre
-        # (profesional_id, fecha, hora) que este INSERT pudiera violar
-        # (confirmado en el diagnóstico de A.3 — antes este comentario
-        # afirmaba lo contrario, era falso). La protección real es
+        # protección real contra doble reserva. El modelo vigente
+        # (app/models/cita.py) no define ningún UniqueConstraint/Index
+        # único sobre (profesional_id, fecha, hora) que este INSERT
+        # pudiera violar. Sin embargo, bases legacy pueden conservar
+        # físicamente índices parciales incompatibles creados fuera
+        # del modelo (p. ej. ux_cita_profesional_fecha_hora_pendiente)
+        # — A.4.4.1 los detecta y sanea mediante una migración
+        # controlada e idempotente (ver
+        # scripts/migrar_a4_4_1_eliminar_indice_unico_slot.py), en vez
+        # de asumir que "nunca existieron ni podrían existir". La
+        # protección de concurrencia vigente sigue siendo
         # adquirir_lock_agenda_profesional_fecha() + la re-evaluación
         # de evaluar_disponibilidad_slot() DENTRO de ese lock, arriba.
         # Este except se conserva solo como red de seguridad genérica

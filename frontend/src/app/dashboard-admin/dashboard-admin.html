@@ -98,7 +98,7 @@
   </button>
   <div class="topbar-left">
         <h1 class="topbar-title" *ngIf="seccionActiva!=='inicio'">{{ tituloSeccion }}</h1>
-        <h1 class="topbar-title" *ngIf="seccionActiva==='inicio'">Hola, {{ nombreUsuario }} 👋</h1>
+        <h1 class="topbar-title" *ngIf="seccionActiva==='inicio'">Hola, {{ nombreUsuario }} {{ puedeVerInicioInstitucional ? '👑' : '👋' }}</h1>
         <span class="topbar-sub">{{ subtituloSeccion }}</span>
       </div>
       <div class="topbar-actions">
@@ -193,6 +193,20 @@
     <main class="main-content">
 
       <!-- ══ INICIO ══ -->
+      <!-- Selector de vista (vistaInicio): 'pendiente' mientras el contexto
+           efectivo no llega (no se monta ninguna); luego 'institucional'
+           (SUPERADMIN) u 'operativa' (ADMIN). El Inicio ADMIN conserva su
+           etiqueta original tal cual: solo queda dentro del selector. -->
+      <ng-container [ngSwitch]="vistaInicio">
+        <ng-container *ngSwitchCase="'institucional'">
+          <app-superadmin-inicio
+            *ngIf="seccionActiva==='inicio'"
+            [puedeIrA]="puedeIrADestinoInicioFn"
+            (navegar)="onNavegarDesdeInicioInstitucional($event)"
+          ></app-superadmin-inicio>
+        </ng-container>
+
+        <ng-container *ngSwitchCase="'operativa'">
       <app-admin-inicio
         *ngIf="seccionActiva==='inicio'"
         [puedeVerAgenda]="hasPermission('agenda.ver')"
@@ -214,6 +228,8 @@
         (cancelarCita)="cancelarCitaAdmin($event)"
         (actualizarDisponibilidad)="cargarResumenDia()"
       ></app-admin-inicio>
+        </ng-container>
+      </ng-container>
 
 <!-- ══ HORARIO ══ -->
       <app-admin-horario
@@ -228,6 +244,11 @@
         [profesionalActualBloqueado]="profesionalActualBloqueado"
         [semanaActual]="semanaActual"
         [semanaLabel]="semanaLabel"
+        [periodoLabel]="periodoLabel"
+        [vista]="vistaAgenda"
+        [diaActual]="diaAgenda"
+        [mesCeldas]="mesCeldas"
+        [diaResumenFn]="horarioDiaResumenFn"
         [horasGrilla]="horasGrilla"
         [(diaSeleccionado)]="diaSeleccionado"
         [citasDiaSeleccionado]="citasDiaSeleccionado"
@@ -246,9 +267,11 @@
         (recargarHorario)="cargarHorarioProfesional()"
         (abrirNuevaCita)="abrirModalNuevaCita()"
         (imprimir)="imprimirAgenda()"
-        (anterior)="semanaAnterior()"
-        (siguiente)="semanaSiguiente()"
-        (hoy)="irAHoy()"
+        (vistaChange)="cambiarVistaAgenda($event)"
+        (abrirDia)="abrirDiaAgenda($event)"
+        (anterior)="agendaAnterior()"
+        (siguiente)="agendaSiguiente()"
+        (hoy)="agendaHoy()"
         (bloqueClick)="clickBloque($event.fecha, $event.hora)"
         (cancelarCita)="cancelarCitaAdmin($event)"
       ></app-admin-horario>

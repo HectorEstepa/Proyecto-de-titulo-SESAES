@@ -255,7 +255,12 @@ describe('AdminHorarioComponent', () => {
     expect(fixture.nativeElement.querySelector('.detalle-acciones')).toBeNull();
   });
 
-  it('AGENDA-A mantiene Semana como única vista habilitada', () => {
+  // Test original AGENDA-A. Se conserva su cobertura vigente (orden de las
+  // tres pestañas, Semana habilitada y activa). La única parte que dejó de
+  // corresponder es que Día y Mes estuvieran deshabilitados: esa afirmación
+  // se retiró porque Día y Mes se habilitan en esta iteración, y queda
+  // cubierta con lo contrario en el test siguiente.
+  it('AGENDA-A mantiene Semana como vista inicial activa y habilitada (antes: "única vista habilitada"; Día y Mes ya no están deshabilitados)', () => {
     fixture.detectChanges();
 
     const botones = Array.from(
@@ -263,10 +268,418 @@ describe('AdminHorarioComponent', () => {
     );
 
     expect(botones.map(b => b.textContent?.trim())).toEqual(['Día', 'Semana', 'Mes']);
-    expect(botones[0].disabled).toBe(true);
     expect(botones[1].disabled).toBe(false);
     expect(botones[1].classList.contains('active')).toBe(true);
-    expect(botones[2].disabled).toBe(true);
+  });
+
+  it('AGENDA-B habilita Día, Semana y Mes, con Semana como vista inicial', () => {
+    expect(component.vista).toBe('semana');
+    fixture.detectChanges();
+
+    const botones = Array.from(
+      fixture.nativeElement.querySelectorAll('.agenda-view-switch button') as NodeListOf<HTMLButtonElement>
+    );
+
+    expect(botones[0].disabled).toBe(false); // Día
+    expect(botones[1].disabled).toBe(false); // Semana
+    expect(botones[2].disabled).toBe(false); // Mes
+    expect(botones.map(b => b.classList.contains('active'))).toEqual([false, true, false]);
+    expect(botones.map(b => b.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
+  });
+
+  it('emite vistaChange al elegir otra vista y no re-emite la vista ya activa', () => {
+    const vistaSpy = vi.spyOn(component.vistaChange, 'emit');
+    fixture.detectChanges();
+
+    const botones = Array.from(
+      fixture.nativeElement.querySelectorAll('.agenda-view-switch button') as NodeListOf<HTMLButtonElement>
+    );
+
+    botones[1].click(); // Semana: ya activa
+    expect(vistaSpy).not.toHaveBeenCalled();
+
+    botones[0].click();
+    botones[2].click();
+    expect(vistaSpy.mock.calls.map(c => c[0])).toEqual(['dia', 'mes']);
+  });
+
+  it('el botón Imprimir queda deshabilitado mientras no haya un profesional seleccionado', () => {
+    const imprimirSpy = vi.spyOn(component.imprimir, 'emit');
+    fixture.detectChanges();
+
+    const boton = Array.from(
+      fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>
+    ).find(b => b.textContent?.includes('Imprimir'))!;
+
+    expect(boton.disabled).toBe(true);
+    boton.click();
+    expect(imprimirSpy).not.toHaveBeenCalled();
+  });
+
+  describe('vista Día', () => {
+    const dia = { nombre: 'Jue', num: 17, fecha: '2026-09-17', esHoy: false };
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('filtroProfesionalId', '10');
+      fixture.componentRef.setInput('vista', 'dia');
+      fixture.componentRef.setInput('diaActual', dia);
+      fixture.componentRef.setInput('periodoLabel', 'Jueves 17 de Septiembre 2026');
+      fixture.componentRef.setInput('horasGrilla', ['08:00', '09:00']);
+      // La semana sigue informada por el padre, pero la vista Día no debe usarla.
+      fixture.componentRef.setInput('semanaActual', [
+        { nombre: 'Lun', num: 14, fecha: '2026-09-14', esHoy: false },
+        dia
+      ]);
+    });
+
+    it('renderiza una sola columna con las horas de la grilla y no la semana completa', () => {
+      fixture.detectChanges();
+
+      const columnas = fixture.nativeElement.querySelectorAll('.dia-col');
+      expect(columnas.length).toBe(1);
+      expect(fixture.nativeElement.querySelectorAll('.bloque-celda').length).toBe(2);
+      expect(fixture.nativeElement.querySelector('.agenda-week-grid')
+        .classList.contains('agenda-day-grid')).toBe(true);
+      expect(fixture.nativeElement.querySelector('.agenda-month')).toBeNull();
+    });
+
+    it('muestra el período informado, el título de vista y la navegación por día', () => {
+      fixture.detectChanges();
+      const texto = fixture.nativeElement.textContent as string;
+
+      expect(texto).toContain('Jueves 17 de Septiembre 2026');
+      expect(texto).toContain('Vista diaria');
+      expect(texto).toContain('Día visible');
+      expect(fixture.nativeElement.querySelector('[aria-label="Día anterior"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('[aria-label="Día siguiente"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('[aria-label="Semana anterior"]')).toBeNull();
+    });
+
+    it('emite el clic de un bloque con la fecha del día visible', () => {
+      const bloqueSpy = vi.spyOn(component.bloqueClick, 'emit');
+      fixture.detectChanges();
+
+      (fixture.nativeElement.querySelectorAll('.bloque-celda')[1] as HTMLElement).click();
+
+      expect(bloqueSpy).toHaveBeenCalledWith({ fecha: '2026-09-17', hora: '09:00' });
+    });
+
+    it('los indicadores cuentan solo las citas del día visible', () => {
+      fixture.componentRef.setInput('citasHorario', [
+        { id: 1, fecha: '2026-09-17', hora: '08:00', estado: 'pendiente', estudiante: 'Ana' },
+        { id: 2, fecha: '2026-09-17', hora: '09:00', estado: 'completada', estudiante: 'Luis', urgente: true },
+        { id: 3, fecha: '2026-09-17', hora: '09:00', estado: 'cancelada', estudiante: 'Eva' },
+        { id: 4, fecha: '2026-09-14', hora: '08:00', estado: 'pendiente', estudiante: 'Otro día' }
+      ]);
+      fixture.detectChanges();
+
+      expect(component.citasProgramadasSemana).toBe(2);
+      expect(component.atencionesRealizadasSemana).toBe(1);
+      expect(component.urgenciasSemana).toBe(1);
+    });
+
+    it('multicita: dos o más citas en el mismo horario aparecen TODAS en la misma celda del día', () => {
+      fixture.componentRef.setInput('bloqueEstadoFn', (_f: string, h: string) => h === '08:00' ? 'sobrecupo' : 'disponible');
+      fixture.componentRef.setInput('bloqueCitasFn', (_f: string, h: string) => h === '08:00'
+        ? [
+            { id: 1, estudiante: 'Diego Soto', sobrecupo: false, urgente: false },
+            { id: 2, estudiante: 'Carlos Muñoz', sobrecupo: true, urgente: false },
+            { id: 3, estudiante: 'Elena Paz', sobrecupo: true, urgente: false }
+          ]
+        : []);
+      fixture.detectChanges();
+
+      const celda = fixture.nativeElement.querySelectorAll('.bloque-celda')[0] as HTMLElement;
+      expect(celda.classList.contains('multi-cita')).toBe(true);
+      expect(celda.classList.contains('sobrecupo-bloque')).toBe(true);
+      const lineas = Array.from(celda.querySelectorAll('.bloque-info')).map(e => e.textContent?.trim());
+      expect(lineas).toHaveLength(3);
+      expect(celda.textContent).toContain('Diego Soto');
+      expect(celda.textContent).toContain('Carlos Muñoz');
+      expect(celda.textContent).toContain('Elena Paz');
+      expect(fixture.nativeElement.querySelectorAll('.bloque-celda')[1].classList.contains('multi-cita')).toBe(false);
+    });
+
+    it('urgencias y sobrecupos conservan su estado visual en la vista Día', () => {
+      fixture.componentRef.setInput('bloqueEstadoFn', (_f: string, h: string) => h === '08:00' ? 'urgente' : 'sobrecupo');
+      fixture.componentRef.setInput('bloqueCitasFn', (_f: string, h: string) => h === '08:00'
+        ? [{ id: 1, estudiante: 'Ana', urgente: true }]
+        : [{ id: 2, estudiante: 'Luis', sobrecupo: true }]);
+      fixture.detectChanges();
+
+      const [urgente, sobrecupo] = Array.from(fixture.nativeElement.querySelectorAll('.bloque-celda')) as HTMLElement[];
+      expect(urgente.classList.contains('urgente-bloque')).toBe(true);
+      expect(urgente.querySelector('.bloque-info-urgente')).toBeTruthy();
+      expect(sobrecupo.classList.contains('sobrecupo-bloque')).toBe(true);
+      expect(sobrecupo.querySelector('.bloque-info-sobrecupo')).toBeTruthy();
+    });
+
+    it('si el endpoint no informó el día muestra "Sin datos" y las celdas quedan neutras, nunca disponibles', () => {
+      fixture.componentRef.setInput('bloqueEstadoFn', () => 'sin-datos');
+      fixture.componentRef.setInput('diaResumenFn', () => ({
+        citas: 0, sobrecupos: 0, urgencias: 0, multicitaHorarios: 0, disponibles: 0, estado: 'sin-datos'
+      }));
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.agenda-day-sindatos')!.textContent).toContain('Sin datos');
+      const celdas = Array.from(fixture.nativeElement.querySelectorAll('.bloque-celda')) as HTMLElement[];
+      expect(celdas.every(c => c.classList.contains('sin-datos-bloque') && !c.classList.contains('disponible'))).toBe(true);
+      expect(fixture.nativeElement.textContent).not.toContain('+ Disponible');
+    });
+
+    it('con datos de disponibilidad informados no muestra el aviso "Sin datos"', () => {
+      fixture.componentRef.setInput('diaResumenFn', () => ({
+        citas: 0, sobrecupos: 0, urgencias: 0, multicitaHorarios: 0, disponibles: 2, estado: 'con-cupos'
+      }));
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.agenda-day-sindatos')).toBeNull();
+    });
+
+    it('solo lectura (sin agenda.gestionar): no hay Nueva cita ni cancelar en la vista Día', () => {
+      fixture.componentRef.setInput('puedeGestionarAgenda', false);
+      fixture.componentRef.setInput('diaSeleccionado', '2026-09-17');
+      fixture.componentRef.setInput('citasDiaSeleccionado', [
+        { id: 1, hora: '08:00', estudiante: 'Ana', especialidad: 'Medicina', estado: 'pendiente' }
+      ]);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).not.toContain('Nueva cita');
+      expect(fixture.nativeElement.querySelector('.detalle-acciones')).toBeNull();
+    });
+
+    it('con agenda.gestionar la vista Día conserva Nueva cita y cancelar', () => {
+      const cancelarSpy = vi.spyOn(component.cancelarCita, 'emit');
+      fixture.componentRef.setInput('puedeGestionarAgenda', true);
+      fixture.componentRef.setInput('diaSeleccionado', '2026-09-17');
+      fixture.componentRef.setInput('citasDiaSeleccionado', [
+        { id: 1, hora: '08:00', estudiante: 'Ana', especialidad: 'Medicina', estado: 'pendiente' }
+      ]);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Nueva cita');
+      (fixture.nativeElement.querySelector('.detalle-acciones button') as HTMLButtonElement).click();
+      expect(cancelarSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('vista Mes', () => {
+    // Sep 2026: martes 1 → una celda previa (31 ago) y 30 días del mes.
+    const celdas = [
+      { fecha: '2026-08-31', num: 31, enMes: false, esHoy: false },
+      { fecha: '2026-09-01', num: 1, enMes: true, esHoy: false },
+      { fecha: '2026-09-02', num: 2, enMes: true, esHoy: true },
+      { fecha: '2026-09-03', num: 3, enMes: true, esHoy: false },
+      { fecha: '2026-09-04', num: 4, enMes: true, esHoy: false }
+    ];
+
+    const resumenes: Record<string, any> = {
+      '2026-09-01': { citas: 1, sobrecupos: 0, urgencias: 0, multicitaHorarios: 0, disponibles: 6, estado: 'con-cupos' },
+      '2026-09-02': { citas: 3, sobrecupos: 1, urgencias: 2, multicitaHorarios: 2, disponibles: 0, estado: 'sin-cupos' },
+      '2026-09-03': { citas: 0, sobrecupos: 0, urgencias: 0, multicitaHorarios: 0, disponibles: 0, estado: 'cerrado' },
+      '2026-09-04': { citas: 0, sobrecupos: 0, urgencias: 0, multicitaHorarios: 0, disponibles: 0, estado: 'sin-datos' }
+    };
+
+    const celdaDe = (fecha: string): HTMLButtonElement =>
+      Array.from(fixture.nativeElement.querySelectorAll('.agenda-month-cell') as NodeListOf<HTMLButtonElement>)
+        .find(c => c.getAttribute('aria-label')?.includes(fecha))!;
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('formatearFechaFn', (f: string) => f);
+      fixture.componentRef.setInput('filtroProfesionalId', '10');
+      fixture.componentRef.setInput('vista', 'mes');
+      fixture.componentRef.setInput('mesCeldas', celdas);
+      fixture.componentRef.setInput('periodoLabel', 'Septiembre 2026');
+      fixture.componentRef.setInput('diaResumenFn', (f: string) => resumenes[f]);
+    });
+
+    it('renderiza los días del mes sin la grilla horaria y con los nombres de la semana', () => {
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.semana-grilla')).toBeNull();
+      expect(fixture.nativeElement.querySelectorAll('.agenda-month-cell').length).toBe(5);
+      const cabeceras = Array.from(
+        fixture.nativeElement.querySelectorAll('.agenda-month-weekdays span') as NodeListOf<HTMLElement>
+      ).map(e => e.textContent?.trim());
+      expect(cabeceras).toEqual(['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']);
+      expect(fixture.nativeElement.textContent).toContain('Vista mensual');
+      expect(fixture.nativeElement.querySelector('[aria-label="Mes anterior"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('[aria-label="Mes siguiente"]')).toBeTruthy();
+    });
+
+    it('muestra citas, sobrecupos, urgencias y cupos usando el resumen entregado por el padre', () => {
+      fixture.detectChanges();
+
+      const uno = celdaDe('2026-09-01').textContent as string;
+      expect(uno).toContain('1 cita');
+      expect(uno).not.toContain('1 citas');
+      expect(uno).toContain('6 disponibles');
+
+      const dos = celdaDe('2026-09-02').textContent as string;
+      expect(dos).toContain('3 citas');
+      expect(dos).toContain('1 sobrecupo');
+      expect(dos).toContain('2 urgencias');
+      expect(dos).toContain('Sin cupos');
+      expect(celdaDe('2026-09-02').classList.contains('hoy')).toBe(true);
+
+      expect(celdaDe('2026-09-03').textContent).toContain('Centro cerrado');
+    });
+
+    it('un día sin datos de disponibilidad se muestra como "Sin datos", nunca como disponible', () => {
+      fixture.detectChanges();
+
+      const texto = celdaDe('2026-09-04').textContent as string;
+      expect(texto).toContain('Sin datos');
+      expect(texto).not.toContain('disponible');
+    });
+
+    it('los días de relleno de otro mes están deshabilitados y no emiten nada', () => {
+      const seleccionSpy = vi.spyOn(component.diaSeleccionadoChange, 'emit');
+      fixture.detectChanges();
+
+      const relleno = fixture.nativeElement.querySelector('.agenda-month-cell.fuera-mes') as HTMLButtonElement;
+      expect(relleno.disabled).toBe(true);
+      relleno.click();
+      component.onSeleccionarDiaMes(celdas[0]);
+
+      expect(seleccionSpy).not.toHaveBeenCalled();
+      expect(relleno.textContent).not.toContain('disponible');
+    });
+
+    it('un clic selecciona el día y un doble clic abre la vista Día', () => {
+      const seleccionSpy = vi.spyOn(component.diaSeleccionadoChange, 'emit');
+      const abrirSpy = vi.spyOn(component.abrirDia, 'emit');
+      fixture.detectChanges();
+
+      const celda = celdaDe('2026-09-03');
+      celda.click();
+      celda.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+
+      expect(seleccionSpy).toHaveBeenCalledWith('2026-09-03');
+      expect(abrirSpy).toHaveBeenCalledWith('2026-09-03');
+    });
+
+    it('marca el día seleccionado y ofrece "Ver agenda del día" solo en la vista Mes', () => {
+      const abrirSpy = vi.spyOn(component.abrirDia, 'emit');
+      fixture.componentRef.setInput('diaSeleccionado', '2026-09-01');
+      fixture.detectChanges();
+
+      expect(celdaDe('2026-09-01').classList.contains('seleccionado')).toBe(true);
+
+      const boton = Array.from(
+        fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>
+      ).find(b => b.textContent?.includes('Ver agenda del día'))!;
+      boton.click();
+      expect(abrirSpy).toHaveBeenCalledWith('2026-09-01');
+
+      fixture.componentRef.setInput('vista', 'semana');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).not.toContain('Ver agenda del día');
+    });
+
+    it('multicita: el día muestra cuántos horarios tienen varias citas y no lo oculta detrás del conteo total', () => {
+      fixture.detectChanges();
+
+      const dos = celdaDe('2026-09-02');
+      expect(dos.querySelector('.agenda-month-chip.multicita')!.textContent).toContain('2 horarios con varias citas');
+      // un día con citas pero sin horarios repetidos no muestra el indicador
+      expect(celdaDe('2026-09-01').querySelector('.agenda-month-chip.multicita')).toBeNull();
+
+      fixture.componentRef.setInput('diaResumenFn', (f: string) => f === '2026-09-01'
+        ? { ...resumenes[f], citas: 2, multicitaHorarios: 1 }
+        : resumenes[f]);
+      fixture.detectChanges();
+      expect(celdaDe('2026-09-01').querySelector('.agenda-month-chip.multicita')!.textContent)
+        .toContain('1 horario con varias citas');
+    });
+
+    it('urgencias y sobrecupos se muestran por separado del total de citas', () => {
+      fixture.detectChanges();
+
+      const dos = celdaDe('2026-09-02');
+      expect(dos.querySelector('.agenda-month-chip.sobrecupo')!.textContent).toContain('1 sobrecupo');
+      expect(dos.querySelector('.agenda-month-chip.urgencia')!.textContent).toContain('2 urgencias');
+      expect(dos.querySelector('.agenda-month-chip.reservada')!.textContent).toContain('3 citas');
+    });
+
+    it('ninguna acción de gestión sale desde el Mes: clic, doble clic y "Ver agenda del día" no emiten bloqueClick, abrirNuevaCita ni cancelarCita', () => {
+      fixture.componentRef.setInput('puedeGestionarAgenda', true);
+      fixture.componentRef.setInput('diaSeleccionado', '2026-09-02');
+      const bloqueSpy = vi.spyOn(component.bloqueClick, 'emit');
+      const nuevaSpy = vi.spyOn(component.abrirNuevaCita, 'emit');
+      const cancelarSpy = vi.spyOn(component.cancelarCita, 'emit');
+      fixture.detectChanges();
+
+      const celda = celdaDe('2026-09-02');
+      celda.click();
+      celda.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      (Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+        .find(b => b.textContent?.includes('Ver agenda del día')))!.click();
+
+      expect(bloqueSpy).not.toHaveBeenCalled();
+      expect(nuevaSpy).not.toHaveBeenCalled();
+      expect(cancelarSpy).not.toHaveBeenCalled();
+    });
+
+    it('solo lectura (sin agenda.gestionar): en el Mes no hay Nueva cita ni cancelar', () => {
+      fixture.componentRef.setInput('puedeGestionarAgenda', false);
+      fixture.componentRef.setInput('diaSeleccionado', '2026-09-02');
+      fixture.componentRef.setInput('citasDiaSeleccionado', [
+        { id: 1, hora: '09:00', estudiante: 'Ana', especialidad: 'Medicina', estado: 'pendiente' }
+      ]);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).not.toContain('Nueva cita');
+      expect(fixture.nativeElement.querySelector('.detalle-acciones')).toBeNull();
+      // la consulta sí está disponible
+      expect(celdaDe('2026-09-02')).toBeTruthy();
+    });
+
+    it('con agenda.gestionar el Mes conserva el botón Nueva cita del encabezado', () => {
+      fixture.componentRef.setInput('puedeGestionarAgenda', true);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Nueva cita');
+    });
+
+    it('los indicadores cuentan solo las citas de días del mes visible', () => {
+      fixture.componentRef.setInput('citasHorario', [
+        { id: 1, fecha: '2026-09-02', hora: '08:00', estado: 'pendiente', sobrecupo: true },
+        { id: 2, fecha: '2026-09-03', hora: '08:00', estado: 'completada' },
+        { id: 3, fecha: '2026-08-31', hora: '08:00', estado: 'pendiente' },
+        { id: 4, fecha: '2026-09-20', hora: '08:00', estado: 'pendiente' }
+      ]);
+      fixture.componentRef.setInput('diasCerrados', [{ fecha: '2026-09-03' }, { fecha: '2026-08-31' }]);
+      fixture.detectChanges();
+
+      // 08-31 es relleno del mes anterior; 09-20 no está entre las celdas del fixture.
+      expect(component.citasProgramadasSemana).toBe(2);
+      expect(component.atencionesRealizadasSemana).toBe(1);
+      expect(component.sobrecuposSemana).toBe(1);
+      expect(component.bloqueosSemana).toBe(1);
+      expect(fixture.nativeElement.textContent).toContain('Mes visible');
+    });
+  });
+
+  it('la vista Semana sigue mostrando los siete días recibidos', () => {
+    fixture.componentRef.setInput('filtroProfesionalId', '10');
+    fixture.componentRef.setInput('semanaLabel', 'Semana 14 – 20 Septiembre 2026');
+    fixture.componentRef.setInput('horasGrilla', ['08:00']);
+    fixture.componentRef.setInput('semanaActual', Array.from({ length: 7 }, (_, i) => ({
+      nombre: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][i],
+      num: 14 + i,
+      fecha: `2026-09-${14 + i}`,
+      esHoy: false
+    })));
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('.dia-col').length).toBe(7);
+    expect(fixture.nativeElement.textContent).toContain('Semana 14 – 20 Septiembre 2026');
+    expect(fixture.nativeElement.textContent).toContain('Vista semanal');
+    expect(fixture.nativeElement.textContent).toContain('Semana visible');
+    expect(fixture.nativeElement.querySelector('.agenda-week-grid')
+      .classList.contains('agenda-day-grid')).toBe(false);
   });
 
   it('A.4.7A: el bloque ocupado con sobrecupo disponible recibe la clase derivada y su ícono de affordance, sin dejar de ser "ocupado"', () => {

@@ -1,0 +1,54 @@
+<section class="cal" aria-label="Calendario institucional">
+  <header class="cal-cabecera">
+    <h3 class="cal-titulo">
+      <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+      Calendario
+    </h3>
+    <div class="cal-nav">
+      <button type="button" class="cal-nav-btn" (click)="mesAnterior()" aria-label="Mes anterior">
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+      </button>
+      <span class="cal-mes" data-testid="cal-mes">{{ tituloMes }}</span>
+      <button type="button" class="cal-nav-btn" (click)="mesSiguiente()" aria-label="Mes siguiente">
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="cal-semana" aria-hidden="true">
+    <span *ngFor="let d of diasSemana">{{ d }}</span>
+  </div>
+
+  <div class="cal-grid" role="grid">
+    <ng-container *ngFor="let celda of celdas">
+      <div class="cal-celda vacia" *ngIf="!celda"></div>
+      <button
+        type="button"
+        class="cal-celda"
+        *ngIf="celda"
+        [class.hoy]="celda.esHoy"
+        [class.feriado]="!!celda.feriado"
+        [class.internacional]="celda.tieneDiasInternacionales && !celda.feriado"
+        [class.seleccionada]="celda.fecha === diaSeleccionado"
+        [attr.aria-label]="celda.num + (celda.feriado ? ', feriado: ' + celda.feriado : '')"
+        [attr.aria-pressed]="celda.fecha === diaSeleccionado"
+        [title]="celda.feriado ?? ''"
+        (click)="seleccionar(celda)"
+      >{{ celda.num }}</button>
+    </ng-container>
+  </div>
+
+  <ul class="cal-leyenda" aria-label="Leyenda">
+    <li><span class="punto punto-hoy"></span> Hoy</li>
+    <li><span class="punto punto-feriado"></span> Feriado</li>
+    <li><span class="punto punto-int"></span> Día internacional</li>
+  </ul>
+
+  <div class="cal-info" *ngIf="diaSeleccionado" data-testid="cal-info">
+    <strong>{{ tituloDiaSeleccionado }}</strong>
+    <ul *ngIf="infoDiaSeleccionado.length; else sinInfo">
+      <li *ngFor="let linea of infoDiaSeleccionado">{{ linea }}</li>
+    </ul>
+    <ng-template #sinInfo><p class="cal-info-vacio">Sin feriados ni efemérides registradas.</p></ng-template>
+  </div>
+</section>

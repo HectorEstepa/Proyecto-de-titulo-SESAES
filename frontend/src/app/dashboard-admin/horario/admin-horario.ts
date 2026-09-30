@@ -7,6 +7,45 @@ export interface HorarioBloqueClick {
   hora: string;
 }
 
+// Vista temporal de la agenda. La fuente de verdad del estado vive en el
+// padre (DashboardAdminComponent); este componente solo la presenta y
+// emite el cambio solicitado.
+export type AgendaVista = 'dia' | 'semana' | 'mes';
+
+// Celda de la vista Mes. `enMes=false` son los días de relleno del mes
+// anterior/siguiente para completar las semanas: se muestran atenuados y
+// no son interactivos (la disponibilidad solo se consulta para el mes
+// visible).
+export interface AgendaMesCelda {
+  fecha: string;
+  num: number;
+  enMes: boolean;
+  esHoy: boolean;
+}
+
+// Resumen de un día para la vista Mes. Lo calcula el padre a partir de
+// las citas reales y de la disponibilidad que entrega backend; este
+// componente no deriva ninguna regla de negocio.
+export interface AgendaDiaResumen {
+  citas: number;
+  sobrecupos: number;
+  urgencias: number;
+  // Cantidad de horarios del día que tienen 2 o más citas operativas
+  // (multicita, A.4.7A.1). La vista Mes no puede ocultar este caso.
+  multicitaHorarios: number;
+  disponibles: number;
+  estado: 'con-cupos' | 'sin-cupos' | 'cerrado' | 'bloqueado' | 'pasado' | 'sin-datos';
+}
+
+const RESUMEN_DIA_VACIO: AgendaDiaResumen = {
+  citas: 0,
+  sobrecupos: 0,
+  urgencias: 0,
+  multicitaHorarios: 0,
+  disponibles: 0,
+  estado: 'sin-datos'
+};
+
 @Component({
   selector: 'app-admin-horario',
   standalone: true,
@@ -57,6 +96,24 @@ export class AdminHorarioComponent {
 
   @Input() semanaActual: any[] = [];
   @Input() semanaLabel = '';
+
+  // Vista temporal (Día / Semana / Mes). Por defecto Semana, que es el
+  // comportamiento previo del componente.
+  @Input() vista: AgendaVista = 'semana';
+  @Output() vistaChange = new EventEmitter<AgendaVista>();
+
+  // Vista Día: un único día (misma forma que los elementos de
+  // semanaActual: { nombre, num, fecha, esHoy }).
+  @Input() diaActual: any = null;
+
+  // Vista Mes: celdas del calendario mensual y resumen por día.
+  @Input() mesCeldas: AgendaMesCelda[] = [];
+  @Input() diaResumenFn: (fecha: string) => AgendaDiaResumen =
+    () => RESUMEN_DIA_VACIO;
+
+  // Etiqueta del período visible. Si el padre no la informa (compatibilidad
+  // con el uso anterior, solo semanal) se usa semanaLabel.
+  @Input() periodoLabel = '';
   @Input() horasGrilla: string[] = [];
 
   @Input() diaSeleccionado: string | null = null;
@@ -131,6 +188,9 @@ export class AdminHorarioComponent {
   @Output() abrirNuevaCita = new EventEmitter<void>();
   @Output() imprimir = new EventEmitter<void>();
 
+  // Vista Mes: abrir la vista Día de una fecha concreta.
+  @Output() abrirDia = new EventEmitter<string>();
+
   @Output() anterior = new EventEmitter<void>();
   @Output() siguiente = new EventEmitter<void>();
   @Output() hoy = new EventEmitter<void>();
@@ -143,12 +203,67 @@ export class AdminHorarioComponent {
     return String(this.filtroProfesionalId ?? '').trim().length > 0;
   }
 
-  private get fechasSemana(): Set<string> {
+  readonly nombresDiasSemana = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+  // Días que muestra la grilla horaria: uno en la vista Día, siete en
+  // Semana. La vista Mes usa mesCeldas y no esta grilla.
+  get diasGrilla(): any[] {
+    if (this.vista === 'dia') return this.diaActual ? [this.diaActual] : [];
+    return this.semanaActual ?? [];
+  }
+
+  get etiquetaPeriodo(): string {
+    return this.periodoLabel || this.semanaLabel;
+  }
+
+  get tituloVista(): string {
+    if (this.vista === 'dia') return 'Vista diaria';
+    if (this.vista === 'mes') return 'Vista mensual';
+    return 'Vista semanal';
+  }
+
+  // Textos del período visible, usados por los KPI y la navegación.
+  get periodoNombre(): string {
+    if (this.vista === 'dia') return 'el día';
+    if (this.vista === 'mes') return 'el mes';
+    return 'la semana';
+  }
+
+  get periodoVisibleTexto(): string {
+    if (this.vista === 'dia') return 'Día visible';
+    if (this.vista === 'mes') return 'Mes visible';
+    return 'Semana visible';
+  }
+
+  get navegacionAnteriorLabel(): string {
+    if (this.vista === 'dia') return 'Día anterior';
+    if (this.vista === 'mes') return 'Mes anterior';
+    return 'Semana anterior';
+  }
+
+  get navegacionSiguienteLabel(): string {
+    if (this.vista === 'dia') return 'Día siguiente';
+    if (this.vista === 'mes') return 'Mes siguiente';
+    return 'Semana siguiente';
+  }
+
+  // Fechas del período que se está mostrando. Todos los KPI se calculan
+  // sobre este conjunto, para que coincidan con lo que hay en pantalla.
+  private get fechasVisibles(): Set<string> {
+    if (this.vista === 'dia') {
+      const fecha = String(this.diaActual?.fecha ?? '');
+      return new Set(fecha ? [fecha] : []);
+    }
+    if (this.vista === 'mes') {
+      return new Set(
+        (this.mesCeldas ?? []).filter(celda => celda?.enMes).map(celda => String(celda.fecha))
+      );
+    }
     return new Set((this.semanaActual ?? []).map(dia => String(dia?.fecha ?? '')));
   }
 
   private get citasSemana(): any[] {
-    const fechas = this.fechasSemana;
+    const fechas = this.fechasVisibles;
     return (this.citasHorario ?? []).filter(cita => fechas.has(String(cita?.fecha ?? '')));
   }
 
@@ -185,7 +300,7 @@ export class AdminHorarioComponent {
 
   get bloqueosSemana(): number | null {
     if (!this.tieneProfesionalSeleccionado) return null;
-    const fechas = this.fechasSemana;
+    const fechas = this.fechasVisibles;
     return new Set(
       (this.diasCerrados ?? [])
         .map(dia => String(dia?.fecha ?? ''))
@@ -213,6 +328,25 @@ export class AdminHorarioComponent {
     return (this.citasDiaSeleccionado ?? []).filter(
       cita => this.esCitaOperativa(cita) && !!cita?.urgente
     ).length;
+  }
+
+  cambiarVista(vista: AgendaVista): void {
+    if (vista === this.vista) return;
+    this.vistaChange.emit(vista);
+  }
+
+  resumenDia(fecha: string): AgendaDiaResumen {
+    return this.diaResumenFn(fecha) ?? RESUMEN_DIA_VACIO;
+  }
+
+  onSeleccionarDiaMes(celda: AgendaMesCelda): void {
+    if (!celda?.enMes) return;
+    this.diaSeleccionadoChange.emit(celda.fecha);
+  }
+
+  onAbrirDia(fecha: string | null): void {
+    if (!fecha) return;
+    this.abrirDia.emit(fecha);
   }
 
   onAprobarSolicitud(solicitud: any): void {

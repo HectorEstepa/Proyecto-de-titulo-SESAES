@@ -2,7 +2,7 @@ import { Component, OnInit, ViewChild, ViewEncapsulation, ChangeDetectorRef } fr
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { environment } from '../config';
 import { obtenerFeriado } from '../shared/feriados-chile';
 import { ToastService } from '../shared/toast/toast.service';
@@ -15,10 +15,28 @@ import { AdminHistorialComponent } from './historial/admin-historial';
 import { AdminReportesComponent } from './reportes/admin-reportes';
 import { AdminEstudiantesComponent } from './estudiantes/admin-estudiantes';
 import { AdminInicioComponent } from './inicio/admin-inicio';
-import { AdminHorarioComponent } from './horario/admin-horario';
+import { SuperadminInicioComponent } from './superadmin-inicio/superadmin-inicio';
+import { DestinoInicioInstitucional } from './superadmin-inicio/superadmin-inicio.models';
+import {
+  NOMBRE_ARCHIVO_ALUMNOS,
+  guardarBlob,
+  mensajeErrorDescarga,
+  nombreArchivoCgr
+} from '../shared/descarga-archivo';
+import { AdminHorarioComponent, AgendaVista, AgendaMesCelda, AgendaDiaResumen } from './horario/admin-horario';
+import { imprimirAgendaAislada } from './horario/agenda-impresion';
 import { AdminConfiguracionComponent, ConfigTab } from './configuracion/admin-configuracion';
 import { AdminAdministradoresComponent } from './administradores/admin-administradores';
 import * as XLSX from 'xlsx';
+import {
+  TablaCgr,
+  construirLibroXlsx,
+  filasEspecialidadExcel,
+  filasHistorialExcel,
+  libroAXlsxBlob,
+  libroCgrAlumnos,
+  libroCgrAtenciones
+} from './reportes/reportes-excel';
 
 
 interface SlotDisponibilidadBackend {
@@ -46,7 +64,7 @@ const API = environment.apiUrl;
 @Component({
   selector: 'app-dashboard-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, AdminCitasComponent, AdminProfesionalesComponent, AdminPerfilComponent, AdminHistorialComponent, AdminReportesComponent, AdminEstudiantesComponent, AdminInicioComponent, AdminHorarioComponent, AdminConfiguracionComponent, AdminAdministradoresComponent],
+  imports: [CommonModule, FormsModule, DatePipe, AdminCitasComponent, AdminProfesionalesComponent, AdminPerfilComponent, AdminHistorialComponent, AdminReportesComponent, AdminEstudiantesComponent, AdminInicioComponent, SuperadminInicioComponent, AdminHorarioComponent, AdminConfiguracionComponent, AdminAdministradoresComponent],
   templateUrl: './dashboard-admin.html',
   styleUrl: './dashboard-admin.css',
   encapsulation: ViewEncapsulation.None
@@ -91,7 +109,60 @@ toggleSidebarMovil(): void {
     return map[this.seccionActiva] ?? 'SESAES';
   }
 
+  /**
+   * Inicio institucional (vista global de SUPERADMIN). Se decide por la
+   * COMBINACIÓN de dos permisos reservados de SUPERADMIN que ningún ADMIN
+   * puede recibir (roles.gestionar + auditoria.ver), nunca por el rol.
+   * Fail-closed: hasPermission() es false hasta que el backend confirma
+   * el contexto administrativo efectivo.
+   */
+  get puedeVerInicioInstitucional(): boolean {
+    return this.hasPermission('roles.gestionar') && this.hasPermission('auditoria.ver');
+  }
+
+  /**
+   * Selector del Inicio. Función pura de dos entradas ya existentes:
+   *  · 'pendiente'     mientras el contexto administrativo se está cargando:
+   *                    no se monta ni el Inicio ADMIN ni el de SUPERADMIN.
+   *  · 'institucional' contexto resuelto y con permisos de SUPERADMIN.
+   *  · 'operativa'     contexto resuelto sin esos permisos (ADMIN); también
+   *                    si la carga del contexto falló, igual que antes.
+   * No altera la lógica de carga ni el comportamiento del Inicio ADMIN.
+   */
+  get vistaInicio(): 'pendiente' | 'institucional' | 'operativa' {
+    if (this.contextoAdministrativoCargando) return 'pendiente';
+    return this.puedeVerInicioInstitucional ? 'institucional' : 'operativa';
+  }
+
+  // ── Acciones del Inicio institucional (solo SUPERADMIN) ──────────────
+  // Reutilizan navegarA()/cambiarTabConfig(): mismo comportamiento y mismos
+  // permisos que el sidebar. No se agregó ninguna ruta ni endpoint.
+  readonly puedeIrADestinoInicioFn = (destino: DestinoInicioInstitucional): boolean =>
+    destino === 'auditoria'
+      ? this.puedeVerAuditoria && this.puedeAccederSeccion('configuracion')
+      : this.puedeAccederSeccion(destino);
+
+  onNavegarDesdeInicioInstitucional(destino: DestinoInicioInstitucional): void {
+    if (!this.puedeIrADestinoInicioFn(destino)) {
+      this.toast.error('No tienes permisos para acceder a esta sección.');
+      return;
+    }
+
+    // La auditoría vive en Configuración › Seguridad.
+    if (destino === 'auditoria') {
+      this.navegarA('configuracion');
+      this.cambiarTabConfig('seguridad');
+      return;
+    }
+
+    this.navegarA(destino);
+  }
+
   get subtituloSeccion(): string {
+    if (this.seccionActiva === 'inicio' && this.puedeVerInicioInstitucional) {
+      return 'Resumen general del sistema: estudiantes, profesionales, citas y actividad institucional.';
+    }
+
     const map: Record<string, string> = {
       inicio: 'Gestiona profesionales, horarios y reservas de bienestar estudiantil.',
       horario: 'Visualización de citas, disponibilidad y resumen operativo.',
@@ -798,11 +869,7 @@ toggleSidebarMovil(): void {
 
   exportarEspecialidadExcel(): void {
     this.exportarComoXlsx(
-      this.graficoEspecialidad.map(d => ({
-        Especialidad: d.especialidad,
-        Cantidad: d.cantidad,
-        Porcentaje: d.porcentaje + '%'
-      })),
+      filasEspecialidadExcel(this.graficoEspecialidad),
       'citas_por_especialidad',
       'Citas por especialidad'
     );
@@ -823,14 +890,17 @@ toggleSidebarMovil(): void {
   // EXPORTACIÓN CGR
   // ══════════════════════════════════════
 
+  // Exportaciones CGR (B2): el backend entrega los DATOS (mismas reglas de
+  // siempre) en JSON; el .xlsx se arma aquí con reportes-excel. Se piden con
+  // HttpClient (Bearer + manejo de 401 vía auth.interceptor) y se guardan
+  // desde un Blob. NO usar window.open(): no puede enviar Authorization y el
+  // backend respondería 401.
   exportarCGR2025(): void {
-    if (!this.puedeExportarCgr) return;
-    window.open(`${API}/admin/exportar/cgr?anio=2025`, '_blank');
+    this.descargarCgr(2025);
   }
 
   exportarCGR2026(): void {
-    if (!this.puedeExportarCgr) return;
-    window.open(`${API}/admin/exportar/cgr?anio=2026&fecha_fin=2026-05-31`, '_blank');
+    this.descargarCgr(2026, '2026-05-31');
   }
 
   // Selector de año dinámico para CGR (reemplaza los botones fijos 2025/2026)
@@ -845,15 +915,48 @@ toggleSidebarMovil(): void {
   }
 
   exportarCGR(): void {
-    if (!this.puedeExportarCgr) return;
-
-    let url = `${API}/admin/exportar/cgr?anio=${this.cgrAnio}`;
-    if (this.cgrFechaFin) url += `&fecha_fin=${this.cgrFechaFin}`;
-    window.open(url, '_blank');
+    this.descargarCgr(this.cgrAnio, this.cgrFechaFin);
   }
+
   exportarListadoAlumnos(): void {
     if (!this.puedeExportarCgr) return;
-    window.open(`${API}/admin/exportar/alumnos`, '_blank');
+
+    this.http.get<TablaCgr>(`${API}/admin/exportar/alumnos/datos`).subscribe({
+      next: tabla => this.guardarLibroCgr(() => libroCgrAlumnos(tabla), NOMBRE_ARCHIVO_ALUMNOS),
+      error: (err: HttpErrorResponse) => this.manejarErrorDescargaCgr(err)
+    });
+  }
+
+  private descargarCgr(anio: number | string, fechaFin?: string | null): void {
+    if (!this.puedeExportarCgr) return;
+
+    const params: Record<string, string | number> = { anio };
+    if (fechaFin) params['fecha_fin'] = fechaFin;
+
+    this.http.get<TablaCgr>(`${API}/admin/exportar/cgr/datos`, { params }).subscribe({
+      next: tabla => this.guardarLibroCgr(() => libroCgrAtenciones(tabla), nombreArchivoCgr(anio, fechaFin)),
+      error: (err: HttpErrorResponse) => this.manejarErrorDescargaCgr(err)
+    });
+  }
+
+  private guardarLibroCgr(construir: () => XLSX.WorkBook, nombreArchivo: string): void {
+    let archivo: Blob;
+    try {
+      archivo = libroAXlsxBlob(construir());
+    } catch {
+      // Respuesta con columnas/filas distintas al contrato: no se entrega un
+      // archivo que pueda tener datos corridos.
+      this.toast.error('La exportación recibió un formato inesperado. No se generó el archivo.');
+      return;
+    }
+    guardarBlob(archivo, nombreArchivo);
+  }
+
+  private manejarErrorDescargaCgr(err: HttpErrorResponse): void {
+    // 401: auth.interceptor ya cerró la sesión y redirigió al login; no se
+    // duplica el aviso.
+    if (err.status === 401) return;
+    this.toast.error(mensajeErrorDescarga(err.status));
   }
 
   // ══════════════════════════════════════
@@ -890,6 +993,34 @@ toggleSidebarMovil(): void {
   filtroProfesionalId            = '';
   filtroEspecialidad             = '';
   semanaLabel                    = '';
+
+  // ── Vista temporal de la agenda (Día / Semana / Mes) ──
+  // Semana es la vista original y sigue siendo la predeterminada: su
+  // estado (semanaActual, semanaLabel) no cambia. Día y Mes agregan el
+  // suyo propio y todas consultan la disponibilidad real de backend con
+  // el mismo endpoint de rango (una request por selección, nunca una por
+  // celda).
+  vistaAgenda: AgendaVista = 'semana';
+
+  // Vista Día
+  diaAgenda: any = null;
+  private fechaDiaAgenda = '';
+  private diaLabel = '';
+
+  // Vista Mes
+  mesCeldas: AgendaMesCelda[] = [];
+  private mesInicioAgenda = '';
+  private mesFinAgenda = '';
+  private mesLabel = '';
+
+  get periodoLabel(): string {
+    if (this.vistaAgenda === 'dia') return this.diaLabel;
+    if (this.vistaAgenda === 'mes') return this.mesLabel;
+    return this.semanaLabel;
+  }
+
+  readonly horarioDiaResumenFn = (fecha: string): AgendaDiaResumen =>
+    this.getResumenDia(fecha);
   modalCitaAbierto               = false;
 
   // Horario general de atención del centro. Antes esto era un rango
@@ -1042,8 +1173,7 @@ toggleSidebarMovil(): void {
     if (!this.hasPermission('agenda.ver')) return;
 
     const profesionalId = Number(this.filtroProfesionalId);
-    const fechaInicio = String(this.semanaActual[0]?.fecha ?? '');
-    const fechaFin = String(this.semanaActual[this.semanaActual.length - 1]?.fecha ?? '');
+    const { inicio: fechaInicio, fin: fechaFin } = this.rangoAgendaVisible();
 
     if (!Number.isInteger(profesionalId) || profesionalId <= 0 || !fechaInicio || !fechaFin) return;
 
@@ -1162,6 +1292,198 @@ toggleSidebarMovil(): void {
   }
 
   irAHoy(): void { this.generarSemanaActual(); if (this.filtroProfesionalId) this.cargarHorarioProfesional(); }
+
+  // ══════════════════════════════════════
+  // AGENDA — vistas Día y Mes
+  // ══════════════════════════════════════
+  private readonly NOMBRES_DIA_CORTO = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  private readonly NOMBRES_MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+  // Rango de fechas [inicio, fin] (inclusive) del período visible. Es lo
+  // único que se le pide a backend: un día, una semana o un mes (máximo
+  // 31 días, dentro del límite del endpoint de disponibilidad).
+  private rangoAgendaVisible(): { inicio: string; fin: string } {
+    if (this.vistaAgenda === 'dia') {
+      return { inicio: this.fechaDiaAgenda, fin: this.fechaDiaAgenda };
+    }
+    if (this.vistaAgenda === 'mes') {
+      return { inicio: this.mesInicioAgenda, fin: this.mesFinAgenda };
+    }
+    return {
+      inicio: String(this.semanaActual[0]?.fecha ?? ''),
+      fin: String(this.semanaActual[this.semanaActual.length - 1]?.fecha ?? '')
+    };
+  }
+
+  // Fecha de referencia al cambiar de vista, para no perder el contexto:
+  // el día seleccionado si sigue visible; si no, hoy si está visible; si
+  // no, el primer día del período.
+  private fechaAnclaAgenda(): string {
+    const { inicio, fin } = this.rangoAgendaVisible();
+    const hoy = this.toDateStr(new Date());
+    const sel = this.diaSeleccionado;
+    if (sel && sel >= inicio && sel <= fin) return sel;
+    if (hoy >= inicio && hoy <= fin) return hoy;
+    return inicio || hoy;
+  }
+
+  private buildDia(fecha: string): void {
+    const d = this.parseDateStrLocal(fecha);
+    this.fechaDiaAgenda = fecha;
+    this.diaAgenda = {
+      nombre: this.NOMBRES_DIA_CORTO[(d.getDay() + 6) % 7],
+      num: d.getDate(),
+      fecha,
+      esHoy: fecha === this.toDateStr(new Date())
+    };
+    this.diaLabel = `${this.formatearFecha(fecha)} ${d.getFullYear()}`;
+    // El panel contextual acompaña al día visible.
+    this.diaSeleccionado = fecha;
+  }
+
+  private buildMes(fecha: string): void {
+    const ref = this.parseDateStrLocal(fecha);
+    const anio = ref.getFullYear();
+    const mes = ref.getMonth();
+    const primero = new Date(anio, mes, 1);
+    const ultimo = new Date(anio, mes + 1, 0);
+    const previos = (primero.getDay() + 6) % 7;
+    const total = Math.ceil((previos + ultimo.getDate()) / 7) * 7;
+    const hoy = this.toDateStr(new Date());
+
+    this.mesInicioAgenda = this.toDateStr(primero);
+    this.mesFinAgenda = this.toDateStr(ultimo);
+    this.mesLabel = `${this.NOMBRES_MES[mes]} ${anio}`;
+    this.mesCeldas = Array.from({ length: total }, (_, i) => {
+      const d = new Date(anio, mes, 1 - previos + i);
+      const f = this.toDateStr(d);
+      return { fecha: f, num: d.getDate(), enMes: d.getMonth() === mes, esHoy: f === hoy };
+    });
+
+    // Igual que buildSemana: un día seleccionado fuera del mes visible se limpia.
+    if (this.diaSeleccionado
+      && (this.diaSeleccionado < this.mesInicioAgenda || this.diaSeleccionado > this.mesFinAgenda)) {
+      this.diaSeleccionado = null;
+    }
+  }
+
+  // Cambiar de vista o navegar solo re-consulta lecturas (citas y
+  // disponibilidad, ambas exigen agenda.ver en backend). Sin agenda.ver
+  // no hay vista parcialmente funcional: estas acciones no hacen nada.
+  private puedeVerAgendaVistas(): boolean {
+    return this.hasPermission('agenda.ver');
+  }
+
+  cambiarVistaAgenda(vista: AgendaVista): void {
+    if (!this.puedeVerAgendaVistas()) return;
+    if (vista === this.vistaAgenda) return;
+    const ancla = this.fechaAnclaAgenda();
+    this.vistaAgenda = vista;
+
+    if (vista === 'dia') {
+      this.buildDia(ancla);
+    } else if (vista === 'mes') {
+      this.buildMes(ancla);
+    } else {
+      const lunes = this.parseDateStrLocal(ancla);
+      lunes.setDate(lunes.getDate() - ((lunes.getDay() + 6) % 7));
+      this.buildSemana(lunes);
+    }
+
+    if (this.filtroProfesionalId) this.cargarHorarioProfesional();
+  }
+
+  // Desde la vista Mes: abrir el día pedido en la vista Día.
+  abrirDiaAgenda(fecha: string): void {
+    if (!fecha || !this.puedeVerAgendaVistas()) return;
+    this.vistaAgenda = 'dia';
+    this.buildDia(fecha);
+    if (this.filtroProfesionalId) this.cargarHorarioProfesional();
+  }
+
+  private desplazarAgenda(sentido: 1 | -1): void {
+    if (!this.puedeVerAgendaVistas()) return;
+    if (this.vistaAgenda === 'dia') {
+      const d = this.parseDateStrLocal(this.fechaDiaAgenda);
+      d.setDate(d.getDate() + sentido);
+      this.buildDia(this.toDateStr(d));
+    } else if (this.vistaAgenda === 'mes') {
+      const d = this.parseDateStrLocal(this.mesInicioAgenda);
+      this.buildMes(this.toDateStr(new Date(d.getFullYear(), d.getMonth() + sentido, 1)));
+    } else {
+      if (sentido < 0) this.semanaAnterior(); else this.semanaSiguiente();
+      return;
+    }
+    if (this.filtroProfesionalId) this.cargarHorarioProfesional();
+  }
+
+  agendaAnterior(): void { this.desplazarAgenda(-1); }
+  agendaSiguiente(): void { this.desplazarAgenda(1); }
+
+  agendaHoy(): void {
+    if (!this.puedeVerAgendaVistas()) return;
+    if (this.vistaAgenda === 'dia') {
+      this.buildDia(this.toDateStr(new Date()));
+    } else if (this.vistaAgenda === 'mes') {
+      this.buildMes(this.toDateStr(new Date()));
+    } else {
+      this.irAHoy();
+      return;
+    }
+    if (this.filtroProfesionalId) this.cargarHorarioProfesional();
+  }
+
+  // Resumen de un día para la vista Mes. Las citas se resuelven con
+  // buscarCitasEnBloque() —la misma función que alimenta la grilla de
+  // Semana/Día, con su filtro de estados operativos y su orden— para no
+  // duplicar la regla ni volver a resolver un horario con una sola cita
+  // (A.4.7A.1). La disponibilidad es la que YA calculó backend: no se
+  // aplican reglas propias, y un día sin slots nunca se presenta como
+  // disponible.
+  getResumenDia(fecha: string): AgendaDiaResumen {
+    const horas = Array.from(new Set(
+      this.citasHorario
+        .filter(c => c.fecha === fecha)
+        .map(c => this.convertirA24h(c.hora))
+        .filter(hora => !!hora)
+    ));
+    const porHorario = horas.map(hora => this.buscarCitasEnBloque(fecha, hora));
+    const citas = porHorario.flat();
+    const slots = Object.values(this.disponibilidadPorFecha[fecha] ?? {});
+
+    return {
+      citas: citas.length,
+      sobrecupos: citas.filter(c => !!c.sobrecupo).length,
+      urgencias: citas.filter(c => !!c.urgente).length,
+      multicitaHorarios: porHorario.filter(lista => lista.length > 1).length,
+      disponibles: slots.filter(slot => slot.disponible).length,
+      estado: this.estadoDisponibilidadDia(slots)
+    };
+  }
+
+  // Solo lee los slots que entregó el endpoint de disponibilidad (misma
+  // fuente y mismos motivos que claseVisualParaMotivo() en Semana). Sin
+  // slots no se infiere nada: 'sin-datos'.
+  private estadoDisponibilidadDia(
+    slots: SlotDisponibilidadBackend[]
+  ): AgendaDiaResumen['estado'] {
+    if (slots.length === 0) return 'sin-datos';
+    if (slots.some(slot => slot.disponible)) return 'con-cupos';
+
+    const motivos = slots.map(slot => slot.motivo);
+    const todos = (...permitidos: string[]): boolean =>
+      motivos.every(m => m !== null && permitidos.includes(m));
+
+    if (todos('dia_cerrado', 'fin_de_semana')) return 'cerrado';
+    if (todos('profesional_inactivo')) return 'bloqueado';
+    if (todos('fecha_pasada', 'hora_pasada')) return 'pasado';
+    // Un motivo desconocido o ausente no permite afirmar nada sobre el día.
+    if (!todos(
+      'dia_cerrado', 'fin_de_semana', 'en_colacion', 'fuera_de_jornada', 'slot_ocupado',
+      'profesional_inactivo', 'fecha_pasada', 'hora_pasada', 'hora_fuera_de_grilla'
+    )) return 'sin-datos';
+    return 'sin-cupos';
+  }
 
 // ¿La hora indicada cae dentro del horario de almuerzo del profesional actual?
   private esHoraDeAlmuerzo(hora: string): boolean {
@@ -1678,17 +2000,37 @@ toggleSidebarMovil(): void {
     });
   }
 
+  // Imprime únicamente el calendario de la agenda (Día, Semana o Mes según
+  // la vista activa), no el dashboard completo. Sin un calendario en
+  // pantalla no hay nada que imprimir: nunca se cae a window.print() de la
+  // página entera.
   imprimirAgenda(): void {
-    const grilla = document.querySelector('.horario-card') as HTMLElement;
-    if (!grilla) { window.print(); return; }
-    const contenido = grilla.innerHTML;
-    const ventana = window.open('', '_blank');
-    if (ventana) {
-      ventana.document.write(`<html><head><title>Agenda</title>
-        <style>body{font-family:sans-serif;font-size:11px;} table{border-collapse:collapse;width:100%} td,th{border:1px solid #ccc;padding:4px;}</style>
-        </head><body>${contenido}</body></html>`);
-      ventana.document.close();
-      ventana.print();
+    if (!this.puedeVerAgendaVistas()) return;
+    const host = document.querySelector('app-admin-horario');
+    const tarjeta = host?.querySelector('.agenda-calendar-card') as HTMLElement | null;
+    const profesional = this.profesionalActual;
+
+    if (!tarjeta || !profesional) {
+      this.mensajeError = 'Selecciona un profesional para imprimir su agenda.';
+      setTimeout(() => this.mensajeError = '', 3000);
+      return;
+    }
+
+    const nombresVista: Record<AgendaVista, string> = { dia: 'Día', semana: 'Semana', mes: 'Mes' };
+    const especialidad = profesional.especialidad ? ` — ${profesional.especialidad}` : '';
+
+    try {
+      imprimirAgendaAislada({
+        tarjeta,
+        leyenda: host?.querySelector('.agenda-legend') as HTMLElement | null,
+        profesional: `${profesional.nombre}${especialidad}`,
+        vistaNombre: nombresVista[this.vistaAgenda],
+        periodo: this.periodoLabel,
+        orientacion: this.vistaAgenda === 'dia' ? 'portrait' : 'landscape'
+      });
+    } catch {
+      this.mensajeError = 'No se pudo preparar la impresión de la agenda.';
+      setTimeout(() => this.mensajeError = '', 3000);
     }
   }
  // ══════════════════════════════════════
@@ -2054,12 +2396,16 @@ toggleSidebarMovil(): void {
   descargarPdf(citaId: number): void { window.open(`${API}/citas/${citaId}/pdf`, '_blank'); }
   exportarHistorialPdf(): void { alert('Exportar PDF: pendiente.'); }
 
+  // Exporta EXACTAMENTE lo que muestra Historial tras "Aplicar filtros"
+  // (this.historialAdmin ya viene filtrado por el backend). Ahora genera un
+  // .xlsx real con estados legibles y fecha/hora en columnas separadas; antes
+  // era texto tabulado con extensión .xls (tildes dañadas al abrir en Excel).
   exportarHistorialExcel(): void {
-    this.exportarComoExcel(this.historialAdmin.map(h => ({
-      Estudiante: h.estudiante, RUT: h.rut, Carrera: h.carrera,
-      Especialidad: h.especialidad, Profesional: h.profesional,
-      Fecha: h.fecha, Hora: h.hora, Estado: h.estado
-    })), 'historial_citas');
+    this.exportarComoXlsx(
+      filasHistorialExcel(this.historialAdmin),
+      'historial_citas',
+      'Historial de citas'
+    );
   }
 
   // ══════════════════════════════════════
@@ -2511,9 +2857,7 @@ toggleSidebarMovil(): void {
    */
   private exportarComoXlsx(datos: any[], nombreArchivo: string, nombreHoja: string): void {
     if (!datos.length) { alert('No hay datos para exportar.'); return; }
-    const hoja  = XLSX.utils.json_to_sheet(datos);
-    const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, nombreHoja);
+    const libro = construirLibroXlsx(datos, nombreHoja);
     XLSX.writeFile(libro, `${nombreArchivo}_${new Date().toISOString().slice(0,10)}.xlsx`);
   }
 }

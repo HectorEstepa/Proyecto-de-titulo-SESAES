@@ -1,0 +1,450 @@
+/* ══════════════════════════════════════════════════════════
+   INICIO SUPERADMIN — estilos encapsulados.
+   Hereda la identidad del shell Admin (Inter, teal, tarjetas de
+   14px, bordes suaves) mediante variables locales; el modo oscuro
+   replica la paleta de `.dashboard.tema-oscuro`.
+   ══════════════════════════════════════════════════════════ */
+
+:host {
+  display: block;
+
+  --sa-card: #ffffff;
+  --sa-card-alt: #f6f8fb;
+  --sa-border: #e7ebef;
+  --sa-text: #17202a;
+  --sa-muted: #66727e;
+  --sa-accent: #0d9488;
+  --sa-accent-soft: #e6f6f4;
+  --sa-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --sa-skel: #edf1f4;
+  --sa-skel-brillo: #f7f9fb;
+
+  --sa-ok: #15803d;
+  --sa-ok-bg: #e3f6ee;
+  --sa-warn: #a65f13;
+  --sa-warn-bg: #fff0dd;
+  --sa-err: #c2410c;
+  --sa-err-bg: #fbe9e9;
+
+  --sa-c-teal: #0d9488;   --sa-c-teal-bg: #ccfbf1;
+  --sa-c-blue: #3b6fd4;   --sa-c-blue-bg: #e7f0fe;
+  --sa-c-violet: #7c4fc4; --sa-c-violet-bg: #efe9fa;
+  --sa-c-amber: #a16a0a;  --sa-c-amber-bg: #fdf3dc;
+  --sa-c-orange: #c2500c; --sa-c-orange-bg: #ffedd5;
+  --sa-c-rose: #c94444;   --sa-c-rose-bg: #fbe9e9;
+
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  color: var(--sa-text);
+}
+
+:host-context(.tema-oscuro) {
+  --sa-card: #242f42;
+  --sa-card-alt: #1c2534;
+  --sa-border: #3a4a63;
+  --sa-text: #e6edf3;
+  --sa-muted: #8b96a8;
+  --sa-accent: #2dd4bf;
+  --sa-accent-soft: rgba(45, 212, 191, 0.14);
+  --sa-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  --sa-skel: #2f3b52;
+  --sa-skel-brillo: #3a4a63;
+
+  --sa-ok: #4ade80;   --sa-ok-bg: rgba(74, 222, 128, 0.14);
+  --sa-warn: #fbbf24; --sa-warn-bg: rgba(251, 191, 36, 0.14);
+  --sa-err: #fb923c;  --sa-err-bg: rgba(248, 113, 113, 0.16);
+
+  --sa-c-teal: #2dd4bf;   --sa-c-teal-bg: rgba(45, 212, 191, 0.16);
+  --sa-c-blue: #8db4fb;   --sa-c-blue-bg: rgba(79, 142, 247, 0.18);
+  --sa-c-violet: #b79cf0; --sa-c-violet-bg: rgba(139, 101, 207, 0.2);
+  --sa-c-amber: #fbbf24;  --sa-c-amber-bg: rgba(251, 191, 36, 0.14);
+  --sa-c-orange: #fb923c; --sa-c-orange-bg: rgba(251, 146, 60, 0.16);
+  --sa-c-rose: #f87171;   --sa-c-rose-bg: rgba(248, 113, 113, 0.16);
+}
+
+.material-symbols-outlined { font-size: 20px; line-height: 1; }
+
+.sa-inicio { display: flex; flex-direction: column; gap: 20px; }
+
+/* ── KPIs ───────────────────────────────────────────────── */
+.sa-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  gap: 14px;
+}
+
+.sa-kpi {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: var(--sa-card);
+  border: 1px solid var(--sa-border);
+  border-radius: 14px;
+  box-shadow: var(--sa-shadow);
+  min-width: 0;
+}
+
+.sa-kpi-icono {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tono);
+  background: var(--tono-bg);
+}
+.sa-kpi-icono .material-symbols-outlined { font-size: 22px; }
+
+.sa-kpi.tono-teal   { --tono: var(--sa-c-teal);   --tono-bg: var(--sa-c-teal-bg); }
+.sa-kpi.tono-blue   { --tono: var(--sa-c-blue);   --tono-bg: var(--sa-c-blue-bg); }
+.sa-kpi.tono-violet { --tono: var(--sa-c-violet); --tono-bg: var(--sa-c-violet-bg); }
+.sa-kpi.tono-amber  { --tono: var(--sa-c-amber);  --tono-bg: var(--sa-c-amber-bg); }
+.sa-kpi.tono-orange { --tono: var(--sa-c-orange); --tono-bg: var(--sa-c-orange-bg); }
+.sa-kpi.tono-rose   { --tono: var(--sa-c-rose);   --tono-bg: var(--sa-c-rose-bg); }
+
+.sa-kpi-cuerpo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sa-kpi-valor { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.sa-kpi-etiqueta { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.sa-kpi-nota { font-size: 11px; color: var(--sa-muted); line-height: 1.3; }
+.sa-kpi.no-disponible .sa-kpi-valor { color: var(--sa-muted); }
+
+.sa-kpis-fallo {
+  grid-column: 1 / -1;
+  background: var(--sa-card);
+  border: 1px solid var(--sa-border);
+  border-radius: 14px;
+  box-shadow: var(--sa-shadow);
+  padding: 18px;
+}
+
+/* ── Layout ─────────────────────────────────────────────── */
+.sa-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.sa-principal,
+.sa-lateral { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+.sa-principal { container-type: inline-size; }
+
+.sa-fila { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+
+@container (min-width: 520px) {
+  .sa-fila-analitica { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sa-fila-analitica .sa-card-linea { grid-column: 1 / -1; }
+  .sa-fila-gestion { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (min-width: 820px) {
+  .sa-fila-analitica { grid-template-columns: 1.6fr 1fr 1fr; }
+  .sa-fila-analitica .sa-card-linea { grid-column: auto; }
+  .sa-fila-gestion { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1180px) {
+  .sa-layout { grid-template-columns: minmax(0, 1fr); }
+  .sa-lateral {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+}
+
+/* ── Tarjeta base ───────────────────────────────────────── */
+.sa-card {
+  background: var(--sa-card);
+  border: 1px solid var(--sa-border);
+  border-radius: 14px;
+  box-shadow: var(--sa-shadow);
+  padding: 18px 20px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sa-card-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-bottom: 14px;
+}
+
+.sa-card-titulo {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--sa-text);
+}
+.sa-card-titulo .material-symbols-outlined { font-size: 19px; color: var(--sa-accent); }
+
+.sa-card-sub { font-size: 11.5px; color: var(--sa-muted); text-transform: capitalize; }
+.sa-card-cuerpo { flex: 1; min-width: 0; }
+
+.sa-pie { margin: 12px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--sa-muted); }
+
+/* ── Acción de navegación (Ver reporte / Ver todos …) ────── */
+.sa-accion {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sa-accent);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sa-accion .material-symbols-outlined { font-size: 15px; transition: transform 0.15s; }
+.sa-accion:hover { text-decoration: underline; }
+.sa-accion:hover .material-symbols-outlined { transform: translateX(2px); }
+.sa-accion:focus-visible { outline: 2px solid var(--sa-accent); outline-offset: 2px; }
+
+/* ── Estados ────────────────────────────────────────────── */
+.sa-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 140px;
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--sa-muted);
+}
+.sa-estado .material-symbols-outlined { font-size: 28px; color: var(--sa-muted); }
+.sa-estado .material-symbols-outlined.err { color: var(--sa-err); }
+
+.sa-spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--sa-border);
+  border-top-color: var(--sa-accent);
+  border-radius: 50%;
+  animation: sa-giro 0.8s linear infinite;
+}
+
+.sa-reintentar {
+  margin-top: 2px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sa-accent);
+  background: transparent;
+  border: 1.5px solid var(--sa-accent);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.sa-reintentar:hover { background: var(--sa-accent-soft); }
+.sa-reintentar:focus-visible { outline: 2px solid var(--sa-accent); outline-offset: 2px; }
+
+/* Esqueletos de KPI */
+.sa-skel {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--sa-skel) 25%, var(--sa-skel-brillo) 50%, var(--sa-skel) 75%);
+  background-size: 200% 100%;
+  animation: sa-brillo 1.4s ease-in-out infinite;
+}
+.sa-skel-icono { width: 40px; height: 40px; border-radius: 12px; flex: none; }
+.sa-skel-valor { width: 56px; height: 24px; }
+.sa-skel-linea { width: 110px; height: 12px; margin-top: 8px; }
+
+@keyframes sa-giro { to { transform: rotate(360deg); } }
+@keyframes sa-brillo { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-spinner, .sa-skel { animation: none; }
+}
+
+/* ── Gráfico de línea ───────────────────────────────────── */
+.sa-linea { width: 100%; height: auto; display: block; overflow: visible; }
+.sa-grilla line { stroke: var(--sa-border); stroke-width: 1; }
+.sa-grilla text,
+.sa-ejex text { fill: var(--sa-muted); font-size: 10px; font-family: inherit; }
+.sa-area { fill: var(--sa-accent); opacity: 0.14; }
+.sa-trazo { fill: none; stroke: var(--sa-accent); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.sa-punto { fill: var(--sa-card); stroke: var(--sa-accent); stroke-width: 2; }
+.sa-punto:hover { fill: var(--sa-accent); }
+
+/* ── Donut ──────────────────────────────────────────────── */
+.sa-donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.sa-donut { width: 100%; max-width: 168px; height: auto; }
+.sa-donut-base { stroke: var(--sa-border); opacity: 0.5; }
+.sa-donut-total { fill: var(--sa-text); font-size: 30px; font-weight: 700; font-family: inherit; }
+.sa-donut-sub { fill: var(--sa-muted); font-size: 12px; font-family: inherit; }
+
+.sa-leyenda { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 7px; }
+.sa-leyenda li { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; }
+.sa-swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.sa-leyenda-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-leyenda-valor { flex: none; color: var(--sa-muted); font-variant-numeric: tabular-nums; }
+
+/* ── Barras horizontales ────────────────────────────────── */
+.sa-barras { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.sa-barra-fila { display: flex; align-items: center; gap: 10px; }
+.sa-barra-rank {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sa-accent);
+  background: var(--sa-accent-soft);
+}
+.sa-barra-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sa-barra-nombre { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-barra-esp { font-size: 11px; color: var(--sa-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-barra-valor { flex: none; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sa-barra-pista { margin: 6px 0 0 32px; height: 7px; border-radius: 999px; background: var(--sa-card-alt); overflow: hidden; }
+.sa-barra-relleno { height: 100%; border-radius: 999px; background: var(--sa-accent); min-width: 4px; }
+
+/* ── Listas (usuarios / solicitudes / administradores) ──── */
+.sa-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sa-fila-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sa-border);
+  min-width: 0;
+}
+.sa-fila-item:first-child { padding-top: 0; }
+.sa-fila-item:last-child { padding-bottom: 0; border-bottom: 0; }
+
+.sa-avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sa-accent);
+  background: var(--sa-accent-soft);
+}
+
+.sa-item-info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.sa-item-titulo { max-width: 100%; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-item-sub { max-width: 100%; font-size: 11.5px; color: var(--sa-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-item-fecha { flex: none; font-size: 11.5px; color: var(--sa-muted); white-space: nowrap; }
+.sa-item-lado { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* Chips de rol y badges de estado */
+.sa-chip,
+.sa-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sa-chip { color: var(--sa-c-teal); background: var(--sa-c-teal-bg); }
+.sa-chip.rol-profesional { color: var(--sa-c-blue); background: var(--sa-c-blue-bg); }
+.sa-chip.rol-admin { color: var(--sa-c-violet); background: var(--sa-c-violet-bg); }
+.sa-chip.rol-superadmin { color: var(--sa-c-amber); background: var(--sa-c-amber-bg); }
+
+.sa-badge.ok { color: var(--sa-ok); background: var(--sa-ok-bg); }
+.sa-badge.warn,
+.sa-badge.pendiente { color: var(--sa-warn); background: var(--sa-warn-bg); }
+.sa-badge.err { color: var(--sa-err); background: var(--sa-err-bg); }
+
+/* ── Tabla de auditoría ─────────────────────────────────── */
+.sa-tabla-wrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.sa-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sa-tabla th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--sa-muted);
+  border-bottom: 1px solid var(--sa-border);
+  white-space: nowrap;
+}
+.sa-tabla td { padding: 10px 12px; border-bottom: 1px solid var(--sa-border); vertical-align: middle; }
+.sa-tabla tbody tr:last-child td { border-bottom: 0; }
+.sa-tabla tbody tr:hover { background: var(--sa-card-alt); }
+.col-usuario { font-weight: 600; white-space: nowrap; }
+.col-detalle { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sa-muted); }
+.col-fecha { white-space: nowrap; color: var(--sa-muted); }
+
+/* ── Actividad reciente ─────────────────────────────────── */
+.sa-actividad { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.sa-actividad li { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+.sa-act-icono {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sa-ok);
+  background: var(--sa-ok-bg);
+}
+.sa-act-icono .material-symbols-outlined { font-size: 17px; }
+.sa-act-icono.warn { color: var(--sa-warn); background: var(--sa-warn-bg); }
+.sa-act-icono.err { color: var(--sa-err); background: var(--sa-err-bg); }
+.sa-act-texto { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-act-titulo { font-size: 12.5px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.sa-act-sub { font-size: 11.5px; color: var(--sa-muted); }
+
+/* ── Tarjeta institucional ──────────────────────────────── */
+.sa-institucional {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  color: #ffffff;
+  border: 0;
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 60%, #115e59 100%);
+}
+:host-context(.tema-oscuro) .sa-institucional {
+  background: linear-gradient(135deg, #0f766e 0%, #115e59 60%, #134e4a 100%);
+}
+.sa-inst-logo {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  padding: 6px;
+  object-fit: contain;
+  background: #ffffff;
+  border-radius: 14px;
+}
+.sa-inst-titulo { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0.5px; }
+.sa-inst-sub { margin: 0 0 6px; font-size: 12px; opacity: 0.85; }
+.sa-inst-desc { margin: 0; font-size: 12px; line-height: 1.45; opacity: 0.92; }
+
+/* ── Móvil ──────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .sa-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .sa-kpi { padding: 12px; gap: 10px; }
+  .sa-kpi-valor { font-size: 22px; }
+  .sa-card { padding: 16px; }
+}

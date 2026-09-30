@@ -32,6 +32,7 @@ from app.rbac.dependencies import (
     require_effective_permission,
 )
 from app.rbac.permissions import Permission
+from app.busqueda import filtro_texto, igual_normalizado
 from app.rbac.admin_authorization import (
     obtener_alcance_administrativo_efectivo,
     especialidad_permitida_por_alcance,
@@ -749,8 +750,14 @@ def get_grafico_especialidad(
     elif anio:
         query = query.filter(Cita.fecha.like(f"{anio}%"))
     if profesional_id: query = query.filter(Cita.profesional_id == profesional_id)
-    if especialidad:   query = query.filter(Profesional.especialidad == especialidad)
-    if carrera:        query = query.filter(Usuario.carrera.ilike(f"%{carrera}%"))
+    # Búsqueda tolerante (mayúsculas, tildes, espacios, parcial): solo para
+    # COMPARAR; las etiquetas devueltas siguen siendo las originales.
+    condicion_especialidad = igual_normalizado(Profesional.especialidad, especialidad)
+    if condicion_especialidad is not None:
+        query = query.filter(condicion_especialidad)
+    condicion_carrera = filtro_texto([Usuario.carrera], carrera)
+    if condicion_carrera is not None:
+        query = query.filter(condicion_carrera)
     resultados = query.group_by(Profesional.especialidad).all()
     total = sum(r[1] for r in resultados) or 1
     return [{"especialidad": r[0], "cantidad": r[1], "porcentaje": round((r[1]/total)*100)} for r in resultados]
@@ -2266,12 +2273,14 @@ def get_historial_admin(
             )
         )
 
-    if estudiante:
-        q = f"%{estudiante}%"
-        query = query.filter(
-            (Usuario.nombre.ilike(q))
-            | (Usuario.rut.ilike(q))
-        )
+    # Búsqueda tolerante (mayúsculas, tildes, espacios, parcial, palabras en
+    # cualquier orden; RUT con o sin puntos/guion). Solo COMPARA: los datos
+    # devueltos y exportados son los originales.
+    condicion_estudiante = filtro_texto(
+        [Usuario.nombre], estudiante, columnas_rut=[Usuario.rut]
+    )
+    if condicion_estudiante is not None:
+        query = query.filter(condicion_estudiante)
 
     if fecha_inicio:
         query = query.filter(
@@ -2283,10 +2292,9 @@ def get_historial_admin(
             Cita.fecha <= fecha_fin
         )
 
-    if especialidad:
-        query = query.filter(
-            Profesional.especialidad == especialidad
-        )
+    condicion_especialidad = igual_normalizado(Profesional.especialidad, especialidad)
+    if condicion_especialidad is not None:
+        query = query.filter(condicion_especialidad)
 
     if estado:
         query = query.filter(
@@ -2298,12 +2306,9 @@ def get_historial_admin(
             Cita.profesional_id == profesional_id
         )
 
-    if carrera:
-        query = query.filter(
-            Usuario.carrera.ilike(
-                f"%{carrera}%"
-            )
-        )
+    condicion_carrera = filtro_texto([Usuario.carrera], carrera)
+    if condicion_carrera is not None:
+        query = query.filter(condicion_carrera)
 
     citas = (
         query
@@ -2426,64 +2431,155 @@ def get_notificaciones_admin(
 # debe reflejar atenciones que realmente ocurrieron, no citas agendadas
 # (pendiente) que todavía no se realizan.
 
+# ── Exportaciones CGR ────────────────────────────────────────────────
+# Las REGLAS (qué filas entran, exclusiones, orden y valores vacíos) viven
+# en _filas_cgr_atenciones / _filas_cgr_alumnos y las consumen TANTO el
+# texto tabulado histórico (/exportar/cgr, /exportar/alumnos) COMO los
+# endpoints JSON (/exportar/cgr/datos, /exportar/alumnos/datos) con los que
+# el frontend arma el .xlsx. Así ambos formatos entregan exactamente las
+# mismas filas y ninguna regla se duplica en Angular.
+
+COLUMNAS_CGR_ATENCIONES = [
+    "Nombre Completo", "RUT", "Tipo de Atención", "Fecha", "Hora",
+    "Medicamento Suministrado", "Profesional que Atendió",
+]
+COLUMNAS_CGR_ALUMNOS = ["Nombre Completo", "RUT", "Carrera", "Correo"]
+
+SIN_DATO = "—"                 # valor realmente ausente
+NO_APLICA = "No aplica"        # medicamento no suministrado
+
+
+def _o_guion(valor):
+    """Un valor ausente (None o vacío) se muestra como "—"; el resto, tal cual."""
+    return SIN_DATO if valor is None or valor == "" else valor
+
+
+def _celda_tsv(valor) -> str:
+    """
+    Valor de UNA celda de una exportación tabulada. Un campo nunca puede
+    partir la fila ni desplazar columnas: solo se reemplazan las tabulaciones
+    y saltos de línea (separadores del formato) por un espacio. El resto del
+    texto (tildes, ñ, mayúsculas, espacios) se conserva tal cual.
+    """
+    if valor is None:
+        return ""
+    return str(valor).replace("\t", " ").replace("\r", " ").replace("\n", " ")
+
+
+def _filas_cgr_atenciones(db: Session, anio: int, fecha_fin: str = None) -> list:
+    """
+    Atenciones CGR: solo citas completadas del año (prefijo de fecha),
+    `fecha_fin` inclusiva, sin los RUT excluidos, ordenadas de forma
+    ascendente por fecha y hora. Una fila (lista de 7 valores, en el orden de
+    COLUMNAS_CGR_ATENCIONES) por atención. Una sola consulta con JOIN.
+    """
+    query = (
+        db.query(Cita, Usuario, Profesional)
+        .join(Profesional, Cita.profesional_id == Profesional.id)
+        .join(Usuario, Cita.estudiante_id == Usuario.id)
+        .filter(Cita.fecha.like(f"{anio}%"), Cita.estado == "completada")
+    )
+    if fecha_fin:
+        query = query.filter(Cita.fecha <= fecha_fin)
+
+    filas = []
+    for cita, est, prof in query.order_by(Cita.fecha, Cita.hora, Cita.id).all():
+        if est.rut in RUTS_EXCLUIDOS_CGR:
+            continue
+        filas.append([
+            _o_guion(est.nombre),
+            _o_guion(est.rut),
+            _o_guion(prof.especialidad),
+            _o_guion(cita.fecha),
+            _o_guion(cita.hora),
+            cita.medicamento or NO_APLICA,
+            _o_guion(prof.nombre),
+        ])
+    return filas
+
+
+def _filas_cgr_alumnos(db: Session) -> list:
+    """Listado de alumnos ordenado por nombre, sin los RUT excluidos."""
+    estudiantes = (
+        db.query(Usuario)
+        .filter(Usuario.rol == "estudiante")
+        .order_by(Usuario.nombre, Usuario.id)
+        .all()
+    )
+    return [
+        [_o_guion(e.nombre), _o_guion(e.rut), _o_guion(e.carrera), _o_guion(e.correo)]
+        for e in estudiantes
+        if e.rut not in RUTS_EXCLUIDOS_CGR
+    ]
+
+
+def _respuesta_tsv(columnas: list, filas: list, nombre_archivo: str) -> StreamingResponse:
+    lineas = ["\t".join(columnas)] + ["\t".join(_celda_tsv(v) for v in fila) for fila in filas]
+    return StreamingResponse(
+        io.BytesIO("\n".join(lineas).encode("utf-8-sig")),
+        media_type="text/tab-separated-values",
+        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"},
+    )
+
+
 @router.get("/exportar/cgr")
 def exportar_cgr(anio: int, fecha_fin: str = None, db: Session = Depends(get_db), current_user: dict = Depends(require_permission(Permission.REPORTES_CGR_EXPORTAR))):
-    query = db.query(Cita)\
-        .join(Profesional, Cita.profesional_id == Profesional.id)\
-        .join(Usuario, Cita.estudiante_id == Usuario.id)\
-        .filter(Cita.fecha.like(f"{anio}%"), Cita.estado == "completada")
-    if fecha_fin: query = query.filter(Cita.fecha <= fecha_fin)
-    citas = query.order_by(Cita.fecha).all()
-    headers = ["Nombre Completo","RUT","Tipo de Atención","Fecha","Hora","Medicamento Suministrado","Profesional que Atendió"]
-    filas = ["\t".join(headers)]
-    for c in citas:
-        est  = db.query(Usuario).filter(Usuario.id == c.estudiante_id).first()
-        prof = db.query(Profesional).filter(Profesional.id == c.profesional_id).first()
-        rut_est = est.rut if est else ""
-        if rut_est in RUTS_EXCLUIDOS_CGR: continue
-        filas.append("\t".join([
-            est.nombre if est else "—", rut_est or "—",
-            prof.especialidad if prof else "—", c.fecha, c.hora,
-            c.medicamento or "No aplica", prof.nombre if prof else "—"
-        ]))
-    contenido = "\n".join(filas)
     nombre_archivo = f"cgr_atenciones_{anio}" + (f"_hasta_{fecha_fin}" if fecha_fin else "") + ".xls"
-    return StreamingResponse(io.BytesIO(contenido.encode("utf-8-sig")),
-        media_type="text/tab-separated-values",
-        headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"})
+    return _respuesta_tsv(COLUMNAS_CGR_ATENCIONES, _filas_cgr_atenciones(db, anio, fecha_fin), nombre_archivo)
 
 
 @router.get("/exportar/alumnos")
 def exportar_listado_alumnos(db: Session = Depends(get_db), current_user: dict = Depends(require_permission(Permission.REPORTES_CGR_EXPORTAR))):
-    estudiantes = db.query(Usuario).filter(Usuario.rol == "estudiante").order_by(Usuario.nombre).all()
-    filas = ["Nombre Completo\tRUT\tCarrera\tCorreo"]
-    for e in estudiantes:
-        if e.rut in RUTS_EXCLUIDOS_CGR: continue
-        filas.append(f"{e.nombre or '—'}\t{e.rut or '—'}\t{e.carrera or '—'}\t{e.correo or '—'}")
-    contenido = "\n".join(filas)
-    return StreamingResponse(io.BytesIO(contenido.encode("utf-8-sig")),
-        media_type="text/tab-separated-values",
-        headers={"Content-Disposition": "attachment; filename=listado_alumnos.xls"})
+    return _respuesta_tsv(COLUMNAS_CGR_ALUMNOS, _filas_cgr_alumnos(db), "listado_alumnos.xls")
+
+
+# Datos JSON de las mismas exportaciones: el frontend arma el .xlsx a partir
+# de ellos (decisión B2: el backend no genera .xlsx ni agrega dependencias).
+# Mismo permiso que el texto tabulado; los valores viajan SIN normalizar ni
+# sanear (tildes, ñ y mayúsculas originales); la fecha y la hora van tal como
+# están guardadas (AAAA-MM-DD y HH:MM) en columnas separadas.
+@router.get("/exportar/cgr/datos")
+def exportar_cgr_datos(anio: int, fecha_fin: str = None, db: Session = Depends(get_db), current_user: dict = Depends(require_permission(Permission.REPORTES_CGR_EXPORTAR))):
+    filas = _filas_cgr_atenciones(db, anio, fecha_fin)
+    return {"columnas": list(COLUMNAS_CGR_ATENCIONES), "filas": filas, "total": len(filas)}
+
+
+@router.get("/exportar/alumnos/datos")
+def exportar_listado_alumnos_datos(db: Session = Depends(get_db), current_user: dict = Depends(require_permission(Permission.REPORTES_CGR_EXPORTAR))):
+    filas = _filas_cgr_alumnos(db)
+    return {"columnas": list(COLUMNAS_CGR_ALUMNOS), "filas": filas, "total": len(filas)}
 
 
 # ══════════════════════════════════════
 # AUDITORÍA — con fix de filtro por fecha
 # ══════════════════════════════════════
 
+LIMITE_MAXIMO_AUDITORIA = 200
+
+
 @router.get("/auditoria")
-def get_auditoria(fecha_inicio: str = None, fecha_fin: str = None, db: Session = Depends(get_db), current_user: dict = Depends(require_permission(Permission.AUDITORIA_VER))):
-    query = db.query(Auditoria).order_by(Auditoria.fecha.desc())
+def get_auditoria(fecha_inicio: str = None, fecha_fin: str = None, limit: int = LIMITE_MAXIMO_AUDITORIA, db: Session = Depends(get_db), current_user: dict = Depends(require_permission(Permission.AUDITORIA_VER))):
+    # Inicio SUPERADMIN: `limit` opcional (default y tope = 200, el valor
+    # histórico) y `actor_nombre` aditivo, resuelto con un único LEFT JOIN
+    # (sin consultar Usuario fila por fila). Los campos previos no cambian.
+    limite = max(1, min(int(limit), LIMITE_MAXIMO_AUDITORIA))
+    query = (
+        db.query(Auditoria, Usuario.nombre)
+        .outerjoin(Usuario, Usuario.id == Auditoria.usuario_id)
+        .order_by(Auditoria.fecha.desc(), Auditoria.id.desc())
+    )
     if fecha_inicio:
         query = query.filter(Auditoria.fecha >= datetime.strptime(fecha_inicio, "%Y-%m-%d"))
     if fecha_fin:
         query = query.filter(Auditoria.fecha <= datetime.strptime(fecha_fin, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
-    registros = query.limit(200).all()
+    registros = query.limit(limite).all()
     return [
         {"id": r.id, "usuario_id": r.usuario_id, "actor_rol": r.actor_rol,
+         "actor_nombre": actor_nombre,
          "accion": r.accion, "resultado": r.resultado, "detalle": r.detalle,
          "entidad": r.entidad, "entidad_id": r.entidad_id,
          "fecha": r.fecha.isoformat() if r.fecha else None}
-        for r in registros
+        for r, actor_nombre in registros
     ]
 
 

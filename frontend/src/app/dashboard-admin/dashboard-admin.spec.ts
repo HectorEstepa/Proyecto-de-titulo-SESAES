@@ -1,7 +1,7 @@
 import { ChangeDetectorRef } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { of, Subject, throwError } from 'rxjs';
 
 import { AuthService } from '../auth.service';
@@ -2200,5 +2200,782 @@ describe('DashboardAdminComponent — A.4.7A: sobrecupo sobre slot ocupado', () 
     const { component } = crearShellConPermisosYHttp(['agenda.ver', 'agenda.gestionar', 'agenda.sobrecupo']);
     component.nuevaCita.sobrecupo = true;
     expect(component.mostrarToggleUrgente).toBe(false);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// Agenda Admin — vistas Día y Mes + impresión aislada
+// ══════════════════════════════════════════════════════════════════
+describe('DashboardAdminComponent — Agenda vistas Día y Mes', () => {
+  // "Hoy" fijo: sábado 19 de septiembre de 2026. Solo se falsea Date para
+  // no interferir con los timers reales de rxjs/vitest.
+  const fijarHoy = (): void => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 19, 10, 0, 0));
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const crearAgenda = (permisos: Permission[] = ['agenda.ver']) => {
+    const { component, http } = crearShellConPermisosYHttp(permisos);
+    component.profesionales = [
+      { id: 20, nombre: 'Dra. Pérez', especialidad: 'Medicina General', duracion_min: 60, estado: 'activo' }
+    ];
+    component.filtroProfesionalId = '20';
+    component.generarSemanaActual(); // semana del 14 al 20 de septiembre de 2026
+    return { component, http };
+  };
+
+  const urlsDisponibilidad = (http: { get: { mock: { calls: unknown[][] } } }): string[] =>
+    http.get.mock.calls.map(call => String(call[0])).filter(url => url.includes('/disponibilidad'));
+
+  const slot = (hora: string, disponible: boolean, motivo: string | null) => ({
+    hora, disponible, motivo, overridable_con_sobrecupo: false
+  });
+
+  it('Semana es la vista por defecto y conserva su período', () => {
+    fijarHoy();
+    const { component } = crearAgenda();
+
+    expect(component.vistaAgenda).toBe('semana');
+    expect(component.periodoLabel).toBe(component.semanaLabel);
+    expect(component.semanaActual[0].fecha).toBe('2026-09-14');
+  });
+
+  describe('vista Día', () => {
+    it('al cambiar a Día toma el día seleccionado y consulta ese único día', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      component.diaSeleccionado = '2026-09-17';
+
+      component.cambiarVistaAgenda('dia');
+
+      expect(component.vistaAgenda).toBe('dia');
+      expect(component.diaAgenda).toEqual({ nombre: 'Jue', num: 17, fecha: '2026-09-17', esHoy: false });
+      expect(component.periodoLabel).toBe('Jueves 17 de Septiembre 2026');
+      expect(component.diaSeleccionado).toBe('2026-09-17');
+
+      const urls = urlsDisponibilidad(http);
+      expect(urls).toHaveLength(1);
+      expect(urls[0]).toContain('/agenda/profesional/20/disponibilidad');
+      expect(urls[0]).toContain('fecha_inicio=2026-09-17');
+      expect(urls[0]).toContain('fecha_fin=2026-09-17');
+    });
+
+    it('sin día seleccionado usa hoy si está en el período visible', () => {
+      fijarHoy();
+      const { component } = crearAgenda();
+      component.diaSeleccionado = null;
+
+      component.cambiarVistaAgenda('dia');
+
+      expect(component.diaAgenda.fecha).toBe('2026-09-19');
+      expect(component.diaAgenda.esHoy).toBe(true);
+    });
+
+    it('Día siguiente/anterior mueve un día, cruza de mes y refresca el rango', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      // Semana del 28 sep al 4 oct: el día seleccionado (30 sep) es el ancla.
+      component.semanaActual = [{ fecha: '2026-09-28' }, { fecha: '2026-10-04' }];
+      component.diaSeleccionado = '2026-09-30';
+      component.cambiarVistaAgenda('dia');
+
+      component.agendaSiguiente();
+      expect(component.diaAgenda.fecha).toBe('2026-10-01');
+
+      component.agendaAnterior();
+      component.agendaAnterior();
+      expect(component.diaAgenda.fecha).toBe('2026-09-29');
+
+      const urls = urlsDisponibilidad(http);
+      expect(urls).toHaveLength(4);
+      expect(urls[1]).toContain('fecha_inicio=2026-10-01&fecha_fin=2026-10-01');
+      expect(urls[3]).toContain('fecha_inicio=2026-09-29&fecha_fin=2026-09-29');
+    });
+
+    it('Hoy vuelve al día actual', () => {
+      fijarHoy();
+      const { component } = crearAgenda();
+      component.cambiarVistaAgenda('dia');
+      component.agendaSiguiente();
+      component.agendaSiguiente();
+
+      component.agendaHoy();
+
+      expect(component.diaAgenda.fecha).toBe('2026-09-19');
+    });
+
+    it('volver a Semana muestra la semana (lunes a domingo) que contiene el día visible', () => {
+      fijarHoy();
+      const { component } = crearAgenda();
+      component.cambiarVistaAgenda('dia');
+      component.agendaSiguiente(); // domingo 20
+      component.agendaSiguiente(); // lunes 21
+
+      component.cambiarVistaAgenda('semana');
+
+      expect(component.semanaActual[0].fecha).toBe('2026-09-21');
+      expect(component.semanaActual[6].fecha).toBe('2026-09-27');
+
+      component.cambiarVistaAgenda('dia');
+      component.agendaAnterior(); // domingo 20 → semana que empieza el lunes 14
+      component.cambiarVistaAgenda('semana');
+      expect(component.semanaActual[0].fecha).toBe('2026-09-14');
+    });
+  });
+
+  describe('vista Mes', () => {
+    it('arma las celdas del mes con relleno del mes anterior y consulta el mes completo', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+
+      component.cambiarVistaAgenda('mes');
+
+      // Septiembre 2026 empieza en martes: 1 día de relleno + 30 días = 31 → 5 semanas (35 celdas).
+      expect(component.mesCeldas).toHaveLength(35);
+      expect(component.mesCeldas[0]).toEqual({ fecha: '2026-08-31', num: 31, enMes: false, esHoy: false });
+      expect(component.mesCeldas[1].fecha).toBe('2026-09-01');
+      expect(component.mesCeldas.filter(c => c.enMes)).toHaveLength(30);
+      expect(component.mesCeldas.find(c => c.esHoy)!.fecha).toBe('2026-09-19');
+      expect(component.periodoLabel).toBe('Septiembre 2026');
+
+      const urls = urlsDisponibilidad(http);
+      expect(urls).toHaveLength(1);
+      expect(urls[0]).toContain('fecha_inicio=2026-09-01');
+      expect(urls[0]).toContain('fecha_fin=2026-09-30');
+    });
+
+    it('el rango mensual nunca supera los 31 días que admite el backend, en ningún mes', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      component.cambiarVistaAgenda('mes');
+
+      for (let i = 0; i < 26; i++) component.agendaSiguiente(); // hasta noviembre de 2028 (incluye febrero bisiesto)
+
+      const rangos = urlsDisponibilidad(http).map(url => {
+        const inicio = /fecha_inicio=([\d-]+)/.exec(url)![1];
+        const fin = /fecha_fin=([\d-]+)/.exec(url)![1];
+        const dias = (Date.UTC(+fin.slice(0, 4), +fin.slice(5, 7) - 1, +fin.slice(8)) -
+          Date.UTC(+inicio.slice(0, 4), +inicio.slice(5, 7) - 1, +inicio.slice(8))) / 86400000 + 1;
+        return { inicio, fin, dias };
+      });
+
+      expect(rangos).toHaveLength(27);
+      expect(rangos.every(r => r.dias >= 28 && r.dias <= 31)).toBe(true);
+      expect(rangos.find(r => r.inicio === '2028-02-01')!.fin).toBe('2028-02-29');
+    });
+
+    it('navegar entre meses hace una sola consulta de disponibilidad por mes (no por celda)', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      component.cambiarVistaAgenda('mes');
+
+      component.agendaSiguiente();
+      component.agendaAnterior();
+      component.agendaAnterior();
+
+      expect(urlsDisponibilidad(http)).toHaveLength(4);
+      expect(component.periodoLabel).toBe('Agosto 2026');
+    });
+
+    it('cruza de año hacia adelante y hacia atrás', () => {
+      fijarHoy();
+      const { component } = crearAgenda();
+      component.cambiarVistaAgenda('mes');
+
+      for (let i = 0; i < 4; i++) component.agendaSiguiente();
+      expect(component.periodoLabel).toBe('Enero 2027');
+
+      component.agendaAnterior();
+      expect(component.periodoLabel).toBe('Diciembre 2026');
+    });
+
+    it('febrero que empieza en lunes usa exactamente cuatro semanas', () => {
+      fijarHoy();
+      const { component } = crearAgenda();
+      component.cambiarVistaAgenda('mes');
+      for (let i = 0; i < 5; i++) component.agendaSiguiente(); // febrero 2027 (lunes 1, 28 días)
+
+      expect(component.periodoLabel).toBe('Febrero 2027');
+      expect(component.mesCeldas).toHaveLength(28);
+      expect(component.mesCeldas.every(c => c.enMes)).toBe(true);
+    });
+
+    it('limpia el día seleccionado si el mes visible ya no lo contiene', () => {
+      fijarHoy();
+      const { component } = crearAgenda();
+      component.cambiarVistaAgenda('mes');
+      component.diaSeleccionado = '2026-09-10';
+
+      component.agendaSiguiente();
+
+      expect(component.diaSeleccionado).toBeNull();
+    });
+
+    it('desde Mes, abrir un día lo muestra en la vista Día con su propia consulta', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      component.cambiarVistaAgenda('mes');
+
+      component.abrirDiaAgenda('2026-09-08');
+
+      expect(component.vistaAgenda).toBe('dia');
+      expect(component.diaAgenda.fecha).toBe('2026-09-08');
+      const urls = urlsDisponibilidad(http);
+      expect(urls[urls.length - 1]).toContain('fecha_inicio=2026-09-08&fecha_fin=2026-09-08');
+    });
+
+    it('Mes → Semana muestra la semana del día seleccionado', () => {
+      fijarHoy();
+      const { component } = crearAgenda();
+      component.cambiarVistaAgenda('mes');
+      component.diaSeleccionado = '2026-09-24';
+
+      component.cambiarVistaAgenda('semana');
+
+      expect(component.semanaActual[0].fecha).toBe('2026-09-21');
+    });
+  });
+
+  it('cambiar de vista sin profesional seleccionado no consulta disponibilidad', () => {
+    fijarHoy();
+    const { component, http } = crearAgenda();
+    component.filtroProfesionalId = '';
+
+    component.cambiarVistaAgenda('mes');
+    component.cambiarVistaAgenda('dia');
+
+    expect(urlsDisponibilidad(http)).toHaveLength(0);
+  });
+
+  it('cambiar a la vista que ya está activa no hace nada', () => {
+    fijarHoy();
+    const { component, http } = crearAgenda();
+
+    component.cambiarVistaAgenda('semana');
+
+    expect(urlsDisponibilidad(http)).toHaveLength(0);
+  });
+
+  it('el profesional seleccionado define la consulta también en Día y Mes', () => {
+    fijarHoy();
+    const { component, http } = crearAgenda();
+    component.cambiarVistaAgenda('dia');
+
+    component.filtroProfesionalId = '33';
+    component.cargarHorarioProfesional();
+    component.cambiarVistaAgenda('mes');
+
+    const todas = http.get.mock.calls.map(c => String(c[0]));
+    expect(todas.filter(u => u.includes('/agenda/profesional/33/disponibilidad'))).toHaveLength(2);
+    expect(todas.filter(u => u.includes('/agenda/profesional/33/citas'))).toHaveLength(2);
+    const ultima = todas.filter(u => u.includes('/disponibilidad')).pop()!;
+    expect(ultima).toContain('/agenda/profesional/33/');
+    expect(ultima).toContain('fecha_inicio=2026-09-01&fecha_fin=2026-09-30');
+  });
+
+  describe('permisos: lectura, gestión y sobrecupo en las nuevas vistas', () => {
+    const mutaciones = (http: { post: any; patch: any; delete: any }): number =>
+      http.post.mock.calls.length + http.patch.mock.calls.length + http.delete.mock.calls.length;
+
+    const recorrerVistas = (component: DashboardAdminComponent): void => {
+      component.cambiarVistaAgenda('dia');
+      component.agendaSiguiente();
+      component.agendaAnterior();
+      component.agendaHoy();
+      component.cambiarVistaAgenda('mes');
+      component.agendaSiguiente();
+      component.agendaAnterior();
+      component.agendaHoy();
+      component.abrirDiaAgenda('2026-09-08');
+      component.cambiarVistaAgenda('semana');
+      component.agendaSiguiente();
+      component.agendaAnterior();
+      component.agendaHoy();
+    };
+
+    const cargarDia = (
+      component: DashboardAdminComponent,
+      http: { get: any },
+      fecha: string,
+      slots: ReturnType<typeof slot>[]
+    ): void => {
+      http.get.mockImplementation((url: string) => url.includes('/disponibilidad')
+        ? of({ profesional_id: 20, fecha_inicio: fecha, fecha_fin: fecha, duracion_min: 60, dias: [{ fecha, slots }] })
+        : of([]));
+      component.semanaActual = [{ fecha }];
+      component.cambiarVistaAgenda('dia');
+      component.abrirDiaAgenda(fecha);
+    };
+
+    it('con solo agenda.ver se puede cambiar de vista y navegar sin ningún POST/PATCH/DELETE', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda(['agenda.ver']);
+
+      recorrerVistas(component);
+
+      expect(mutaciones(http)).toBe(0);
+      expect(http.get).toHaveBeenCalled();
+    });
+
+    it('con agenda.gestionar y agenda.sobrecupo, cambiar de vista tampoco ejecuta ninguna mutación', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda(['agenda.ver', 'agenda.gestionar', 'agenda.sobrecupo']);
+
+      recorrerVistas(component);
+
+      expect(mutaciones(http)).toBe(0);
+      expect(component.modalCitaAbierto).toBe(false);
+      expect(component.sobrecupoConfirmAbierto).toBe(false);
+    });
+
+    it('sin agenda.ver ninguna acción de vista cambia el estado ni consulta nada', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda([]);
+      const semanaAntes = component.semanaActual.map(d => d.fecha);
+
+      recorrerVistas(component);
+      component.cargarHorarioProfesional();
+
+      expect(component.vistaAgenda).toBe('semana');
+      expect(component.semanaActual.map(d => d.fecha)).toEqual(semanaAntes);
+      expect(component.diaAgenda).toBeNull();
+      expect(component.mesCeldas).toEqual([]);
+      expect(http.get).not.toHaveBeenCalled();
+      expect(mutaciones(http)).toBe(0);
+    });
+
+    it('sin agenda.ver, Anterior/Siguiente y Hoy no mueven el período (guard propio de la navegación, no solo el de la carga)', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda([]);
+      const semana = () => component.semanaActual.map(d => d.fecha);
+      const original = semana();
+
+      component.agendaSiguiente();
+      expect(semana()).toEqual(original);
+
+      component.semanaAnterior(); // desplaza el período sin pasar por la navegación de vistas
+      const desplazada = semana();
+      expect(desplazada).not.toEqual(original);
+      component.agendaHoy();
+      expect(semana()).toEqual(desplazada);
+      expect(http.get).not.toHaveBeenCalled();
+    });
+
+    it('si se pierde agenda.ver estando en Día o en Mes, navegar, Hoy y abrir un día dejan de actuar y no consultan nada', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda(['agenda.ver']);
+      const revocar = () => vi.spyOn(component as any, 'hasPermission').mockReturnValue(false);
+
+      component.cambiarVistaAgenda('dia');
+      component.agendaSiguiente();                     // Día 20
+      let consultas = urlsDisponibilidad(http).length;
+      const restaurar = revocar();
+      component.agendaSiguiente();
+      component.agendaAnterior();
+      component.agendaHoy();
+      component.abrirDiaAgenda('2026-09-08');
+      component.cambiarVistaAgenda('mes');
+      expect(component.vistaAgenda).toBe('dia');
+      expect(component.diaAgenda.fecha).toBe('2026-09-20');
+      expect(urlsDisponibilidad(http)).toHaveLength(consultas);
+      restaurar.mockRestore();
+
+      component.cambiarVistaAgenda('mes');
+      component.agendaSiguiente();                     // Octubre
+      consultas = urlsDisponibilidad(http).length;
+      revocar();
+      component.agendaAnterior();
+      component.agendaHoy();
+      expect(component.periodoLabel).toBe('Octubre 2026');
+      expect(urlsDisponibilidad(http)).toHaveLength(consultas);
+    });
+
+    it('con agenda.ver y sin agenda.gestionar, clickBloque en Día selecciona pero no abre cita ni sobrecupo', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda(['agenda.ver']);
+      cargarDia(component, http, '2026-09-21', [
+        slot('08:00', true, null),
+        { ...slot('13:00', false, 'en_colacion'), overridable_con_sobrecupo: true }
+      ]);
+
+      component.clickBloque('2026-09-21', '08:00');
+      component.clickBloque('2026-09-21', '13:00');
+
+      expect(component.diaSeleccionado).toBe('2026-09-21');
+      expect(component.modalCitaAbierto).toBe(false);
+      expect(component.sobrecupoConfirmAbierto).toBe(false);
+      expect(mutaciones(http)).toBe(0);
+    });
+
+    it('con agenda.gestionar el flujo existente sigue funcionando en la vista Día (abre la cita en un slot disponible)', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda(['agenda.ver', 'agenda.gestionar']);
+      cargarDia(component, http, '2026-09-21', [slot('08:00', true, null)]);
+
+      component.clickBloque('2026-09-21', '08:00');
+
+      expect(component.modalCitaAbierto).toBe(true);
+      expect(component.nuevaCita).toMatchObject({ fecha: '2026-09-21', hora: '08:00', sobrecupo: false });
+    });
+
+    it('agenda.sobrecupo se sigue exigiendo en la vista Día: sin él no se ofrece, con él se abre la confirmación', () => {
+      fijarHoy();
+      const colacion = [{ ...slot('13:00', false, 'en_colacion'), overridable_con_sobrecupo: true }];
+
+      const sin = crearAgenda(['agenda.ver', 'agenda.gestionar']);
+      cargarDia(sin.component, sin.http, '2026-09-21', colacion);
+      expect(sin.component.puedeSolicitarSobrecupo('2026-09-21', '13:00')).toBe(false);
+      sin.component.clickBloque('2026-09-21', '13:00');
+      expect(sin.component.sobrecupoConfirmAbierto).toBe(false);
+
+      const con = crearAgenda(['agenda.ver', 'agenda.gestionar', 'agenda.sobrecupo']);
+      cargarDia(con.component, con.http, '2026-09-21', colacion);
+      expect(con.component.puedeSolicitarSobrecupo('2026-09-21', '13:00')).toBe(true);
+      con.component.clickBloque('2026-09-21', '13:00');
+      expect(con.component.sobrecupoConfirmAbierto).toBe(true);
+    });
+
+    it('abrir un día desde el Mes solo cambia la vista: no abre modales ni crea citas', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda(['agenda.ver', 'agenda.gestionar', 'agenda.sobrecupo']);
+      component.cambiarVistaAgenda('mes');
+
+      component.abrirDiaAgenda('2026-09-24');
+
+      expect(component.vistaAgenda).toBe('dia');
+      expect(component.modalCitaAbierto).toBe(false);
+      expect(component.sobrecupoConfirmAbierto).toBe(false);
+      expect(mutaciones(http)).toBe(0);
+    });
+  });
+
+  describe('multicita, urgencias y sobrecupos se conservan entre vistas', () => {
+    const citasDia = [
+      { id: 1, fecha: '2026-09-21', hora: '08:00', estado: 'pendiente', urgente: false, sobrecupo: false, estudiante: 'Diego Soto' },
+      { id: 2, fecha: '2026-09-21', hora: '08:00', estado: 'pendiente', urgente: false, sobrecupo: true, estudiante: 'Carlos Muñoz' },
+      { id: 3, fecha: '2026-09-21', hora: '10:00', estado: 'pendiente', urgente: true, sobrecupo: false, estudiante: 'Eva Díaz' },
+      { id: 4, fecha: '2026-09-21', hora: '11:00', estado: 'pendiente', urgente: false, sobrecupo: true, estudiante: 'Pía Vera' }
+    ];
+
+    const preparar = () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      (http.get as any).mockImplementation((url: string) => url.includes('/disponibilidad')
+        ? of({ profesional_id: 20, fecha_inicio: '', fecha_fin: '', duracion_min: 60, dias: [] })
+        : url.includes('/citas') ? of(citasDia) : of([]));
+      component.semanaSiguiente(); // semana del 21 al 27 de septiembre
+      component.diaSeleccionado = '2026-09-21';
+      return component;
+    };
+
+    const verificarConservacion = (component: DashboardAdminComponent): void => {
+      const multicita = component.getBloqueCitas('2026-09-21', '08:00');
+      expect(multicita.map((c: any) => c.estudiante)).toEqual(['Diego Soto', 'Carlos Muñoz']);
+      expect(component.getBloqueEstado('2026-09-21', '08:00')).toBe('sobrecupo');
+      expect(component.getBloqueEstado('2026-09-21', '10:00')).toBe('urgente');
+      expect(component.getBloqueEstado('2026-09-21', '11:00')).toBe('sobrecupo');
+      expect(component.getResumenDia('2026-09-21')).toMatchObject({
+        citas: 4, sobrecupos: 2, urgencias: 1, multicitaHorarios: 1
+      });
+    };
+
+    it('Semana → Día → Semana → Mes → Día → Semana no pierde citas múltiples, urgencias ni sobrecupos', () => {
+      const component = preparar();
+      verificarConservacion(component);
+
+      component.cambiarVistaAgenda('dia');       // Semana → Día
+      expect(component.diaAgenda.fecha).toBe('2026-09-21');
+      verificarConservacion(component);
+
+      component.cambiarVistaAgenda('semana');    // Día → Semana
+      expect(component.semanaActual[0].fecha).toBe('2026-09-21');
+      verificarConservacion(component);
+
+      component.cambiarVistaAgenda('mes');       // Semana → Mes
+      expect(component.periodoLabel).toBe('Septiembre 2026');
+      verificarConservacion(component);
+
+      component.abrirDiaAgenda('2026-09-21');    // Mes → Día
+      expect(component.vistaAgenda).toBe('dia');
+      verificarConservacion(component);
+
+      component.cambiarVistaAgenda('semana');
+      verificarConservacion(component);
+    });
+
+    it('Mes → Día conserva la fecha elegida aunque otra estuviera seleccionada', () => {
+      const component = preparar();
+      component.cambiarVistaAgenda('mes');
+      component.diaSeleccionado = '2026-09-30';
+
+      component.abrirDiaAgenda('2026-09-21');
+
+      expect(component.diaAgenda.fecha).toBe('2026-09-21');
+      expect(component.diaSeleccionado).toBe('2026-09-21');
+    });
+  });
+
+  describe('getResumenDia (vista Mes)', () => {
+    const cargarDisponibilidad = (
+      component: DashboardAdminComponent,
+      http: { get: any },
+      slotsPorFecha: Record<string, ReturnType<typeof slot>[]>,
+      citas: any[] = []
+    ): void => {
+      http.get.mockImplementation((url: string) => {
+        if (url.includes('/disponibilidad')) {
+          return of({
+            profesional_id: 20,
+            fecha_inicio: '2026-09-01',
+            fecha_fin: '2026-09-30',
+            duracion_min: 60,
+            dias: Object.entries(slotsPorFecha).map(([fecha, slots]) => ({ fecha, slots }))
+          });
+        }
+        if (url.includes('/citas')) return of(citas);
+        return of([]);
+      });
+      component.cambiarVistaAgenda('mes');
+    };
+
+    it('cuenta solo citas operativas y separa sobrecupos y urgencias', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      cargarDisponibilidad(component, http, { '2026-09-21': [slot('08:00', true, null)] }, [
+        { id: 1, fecha: '2026-09-21', hora: '08:00', estado: 'pendiente' },
+        { id: 2, fecha: '2026-09-21', hora: '08:00', estado: 'pendiente', sobrecupo: true },
+        { id: 3, fecha: '2026-09-21', hora: '09:00', estado: 'pendiente', urgente: true },
+        { id: 4, fecha: '2026-09-21', hora: '10:00', estado: 'cancelada' },
+        { id: 5, fecha: '2026-09-21', hora: '11:00', estado: 'inasistencia' },
+        { id: 6, fecha: '2026-09-22', hora: '08:00', estado: 'pendiente' }
+      ]);
+
+      expect(component.getResumenDia('2026-09-21')).toMatchObject({ citas: 3, sobrecupos: 1, urgencias: 1 });
+    });
+
+    it('con al menos un slot disponible informa cuántos cupos hay', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      cargarDisponibilidad(component, http, {
+        '2026-09-21': [slot('08:00', true, null), slot('09:00', false, 'slot_ocupado'), slot('10:00', true, null)]
+      });
+
+      expect(component.getResumenDia('2026-09-21')).toMatchObject({ estado: 'con-cupos', disponibles: 2 });
+    });
+
+    it('un día sin slots en backend NO se muestra como disponible (celda vacía ≠ disponible)', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      cargarDisponibilidad(component, http, {});
+
+      const resumen = component.getResumenDia('2026-09-21');
+      expect(resumen.estado).toBe('sin-datos');
+      expect(resumen.disponibles).toBe(0);
+    });
+
+    it('si falla la consulta de disponibilidad todos los días quedan "sin-datos"', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      http.get.mockImplementation((url: string) =>
+        url.includes('/disponibilidad') ? throwError(() => new Error('500')) : of([]));
+
+      component.cambiarVistaAgenda('mes');
+
+      expect(component.getResumenDia('2026-09-21').estado).toBe('sin-datos');
+      expect(component.disponibilidadError).toBe(true);
+    });
+
+    it('clasifica fines de semana/días cerrados, pasado, sin cupos y motivos desconocidos', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      cargarDisponibilidad(component, http, {
+        '2026-09-20': [slot('08:00', false, 'fin_de_semana'), slot('09:00', false, 'fin_de_semana')],
+        '2026-09-18': [slot('08:00', false, 'dia_cerrado')],
+        '2026-09-10': [slot('08:00', false, 'fecha_pasada'), slot('09:00', false, 'fecha_pasada')],
+        '2026-09-22': [slot('08:00', false, 'slot_ocupado'), slot('09:00', false, 'en_colacion')],
+        '2026-09-23': [slot('08:00', false, 'motivo_nuevo_desconocido')],
+        '2026-09-24': [slot('08:00', false, null)]
+      });
+
+      expect(component.getResumenDia('2026-09-20').estado).toBe('cerrado');
+      expect(component.getResumenDia('2026-09-18').estado).toBe('cerrado');
+      expect(component.getResumenDia('2026-09-10').estado).toBe('pasado');
+      expect(component.getResumenDia('2026-09-22').estado).toBe('sin-cupos');
+      expect(component.getResumenDia('2026-09-23').estado).toBe('sin-datos');
+      expect(component.getResumenDia('2026-09-24').estado).toBe('sin-datos');
+    });
+
+    it('un profesional no activo se muestra bloqueado SOLO si backend lo informó en los slots', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      component.profesionales[0].estado = 'licencia';
+      cargarDisponibilidad(component, http, { '2026-09-21': [slot('08:00', false, 'profesional_inactivo')] });
+
+      expect(component.getResumenDia('2026-09-21').estado).toBe('bloqueado');
+      // un día que backend no informó NO se infiere bloqueado por el estado del profesional: 'sin-datos'
+      expect(component.getResumenDia('2026-09-28').estado).toBe('sin-datos');
+    });
+
+    it('un día cerrado registrado aparte NO se infiere en el Mes si el endpoint de disponibilidad no lo informó', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      cargarDisponibilidad(component, http, {});
+      component.diasCerrados = [{ fecha: '2026-09-25' }];
+
+      expect(component.getResumenDia('2026-09-25').estado).toBe('sin-datos');
+    });
+
+    it('multicita: cuenta los horarios con 2 o más citas operativas y no los oculta', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      cargarDisponibilidad(component, http, { '2026-09-21': [slot('08:00', false, 'slot_ocupado')] }, [
+        { id: 1, fecha: '2026-09-21', hora: '08:00', estado: 'pendiente', estudiante: 'Diego' },
+        { id: 2, fecha: '2026-09-21', hora: '08:00', estado: 'pendiente', sobrecupo: true, estudiante: 'Carlos' },
+        { id: 3, fecha: '2026-09-21', hora: '09:00', estado: 'pendiente', estudiante: 'Ana' },
+        { id: 4, fecha: '2026-09-21', hora: '10:00', estado: 'pendiente', estudiante: 'Luis' },
+        { id: 5, fecha: '2026-09-21', hora: '10:00', estado: 'pendiente', urgente: true, estudiante: 'Eva' },
+        { id: 6, fecha: '2026-09-21', hora: '10:00', estado: 'cancelada', estudiante: 'Cancelada' }
+      ]);
+
+      expect(component.getResumenDia('2026-09-21')).toMatchObject({
+        citas: 5, sobrecupos: 1, urgencias: 1, multicitaHorarios: 2
+      });
+    });
+
+    it('agrupa por horario con la misma normalización de hora que la grilla (08:00, 08:00:00 y 08:00 AM son el mismo slot)', () => {
+      fijarHoy();
+      const { component, http } = crearAgenda();
+      cargarDisponibilidad(component, http, {}, [
+        { id: 1, fecha: '2026-09-21', hora: '08:00', estado: 'pendiente' },
+        { id: 2, fecha: '2026-09-21', hora: '08:00:00', estado: 'pendiente' },
+        { id: 3, fecha: '2026-09-21', hora: '08:00 AM', estado: 'pendiente' },
+        { id: 4, fecha: '2026-09-21', hora: '02:00 PM', estado: 'pendiente' }
+      ]);
+
+      expect(component.getBloqueCitas('2026-09-21', '08:00')).toHaveLength(3);
+      expect(component.getBloqueCitas('2026-09-21', '14:00')).toHaveLength(1);
+      expect(component.getResumenDia('2026-09-21')).toMatchObject({ citas: 4, multicitaHorarios: 1 });
+    });
+  });
+
+  describe('imprimirAgenda — solo la agenda, nunca la pantalla completa', () => {
+    // Aunque una aserción falle a mitad de un test, los iframes y el DOM
+    // simulado se limpian siempre, para que un fallo no arrastre a los demás.
+    afterEach(() => {
+      document.querySelectorAll('iframe').forEach(f => f.remove());
+      document.querySelectorAll('.fixture-agenda-impresion').forEach(f => f.remove());
+    });
+
+    const montarDom = (): { limpiar: () => void } => {
+      const shell = document.createElement('div');
+      shell.className = 'dashboard admin-shell fixture-agenda-impresion';
+      shell.innerHTML = `
+        <aside class="sidebar">MENU-LATERAL</aside>
+        <app-admin-horario>
+          <section class="agenda-page">
+            <div class="agenda-kpi-grid">INDICADORES-KPI</div>
+            <div class="agenda-legend">LEYENDA</div>
+            <div class="agenda-calendar-card">CALENDARIO-AGENDA</div>
+            <aside class="agenda-context-panel">PANEL-LATERAL</aside>
+          </section>
+        </app-admin-horario>`;
+      document.body.appendChild(shell);
+      return { limpiar: () => shell.remove() };
+    };
+
+    it('imprime únicamente el calendario en un iframe aislado y no llama a window.print()', () => {
+      vi.useFakeTimers();
+      const dom = montarDom();
+      const printPagina = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+      const { component } = crearAgenda();
+      component.cambiarVistaAgenda('semana');
+
+      component.imprimirAgenda();
+
+      const iframe = document.querySelector('iframe[title="Vista de impresión de la agenda"]') as HTMLIFrameElement;
+      expect(iframe).toBeTruthy();
+      const contenido = iframe.contentDocument!.body.textContent ?? '';
+      expect(contenido).toContain('CALENDARIO-AGENDA');
+      expect(contenido).toContain('Dra. Pérez — Medicina General');
+      expect(contenido).toContain('Semana');
+      for (const ajeno of ['MENU-LATERAL', 'INDICADORES-KPI', 'PANEL-LATERAL']) {
+        expect(contenido).not.toContain(ajeno);
+      }
+      expect(printPagina).not.toHaveBeenCalled();
+
+      iframe.remove();
+      printPagina.mockRestore();
+      dom.limpiar();
+    });
+
+    it('la vista Día se imprime en vertical y las vistas Semana y Mes en horizontal, cada una con su período', () => {
+      vi.useFakeTimers();
+      const dom = montarDom();
+      const { component } = crearAgenda();
+      const estilosDe = (iframe: HTMLIFrameElement): string =>
+        Array.from(iframe.contentDocument!.head.querySelectorAll('style')).map(e => e.textContent).join('\n');
+
+      component.cambiarVistaAgenda('dia');
+      component.imprimirAgenda();
+      const iframeDia = document.querySelector('iframe') as HTMLIFrameElement;
+      expect(estilosDe(iframeDia)).toContain('size: A4 portrait');
+      expect(iframeDia.contentDocument!.body.textContent).toContain('Dra. Pérez — Medicina General');
+      expect(iframeDia.contentDocument!.body.textContent).toContain('Día');
+      expect(iframeDia.contentDocument!.body.textContent).toContain(component.periodoLabel);
+      iframeDia.remove();
+
+      component.cambiarVistaAgenda('mes');
+      component.imprimirAgenda();
+      const iframeMes = document.querySelector('iframe') as HTMLIFrameElement;
+      expect(estilosDe(iframeMes)).toContain('size: A4 landscape');
+      expect(iframeMes.contentDocument!.body.textContent).toContain('Mes');
+      expect(iframeMes.contentDocument!.body.textContent).toContain('Septiembre 2026');
+      iframeMes.remove();
+
+      component.cambiarVistaAgenda('semana');
+      component.imprimirAgenda();
+      const iframeSemana = document.querySelector('iframe') as HTMLIFrameElement;
+      expect(estilosDe(iframeSemana)).toContain('size: A4 landscape');
+      expect(iframeSemana.contentDocument!.body.textContent).toContain(component.semanaLabel);
+      iframeSemana.remove();
+
+      dom.limpiar();
+    });
+
+    it('sin agenda.ver no imprime nada', () => {
+      vi.useFakeTimers();
+      const dom = montarDom();
+      const printPagina = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+      const { component } = crearAgenda([]);
+
+      component.imprimirAgenda();
+
+      expect(document.querySelector('iframe')).toBeNull();
+      expect(printPagina).not.toHaveBeenCalled();
+      printPagina.mockRestore();
+      dom.limpiar();
+    });
+
+    it('sin calendario en pantalla avisa y no imprime nada (ni la página completa)', () => {
+      vi.useFakeTimers();
+      const printPagina = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+      const abrirVentana = vi.spyOn(window, 'open').mockImplementation(() => null);
+      const { component } = crearAgenda();
+      component.filtroProfesionalId = '';
+
+      component.imprimirAgenda();
+
+      expect(printPagina).not.toHaveBeenCalled();
+      expect(abrirVentana).not.toHaveBeenCalled();
+      expect(document.querySelector('iframe')).toBeNull();
+      expect((component as any).toast.error).toHaveBeenCalledWith('Selecciona un profesional para imprimir su agenda.');
+
+      printPagina.mockRestore();
+      abrirVentana.mockRestore();
+    });
   });
 });
