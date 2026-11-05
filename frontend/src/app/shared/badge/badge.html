@@ -1,0 +1,14 @@
+<span
+  class="badge"
+  [class.badge--sm]="size === 'sm'"
+  [class.badge--md]="size === 'md'"
+  [ngClass]="'badge--' + tone"
+>
+  <svg
+    *ngIf="icon"
+    class="badge__icon"
+    [lucideIcon]="icon"
+    aria-hidden="true"
+  ></svg>
+  <span class="badge__label">{{ label }}</span>
+</span>

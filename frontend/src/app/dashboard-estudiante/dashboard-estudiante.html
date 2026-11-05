@@ -1,0 +1,1050 @@
+<div class="dashboard estudiante-shell" [class.sidebar-movil-abierto]="sidebarMovilAbierto">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar-backdrop" *ngIf="sidebarMovilAbierto" (click)="toggleSidebarMovil()"></div>
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="temporal.jpg" alt="UTEM">
+      <div class="sidebar-logo-divider"></div>
+      <div class="sidebar-logo-text">
+        <span class="sidebar-logo-title">SESAES</span>
+        <span class="sidebar-logo-sub">Salud Estudiantil</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item" [class.active]="seccionActiva === 'inicio'" (click)="navegarA('inicio')">
+        <span class="material-symbols-outlined" aria-hidden="true">home</span>
+        Inicio
+      </button>
+      <button class="nav-item" [class.active]="seccionActiva === 'citas' && citasTab === 'solicitar'" (click)="navegarA('citas', 'solicitar')">
+        <span class="material-symbols-outlined" aria-hidden="true">event_available</span>
+        Agendar cita
+      </button>
+      <button class="nav-item" [class.active]="seccionActiva === 'citas' && citasTab === 'proximas'" (click)="navegarA('citas', 'proximas')">
+        <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+        Mis citas
+      </button>
+      <button class="nav-item" [class.active]="seccionActiva === 'atenciones'" (click)="navegarA('atenciones')">
+        <span class="material-symbols-outlined" aria-hidden="true">favorite</span>
+        Mis atenciones
+      </button>
+      <button class="nav-item" [class.active]="seccionActiva === 'cuestionarios'" (click)="navegarA('cuestionarios')">
+        <span class="material-symbols-outlined" aria-hidden="true">assignment</span>
+        Cuestionarios
+      </button>
+      <button class="nav-item" [class.active]="seccionActiva === 'configuracion'" (click)="navegarA('configuracion')">
+        <span class="material-symbols-outlined" aria-hidden="true">person</span>
+        Mi perfil
+      </button>
+    </nav>
+
+    <div class="sidebar-nav-ayuda">
+      <button class="nav-item" [class.active]="seccionActiva === 'ayuda'" (click)="navegarA('ayuda')">
+        <span class="material-symbols-outlined" aria-hidden="true">help</span>
+        Ayuda
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+  <button class="logout-btn" (click)="cerrarSesion()">
+    <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+    Cerrar sesión
+  </button>
+</div>
+
+  </aside>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div class="main-wrapper">
+  <main class="main-content">
+
+    <div class="blob blob-green"></div>
+    <div class="blob blob-yellow"></div>
+    <div class="blob blob-blue"></div>
+    <div class="blob blob-pink"></div>
+
+    <!-- ══ TOPBAR ══ -->
+<header class="topbar-est">
+  <div class="topbar-left-est">
+  <button class="btn-hamburguesa" (click)="toggleSidebarMovil()">
+    <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+  </button>
+    <h1 class="topbar-title-est" [style.visibility]="seccionActiva === 'inicio' ? 'hidden' : 'visible'">{{ tituloSeccionEst }}</h1>
+    <span class="topbar-sub-est" [style.visibility]="seccionActiva === 'inicio' ? 'hidden' : 'visible'">{{ subtituloSeccionEst }}</span>
+  </div>
+  <div class="topbar-actions-est">
+    <button class="topbar-icon-btn-est" (click)="toggleTemaRapido()" [title]="temaOscuro ? 'Modo claro' : 'Modo oscuro'">
+      <span *ngIf="!temaOscuro" class="material-symbols-outlined" aria-hidden="true">light_mode</span>
+      <span *ngIf="temaOscuro" class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+    </button>
+    <button class="topbar-icon-btn-est" (click)="toggleNotificaciones()">
+      <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
+      <span class="notif-badge-est" *ngIf="notifNoLeidas > 0">{{ notifNoLeidas }}</span>
+    </button>
+    <div class="topbar-perfil-est">
+      <div class="avatar-topbar-est" *ngIf="!fotoPerfilUrl">{{ estudianteIniciales }}</div>
+      <img *ngIf="fotoPerfilUrl" [src]="fotoPerfilUrl" class="avatar-img-topbar-est" alt="Foto de perfil" />
+      <div class="topbar-perfil-info-est">
+        <span class="topbar-perfil-nombre-est">{{ estudianteNombre }}</span>
+        <span class="topbar-perfil-rol-est">Estudiante</span>
+      </div>
+    </div>
+  </div>
+</header>
+  <!-- PANEL DE NOTIFICACIONES -->
+<div class="notif-panel-est" *ngIf="notifPanelAbierto">
+  <div class="notif-panel-header-est">
+    <label class="notif-select-all-est">
+      <input type="checkbox" [checked]="notifTodasSeleccionadas" (change)="toggleSeleccionarTodasNotif()" [disabled]="notificaciones.length===0" />
+      <span>Notificaciones</span>
+    </label>
+    <div class="notif-panel-header-acciones-est">
+      <button class="notif-leer-todas-est" (click)="marcarTodasLeidas()" *ngIf="!notifHaySeleccionadas && notificaciones.length > 0">Marcar todas como leídas</button>
+      <button class="notif-cerrar" aria-label="Cerrar" (click)="notifPanelAbierto = false"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+    </div>
+  </div>
+
+  <div class="notif-acciones-masivas-est" *ngIf="notifHaySeleccionadas">
+    <span>{{ notifSeleccionadas.size }} seleccionada{{ notifSeleccionadas.size === 1 ? '' : 's' }}</span>
+    <div class="notif-acciones-masivas-btns-est">
+      <button (click)="marcarSeleccionadasLeidas()"><span class="material-symbols-outlined" aria-hidden="true">done_all</span> Marcar leídas</button>
+      <button class="danger" (click)="eliminarSeleccionadas()"><span class="material-symbols-outlined" aria-hidden="true">delete</span> Eliminar</button>
+    </div>
+  </div>
+
+  <div class="notif-lista-est">
+    <div *ngIf="notificaciones.length === 0" class="notif-vacia-est">Sin notificaciones</div>
+    <div *ngFor="let n of notificaciones" class="notif-item-est" [class.no-leida]="!n.leida">
+      <input type="checkbox" [checked]="notifSeleccionadas.has(n.id)" (change)="toggleSeleccionNotif(n)" (click)="$event.stopPropagation()" />
+      <div class="notif-dot" [ngClass]="n.tipo"></div>
+      <div class="notif-texto-est" (click)="marcarNotifLeida(n)">
+        <p>{{ n.mensaje }}</p>
+        <div class="notif-acciones-est" *ngIf="n.tipo === 'cancelacion' && !n.leida">
+          <button class="btn-reagendar-notif" (click)="reagendarDesdeCancelacion(n); $event.stopPropagation()">
+            <span class="material-symbols-outlined icono-inline" aria-hidden="true">autorenew</span> Reagendar cita
+          </button>
+        </div>
+        <span>{{ n.fecha_creacion }}</span>
+      </div>
+      <div class="notif-item-acciones-est">
+        <button *ngIf="!n.leida" title="Marcar como leída" (click)="marcarNotifLeida(n)"><span class="material-symbols-outlined" aria-hidden="true">check</span></button>
+        <button title="Eliminar" (click)="eliminarNotificacion(n)"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <!-- ══ MODAL: RESPONDER CUESTIONARIO DE ANTECEDENTES ══ -->
+    <div class="modal-overlay-est" *ngIf="cuestionarioModalAbierto" (click)="cerrarCuestionario()">
+      <div class="modal-est" (click)="$event.stopPropagation()">
+        <div class="modal-header-est">
+          <h3>Cuestionario de antecedentes — {{ cuestionarioActual?.profesional_nombre }}</h3>
+          <button class="modal-cerrar-est" (click)="cerrarCuestionario()" aria-label="Cerrar"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        </div>
+
+        <p class="cuestionario-intro-est">
+          Estas preguntas las revisará <strong>{{ cuestionarioActual?.profesional_nombre }}</strong>
+          ({{ cuestionarioActual?.especialidad }}) antes de tu primera atención. Responde con la mayor precisión posible.
+        </p>
+
+        <div class="cuestionario-form-est" *ngIf="cuestionarioActual">
+          <div class="cuestionario-campo-est" *ngFor="let p of cuestionarioActual.preguntas">
+            <label>{{ p.etiqueta }}</label>
+
+            <select *ngIf="p.tipo === 'si_no'" [(ngModel)]="respuestasCuestionario[p.id]">
+              <option value="" disabled selected>Selecciona una opción</option>
+              <option value="Sí">Sí</option>
+              <option value="No">No</option>
+            </select>
+
+            <input *ngIf="p.tipo === 'numero'" type="number" [(ngModel)]="respuestasCuestionario[p.id]" placeholder="Escribe un número">
+
+            <input *ngIf="p.tipo === 'texto'" type="text" [(ngModel)]="respuestasCuestionario[p.id]" placeholder="Tu respuesta">
+
+            <textarea *ngIf="p.tipo === 'textarea'" rows="3" [(ngModel)]="respuestasCuestionario[p.id]" placeholder="Tu respuesta"></textarea>
+          </div>
+        </div>
+
+        <p class="cuestionario-error-est" *ngIf="errorCuestionario">{{ errorCuestionario }}</p>
+
+        <div class="modal-footer-est">
+          <button class="btn-cerrar-modal-est" (click)="cerrarCuestionario()" [disabled]="enviandoCuestionario">Responder después</button>
+          <button class="btn-descargar-modal-est" (click)="enviarCuestionario()" [disabled]="enviandoCuestionario">
+            {{ enviandoCuestionario ? 'Enviando...' : 'Enviar respuestas' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ INICIO ══ -->
+    <div class="section" *ngIf="seccionActiva === 'inicio'">
+      <div class="inicio-layout-est">
+
+        <div class="inicio-principal-est">
+          <header class="inicio-saludo-est">
+            <div>
+              <h2 class="inicio-saludo-titulo">Hola, {{ estudianteNombre }} <span class="material-symbols-outlined icono-saludo" aria-hidden="true">waving_hand</span></h2>
+              <p class="inicio-saludo-sub">Aquí puedes gestionar tu atención de salud en SESAES.</p>
+            </div>
+            <p class="inicio-frase-est"><span class="material-symbols-outlined" aria-hidden="true">favorite</span> Tu bienestar también es parte de tu vida universitaria</p>
+          </header>
+
+          <div class="inicio-kpis-est">
+            <button type="button" class="kpi-inicio-est" (click)="navegarA('citas','proximas')">
+              <span class="kpi-inicio-icono"><span class="material-symbols-outlined" aria-hidden="true">event_available</span></span>
+              <span class="kpi-inicio-texto">
+                <small>Próxima cita</small>
+                <strong>{{ proximaCita ? fechaCorta(fechaIsoDe(proximaCita)) : 'Sin cita' }}</strong>
+                <span>{{ proximaCita ? proximaCita.especialidad : 'Agenda una hora' }}</span>
+              </span>
+              <span class="material-symbols-outlined kpi-inicio-flecha" aria-hidden="true">chevron_right</span>
+            </button>
+            <button type="button" class="kpi-inicio-est" (click)="navegarA('cuestionarios')">
+              <span class="kpi-inicio-icono aviso"><span class="material-symbols-outlined" aria-hidden="true">assignment</span></span>
+              <span class="kpi-inicio-texto">
+                <small>Cuestionarios pendientes</small>
+                <strong>{{ cuestionariosPendientes.length }}</strong>
+                <span>{{ cuestionariosPendientes.length === 0 ? 'Estás al día' : (cuestionariosPendientes.length === 1 ? 'Cuestionario por responder' : 'Cuestionarios por responder') }}</span>
+              </span>
+              <span class="material-symbols-outlined kpi-inicio-flecha" aria-hidden="true">chevron_right</span>
+            </button>
+            <button type="button" class="kpi-inicio-est" (click)="navegarA('atenciones')">
+              <span class="kpi-inicio-icono info"><span class="material-symbols-outlined" aria-hidden="true">description</span></span>
+              <span class="kpi-inicio-texto">
+                <small>Documentos disponibles</small>
+                <strong>{{ documentosDisponibles.length }}</strong>
+                <span>Recetas y justificativos</span>
+              </span>
+              <span class="material-symbols-outlined kpi-inicio-flecha" aria-hidden="true">chevron_right</span>
+            </button>
+            <button type="button" class="kpi-inicio-est" (click)="navegarA('atenciones')">
+              <span class="kpi-inicio-icono"><span class="material-symbols-outlined" aria-hidden="true">favorite</span></span>
+              <span class="kpi-inicio-texto">
+                <small>Atenciones realizadas</small>
+                <strong>{{ atencionesRealizadas }}</strong>
+                <span>Durante tu periodo en SESAES</span>
+              </span>
+              <span class="material-symbols-outlined kpi-inicio-flecha" aria-hidden="true">chevron_right</span>
+            </button>
+          </div>
+
+          <section class="card-inicio-est">
+            <h3 class="card-inicio-titulo">¿Qué necesitas hacer hoy?</h3>
+            <p class="card-inicio-sub">Realiza tus trámites y accede a los servicios de salud que necesitas.</p>
+            <div class="inicio-acciones-est">
+              <button class="accion-inicio-est" (click)="navegarA('citas','solicitar')">
+                <span class="accion-inicio-icono"><span class="material-symbols-outlined" aria-hidden="true">event_available</span></span>
+                <span class="accion-inicio-texto">
+                  <strong>Agendar una cita</strong>
+                  <small>Elige la especialidad, profesional y horario.</small>
+                </span>
+                <span class="material-symbols-outlined accion-inicio-flecha" aria-hidden="true">chevron_right</span>
+              </button>
+              <button class="accion-inicio-est" (click)="navegarA('citas','proximas')">
+                <span class="accion-inicio-icono"><span class="material-symbols-outlined" aria-hidden="true">calendar_month</span></span>
+                <span class="accion-inicio-texto">
+                  <strong>Ver mis citas</strong>
+                  <small>Revisa tus próximas citas.</small>
+                </span>
+                <span class="material-symbols-outlined accion-inicio-flecha" aria-hidden="true">chevron_right</span>
+              </button>
+              <button class="accion-inicio-est" (click)="navegarA('cuestionarios')">
+                <span class="accion-inicio-icono"><span class="material-symbols-outlined" aria-hidden="true">assignment</span></span>
+                <span class="accion-inicio-texto">
+                  <strong>Responder cuestionario</strong>
+                  <small>Completa los cuestionarios pendientes de salud.</small>
+                </span>
+                <span class="material-symbols-outlined accion-inicio-flecha" aria-hidden="true">chevron_right</span>
+              </button>
+              <button class="accion-inicio-est" (click)="navegarA('atenciones')">
+                <span class="accion-inicio-icono"><span class="material-symbols-outlined" aria-hidden="true">description</span></span>
+                <span class="accion-inicio-texto">
+                  <strong>Ver documentos</strong>
+                  <small>Consulta tus recetas y justificativos.</small>
+                </span>
+                <span class="material-symbols-outlined accion-inicio-flecha" aria-hidden="true">chevron_right</span>
+              </button>
+            </div>
+          </section>
+
+          <div class="inicio-par-est">
+            <section class="card-inicio-est">
+              <div class="card-inicio-cabecera">
+                <h3 class="card-inicio-titulo"><span class="material-symbols-outlined" aria-hidden="true">calendar_month</span> Próxima cita</h3>
+                <button class="enlace-inicio-est" (click)="navegarA('citas','proximas')">Ver todas mis citas <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
+              </div>
+              <ng-container *ngIf="proximaCita as pc; else sinProximaCita">
+                <div class="proxima-cita-est">
+                  <div class="proxima-cita-cab">
+                    <span class="proxima-cita-icono"><span class="material-symbols-outlined" aria-hidden="true">{{ iconoEspecialidad(pc.especialidad) }}</span></span>
+                    <div class="proxima-cita-quien">
+                      <span class="proxima-cita-especialidad"><strong>{{ pc.especialidad }}</strong> <span class="proxima-cita-estado">Confirmada</span> <app-tipo-cita-badge [tipo]="pc.tipo"></app-tipo-cita-badge></span>
+                      <span>{{ pc.profesional }}</span>
+                    </div>
+                  </div>
+                  <ul class="proxima-cita-datos">
+                    <li><span class="material-symbols-outlined" aria-hidden="true">calendar_today</span> {{ fechaLarga(fechaIsoDe(pc)) }}</li>
+                    <li><span class="material-symbols-outlined" aria-hidden="true">schedule</span> {{ pc.hora }} hrs.</li>
+                    <li *ngIf="infoCentro.direccion"><span class="material-symbols-outlined" aria-hidden="true">location_on</span> <span>{{ infoCentro.nombre_centro }}<small>{{ infoCentro.direccion }}</small></span></li>
+                  </ul>
+                  <div class="proxima-cita-acciones">
+                    <button class="resumen-card-boton resumen-card-boton-primario" (click)="navegarA('citas','proximas')">Ver detalles de la cita <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
+                    <button class="resumen-card-boton resumen-card-boton-contorno" (click)="reagendarCita(pc)"><span class="material-symbols-outlined" aria-hidden="true">autorenew</span> Reagendar cita</button>
+                  </div>
+                </div>
+              </ng-container>
+              <ng-template #sinProximaCita>
+                <p class="card-inicio-vacio">No tienes citas próximas. Agenda una atención con nuestros profesionales.</p>
+                <button class="resumen-card-boton resumen-card-boton-primario" (click)="navegarA('citas','solicitar')">Agendar cita <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
+              </ng-template>
+            </section>
+
+            <section class="card-inicio-est">
+              <div class="card-inicio-cabecera">
+                <h3 class="card-inicio-titulo"><span class="material-symbols-outlined" aria-hidden="true">notifications</span> Recordatorios y avisos</h3>
+                <button class="enlace-inicio-est" (click)="toggleNotificaciones()">Ver todos <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
+              </div>
+              <p class="card-inicio-vacio" *ngIf="recordatorios.length === 0">No tienes recordatorios por ahora.</p>
+              <div class="recordatorio-est" *ngFor="let r of recordatorios; trackBy: trackPorId" [ngClass]="r.tono">
+                <span class="recordatorio-icono"><span class="material-symbols-outlined" aria-hidden="true">{{ r.icono }}</span></span>
+                <span class="recordatorio-texto"><strong>{{ r.titulo }}</strong><small>{{ r.detalle }}</small></span>
+                <button type="button" class="recordatorio-cerrar" (click)="descartarRecordatorio(r.id)" aria-label="Descartar recordatorio"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+              </div>
+            </section>
+          </div>
+
+          <section class="card-inicio-est">
+            <div class="card-inicio-cabecera">
+              <h3 class="card-inicio-titulo"><span class="material-symbols-outlined" aria-hidden="true">favorite</span> Mis últimas atenciones</h3>
+              <button class="enlace-inicio-est" (click)="navegarA('atenciones')">Ver todas <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
+            </div>
+            <p class="card-inicio-vacio" *ngIf="ultimasAtenciones.length === 0">Aún no tienes atenciones registradas.</p>
+            <div class="tabla-inicio-scroll" *ngIf="ultimasAtenciones.length > 0">
+              <table class="tabla-inicio-est">
+                <thead>
+                  <tr><th>Especialidad</th><th>Profesional</th><th>Fecha</th><th>Estado</th><th>Acción</th></tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let h of ultimasAtenciones">
+                    <td data-label="Especialidad">{{ h.especialidad }} <app-tipo-cita-badge [tipo]="h.tipo"></app-tipo-cita-badge></td>
+                    <td data-label="Profesional">{{ h.profesional }}</td>
+                    <td data-label="Fecha" class="celda-fecha-est">{{ fechaCorta(h.fecha) }}</td>
+                    <td data-label="Estado"><span class="estado-badge" [ngClass]="h.estado">{{ h.estado }}</span></td>
+                    <td data-label="Acción"><button type="button" class="enlace-inicio-est" (click)="verDetalleAtencion(h)"><span class="material-symbols-outlined" aria-hidden="true">description</span> Ver detalle</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <aside class="inicio-lateral-est">
+          <section class="card-inicio-est">
+            <h3 class="card-inicio-titulo"><span class="material-symbols-outlined" aria-hidden="true">calendar_month</span> Tu calendario</h3>
+            <div class="cal-inicio-cabecera">
+              <button class="cal-inicio-nav" (click)="calInicioMesAnterior()" aria-label="Mes anterior"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+              <strong>{{ calInicioTitulo }}</strong>
+              <button class="cal-inicio-nav" (click)="calInicioMesSiguiente()" aria-label="Mes siguiente"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
+            </div>
+            <div class="cal-inicio-grid cal-inicio-semana">
+              <span *ngFor="let d of DIAS_SEMANA_INICIO; trackBy: trackPorIndice">{{ d }}</span>
+            </div>
+            <div class="cal-inicio-grid">
+              <span class="cal-inicio-celda" *ngFor="let dia of calInicioDias; trackBy: trackPorIndice"
+                    [class.hoy]="dia?.hoy" [class.con-cita]="dia?.conCita">{{ dia?.num }}</span>
+            </div>
+          </section>
+
+          <section class="card-inicio-est">
+            <div class="card-inicio-cabecera">
+              <h3 class="card-inicio-titulo"><span class="material-symbols-outlined" aria-hidden="true">description</span> Documentos recientes</h3>
+              <button class="enlace-inicio-est" (click)="navegarA('atenciones')">Ver todos <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
+            </div>
+            <p class="card-inicio-vacio" *ngIf="documentosRecientes.length === 0">Aún no tienes documentos emitidos.</p>
+            <div class="doc-reciente-est" *ngFor="let x of documentosRecientes; trackBy: trackPorDocumento">
+              <span class="doc-reciente-icono"><span class="material-symbols-outlined" aria-hidden="true">{{ x.doc.tipo === 'receta' ? 'prescriptions' : 'description' }}</span></span>
+              <span class="doc-reciente-texto"><strong>{{ x.doc.nombre_tipo }}</strong><small>{{ x.especialidad }}</small></span>
+              <span class="doc-reciente-fecha">{{ fechaCorta(x.fecha) }}</span>
+              <button type="button" class="doc-reciente-descarga" (click)="descargarDocumento(x.doc)" [attr.aria-label]="'Descargar ' + x.doc.nombre_tipo"><span class="material-symbols-outlined" aria-hidden="true">download</span></button>
+            </div>
+          </section>
+
+          <section class="card-inicio-est">
+            <h3 class="card-inicio-titulo"><span class="material-symbols-outlined" aria-hidden="true">volunteer_activism</span> Tu salud importa</h3>
+            <p class="card-inicio-sub">Si presentas síntomas o necesitas atención urgente, acude al servicio de urgencias de la universidad o comunícate con SESAES.</p>
+            <button class="resumen-card-boton resumen-card-boton-contorno" (click)="navegarA('ayuda')">Ver más información <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ══ MIS CUESTIONARIOS (lista única: pendientes y respondidos) ══ -->
+    <div class="section" *ngIf="seccionActiva === 'cuestionarios'">
+      <div class="cuestionarios-layout-est">
+
+        <div class="inicio-principal-est">
+          <section class="aviso-cuestionarios-est">
+            <span class="aviso-cuestionarios-icono"><span class="material-symbols-outlined" aria-hidden="true">info</span></span>
+            <div>
+              <strong>Los cuestionarios solo aparecen cuando un profesional necesita recopilar información antes de tu atención.</strong>
+              <p>Algunos cuestionarios son opcionales según el profesional. Te recomendamos responderlos antes de tu cita para una mejor atención.</p>
+            </div>
+          </section>
+
+          <div class="cuestionarios-kpis-est">
+            <div class="kpi-inicio-est kpi-estatico-est">
+              <span class="kpi-inicio-icono aviso"><span class="material-symbols-outlined" aria-hidden="true">assignment</span></span>
+              <span class="kpi-inicio-texto"><small>Pendientes</small><strong>{{ cuestionariosPendientes.length }}</strong></span>
+            </div>
+            <div class="kpi-inicio-est kpi-estatico-est">
+              <span class="kpi-inicio-icono"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span></span>
+              <span class="kpi-inicio-texto"><small>Respondidos</small><strong>{{ cuestionariosRespondidos.length }}</strong></span>
+            </div>
+          </div>
+
+          <section class="card-inicio-est">
+            <h3 class="card-inicio-titulo">Mis cuestionarios</h3>
+            <p class="card-inicio-sub">Los formularios que tus profesionales te han pedido, tanto los pendientes como los que ya respondiste.</p>
+            <p class="card-inicio-vacio" *ngIf="cuestionariosLista.length === 0">No tienes cuestionarios por ahora. Aparecerán aquí cuando un profesional necesite información tuya antes de tu atención.</p>
+            <div class="tabla-inicio-scroll" *ngIf="cuestionariosLista.length > 0">
+              <table class="tabla-inicio-est tabla-cuestionarios-est">
+                <thead>
+                  <tr><th>Cuestionario</th><th>Profesional</th><th>Especialidad</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let item of cuestionariosLista; trackBy: trackPorCuestionario" class="fila-cuestionario-est">
+                    <td data-label="Cuestionario"><span class="cuestionario-nombre-est">Cuestionario de antecedentes</span><small>Información de salud previa a tu atención.</small></td>
+                    <td data-label="Profesional"><div class="profesional-cell-est"><span class="mini-avatar">{{ calcularIniciales(item.profesional_nombre) }}</span><span>{{ item.profesional_nombre }}</span></div></td>
+                    <td data-label="Especialidad">{{ item.especialidad }}</td>
+                    <td data-label="Fecha">
+                      <ng-container *ngIf="item.estado === 'pendiente'"><span class="cuestionario-fecha-est">{{ fechaCorta(item.fecha) }}</span><small>Cita · {{ item.hora }}</small></ng-container>
+                      <ng-container *ngIf="item.estado !== 'pendiente'"><span class="cuestionario-fecha-est">{{ fechaCorta(item.fecha_respuesta) }}</span><small>Respuesta</small></ng-container>
+                    </td>
+                    <td data-label="Estado"><span class="estado-cuestionario-est" [ngClass]="item.estado">{{ item.estado }}</span></td>
+                    <td data-label="Acciones">
+                      <button type="button" class="resumen-card-boton resumen-card-boton-primario" *ngIf="item.estado === 'pendiente'" (click)="abrirCuestionario(item)">Responder ahora</button>
+                      <span class="sin-accion-est" *ngIf="item.estado !== 'pendiente'">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <aside class="inicio-lateral-est">
+          <section class="card-inicio-est">
+            <h3 class="card-inicio-titulo"><span class="material-symbols-outlined" aria-hidden="true">info</span> Información importante</h3>
+            <ol class="pasos-info-est">
+              <li><span class="paso-info-num">1</span><div><strong>Solicitud del profesional</strong><p>Los cuestionarios son solicitados por tu profesional cuando necesita conocer más información antes de tu atención.</p></div></li>
+              <li><span class="paso-info-num">2</span><div><strong>Responde antes de tu cita</strong><p>Te recomendamos completar los cuestionarios antes de tu cita para una mejor atención.</p></div></li>
+              <li><span class="paso-info-num">3</span><div><strong>Uso de la información</strong><p>Las respuestas son revisadas por tu profesional de salud y forman parte de tu atención médica.</p></div></li>
+              <li><span class="paso-info-num">4</span><div><strong>Confidencialidad</strong><p>Tu información es confidencial y se maneja según nuestras políticas de privacidad y seguridad de datos.</p></div></li>
+            </ol>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ══ AGENDAR CITA ══ -->
+    <div class="section" *ngIf="seccionActiva === 'citas' && citasTab === 'solicitar'">
+
+      <!-- STEPPER -->
+      <div class="stepper">
+        <div class="step" [class.active]="pasoAgendar >= 1" [class.done]="pasoAgendar > 1">
+          <div class="step-circle">
+            <span *ngIf="pasoAgendar <= 1">1</span>
+            <span class="material-symbols-outlined icono-paso" aria-hidden="true">check</span>
+          </div>
+          <span class="step-label">Profesional</span>
+        </div>
+        <div class="step-line" [class.active]="pasoAgendar > 1"></div>
+        <div class="step" [class.active]="pasoAgendar >= 2" [class.done]="pasoAgendar > 2">
+          <div class="step-circle">
+            <span *ngIf="pasoAgendar <= 2">2</span>
+            <span class="material-symbols-outlined icono-paso" aria-hidden="true">check</span>
+          </div>
+          <span class="step-label">Horario</span>
+        </div>
+        <div class="step-line" [class.active]="pasoAgendar > 2"></div>
+        <div class="step" [class.active]="pasoAgendar >= 3">
+          <div class="step-circle">3</div>
+          <span class="step-label">Confirmación</span>
+        </div>
+      </div>
+
+      <!-- PASO 1 — PROFESIONAL (con filtro de área) -->
+      <div *ngIf="pasoAgendar === 1">
+        <div class="search-bar">
+          <span class="material-symbols-outlined icono-busqueda" aria-hidden="true">search</span>
+          <input type="text" placeholder="Buscar profesional..." [(ngModel)]="busqueda" (ngModelChange)="pagProf = 0">
+          <select [(ngModel)]="filtroArea" (ngModelChange)="pagProf = 0">
+            <option value="">Todas las áreas</option>
+            <option *ngFor="let e of especialidadesDisponibles" [value]="e">{{ e }}</option>
+          </select>
+        </div>
+
+        <div class="profesionales-zona">
+        <div class="profesionales-grid">
+
+          <div class="profesional-card" *ngFor="let p of profesionalesFiltrados(); trackBy: trackPorProfesional" (click)="seleccionarProfesional(p, $event)">
+  <div class="profesional-img">
+    <!-- Foto del profesional si tiene una subida; si no existe o no carga, se muestran sus iniciales -->
+    <img *ngIf="mostrarFoto(p)" [src]="p.foto_url" class="prof-foto-card" [alt]="'Foto de ' + p.nombre" (error)="fotoNoCarga(p)" />
+    <div class="profesional-avatar-full" *ngIf="!mostrarFoto(p)">{{ p.iniciales }}</div>
+  </div>
+  <div class="profesional-info-body">
+    <span class="profesional-nombre">{{ p.nombre }}</span>
+    <span class="profesional-especialidad">{{ p.especialidad }}</span>
+  </div>
+  <p class="profesional-desc" *ngIf="p.descripcion">{{ p.descripcion }}</p>
+  <button class="btn-agendar" (click)="seleccionarProfesional(p, $event)">Agendar Cita</button>
+</div>
+
+          <div *ngIf="profesionalesFiltrados().length === 0" style="grid-column:1/-1;text-align:center;color:var(--est-muted);padding:32px;font-size:14px;">
+            No se encontraron profesionales con esos filtros.
+          </div>
+        </div>
+        </div>
+
+        <!-- Paginación de profesionales -->
+        <div class="paginacion" *ngIf="profesionalesFiltradosTotal.length > profPorPagina">
+          <span>Mostrando {{ pagProf * profPorPagina + 1 }}–{{ ((pagProf + 1) * profPorPagina) > profesionalesFiltradosTotal.length ? profesionalesFiltradosTotal.length : (pagProf + 1) * profPorPagina }} de {{ profesionalesFiltradosTotal.length }} profesionales</span>
+          <div class="pag-btns">
+            <button class="btn-pag" [disabled]="!hayPaginaAnterior" (click)="paginaAnteriorProf()"><span class="material-symbols-outlined icono-inline" aria-hidden="true">chevron_left</span> Anterior</button>
+            <button class="btn-pag" [disabled]="!hayPaginaSiguiente" (click)="paginaSiguienteProf()">Siguiente <span class="material-symbols-outlined icono-inline" aria-hidden="true">chevron_right</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PASO 2 — HORARIO -->
+      <div *ngIf="pasoAgendar === 2">
+        <div class="profesional-seleccionado">
+          <div class="profesional-avatar-sm">{{ profesionalSeleccionado?.iniciales }}</div>
+          <div>
+            <p class="ps-nombre">{{ profesionalSeleccionado?.nombre }}</p>
+            <p class="ps-esp">{{ profesionalSeleccionado?.especialidad }}</p>
+          </div>
+          <span class="badge-duracion">{{ profesionalSeleccionado?.duracion_min || 45 }} min</span>
+          <span class="badge-modalidad">Presencial</span>
+        </div>
+
+        <p class="horario-semana">Selecciona una fecha disponible (próximos 7 días, lunes a viernes)</p>
+
+        <div class="fecha-selector-wrap">
+          <button class="fecha-selector-btn" (click)="toggleCalendario()" [class.abierto]="calendarioAbierto">
+            <span class="material-symbols-outlined icono-fecha" aria-hidden="true">calendar_month</span>
+            <span>{{ fechaSeleccionada ? getFechaDisplay() : 'Elegir una fecha' }}</span>
+            <span class="material-symbols-outlined fecha-selector-chevron" aria-hidden="true">expand_more</span>
+          </button>
+
+          <!-- Calendario mensual -->
+          <div class="calendario-mes" *ngIf="calendarioAbierto">
+            <div class="cal-mes-header">
+              <button class="cal-nav-btn" (click)="mesAnterior()"><span class="material-symbols-outlined icono-inline" aria-hidden="true">chevron_left</span></button>
+              <span class="cal-mes-nombre">{{ nombreMesVisible }}</span>
+              <button class="cal-nav-btn" (click)="mesSiguiente()"><span class="material-symbols-outlined icono-inline" aria-hidden="true">chevron_right</span></button>
+            </div>
+            <div class="cal-grid-dias-nombre">
+              <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+            </div>
+            <div class="cal-grid">
+              <div *ngFor="let dia of diasMes"
+                   class="cal-celda"
+                   [class.vacia]="!dia"
+                   [class.deshabilitada]="dia?.deshabilitado"
+                   [class.hoy]="dia?.esHoy"
+                   [class.seleccionada]="dia?.fecha === fechaSeleccionada"
+                   [class.feriado]="esFeriado(dia?.fecha)"
+                   [class.cerrado]="dia?.esCerrado"
+                   [title]="dia?.esCerrado ? ('El centro no atiende este día. ' + dia.motivoCerrado) : nombreFeriado(dia?.fecha)"
+                   (click)="seleccionarDia(dia)">
+                <span *ngIf="dia">{{ dia.num }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Qué se celebra el día seleccionado (informativo, no bloquea nada) -->
+        <div class="info-dia-est" *ngIf="fechaSeleccionada && infoDelDia(fechaSeleccionada).length > 0">
+          <p class="info-dia-est-titulo">{{ getFechaDisplay() }}</p>
+          <span class="info-dia-est-item" *ngFor="let info of infoDelDia(fechaSeleccionada)">{{ info }}</span>
+        </div>
+
+        <!-- Panel de horas -->
+        <div class="horas-panel" *ngIf="fechaSeleccionada">
+          <p class="horas-panel-titulo">Horas disponibles para {{ getFechaDisplay() }}</p>
+          <div *ngIf="cargando" style="color:var(--est-muted);font-size:13px;text-align:center;padding:12px">Cargando horarios...</div>
+          <div class="horas-grid" *ngIf="!cargando && horasDisponibles.length > 0">
+            <button *ngFor="let hora of horasDisponibles"
+                    class="horario-btn"
+                    [class.selected]="horaSeleccionada === hora"
+                    (click)="seleccionarHora(hora)">
+              {{ hora }}
+            </button>
+          </div>
+          <div class="sin-horas-msg" *ngIf="!cargando && horasDisponibles.length === 0 && mensajeDisponibilidad">
+            {{ mensajeDisponibilidad }}
+          </div>
+        </div>
+
+        <div class="paso-acciones">
+          <button class="btn-volver" (click)="pasoAgendar = 1; profesionalSeleccionado = null"><span class="material-symbols-outlined icono-inline" aria-hidden="true">arrow_back</span> Volver</button>
+          <button class="btn-continuar" [disabled]="!fechaSeleccionada || !horaSeleccionada" (click)="pasoAgendar = 3">Continuar <span class="material-symbols-outlined icono-inline" aria-hidden="true">arrow_forward</span></button>
+        </div>
+      </div>
+
+      <!-- PASO 3 — CONFIRMACIÓN -->
+      <div *ngIf="pasoAgendar === 3">
+        <div class="confirmacion">
+          <div class="confirmacion-header">
+            <h2>Confirmar Cita Médica</h2>
+            <p>Revisa los detalles antes de confirmar tu reserva</p>
+          </div>
+
+          <div class="confirmacion-profesional">
+            <div class="profesional-avatar-sm">{{ profesionalSeleccionado?.iniciales }}</div>
+            <div>
+              <p class="ps-nombre">{{ profesionalSeleccionado?.nombre }}</p>
+              <p class="ps-esp">{{ profesionalSeleccionado?.especialidad }}</p>
+            </div>
+            <span class="badge-verificado"><span class="material-symbols-outlined" aria-hidden="true">verified</span> Verificado</span>
+          </div>
+
+          <div class="confirmacion-detalles">
+            <div class="detalle-item">
+              <span class="material-symbols-outlined icono-detalle" aria-hidden="true">event</span>
+              <span>{{ getFechaDisplay() }}</span>
+            </div>
+            <div class="detalle-item">
+              <span class="material-symbols-outlined icono-detalle" aria-hidden="true">schedule</span>
+              <span>{{ getHoraDisplay() }}</span>
+            </div>
+            <div class="detalle-item">
+              <span class="material-symbols-outlined icono-detalle" aria-hidden="true">location_on</span>
+              <span>{{ infoCentro.direccion }}</span>
+            </div>
+          </div>
+
+          <div class="observaciones">
+            <label>Observaciones <span style="font-weight:400;color:var(--est-muted)">(opcional)</span></label>
+            <textarea [(ngModel)]="observaciones" placeholder="Describe brevemente el motivo de tu consulta..." rows="3"></textarea>
+          </div>
+
+          <div class="paso-acciones">
+            <button class="btn-volver" (click)="pasoAgendar = 2"><span class="material-symbols-outlined icono-inline" aria-hidden="true">arrow_back</span> Volver</button>
+            <button class="btn-confirmar" [disabled]="enviandoCita" (click)="confirmarCita()">{{ enviandoCita ? 'Agendando…' : 'Confirmar Cita' }}</button>
+          </div>
+
+          <p class="confirmacion-aviso">Puedes cancelar hasta 5 horas antes de la cita sin penalización.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" *ngIf="seccionActiva === 'citas' && citasTab === 'proximas'">
+      <app-estudiante-citas-proximas
+        [citas]="proximasCitas"
+        (cancelar)="cancelarCita($event.index, $event.cita)"
+        (solicitarNueva)="navegarA('citas','solicitar')"
+      ></app-estudiante-citas-proximas>
+    </div>
+
+    <!-- ══ MIS ATENCIONES ══ -->
+    <div class="section" *ngIf="seccionActiva === 'atenciones'">
+      <app-estudiante-historial
+        [historial]="historialCompleto"
+        [especialidadesDisponibles]="especialidadesDisponibles"
+        (reagendar)="reagendarCita($event)"
+        (verDetalle)="verDetalleAtencion($event)"
+        (descargarPdf)="descargarPdf($event)"
+        (descargarDocumento)="descargarDocumento($event)"
+      ></app-estudiante-historial>
+    </div>
+
+    <!-- ══ CONFIGURACIÓN ══ -->
+    <div class="section" *ngIf="seccionActiva === 'configuracion'">
+
+      <div class="config-grid">
+
+        <!-- Perfil -->
+        <div class="config-card">
+          <div class="card-header-perfil-est">
+            <h3 class="config-card-title"><span class="material-symbols-outlined" aria-hidden="true">person</span> Perfil de Usuario</h3>
+            <button class="btn-editar-perfil" *ngIf="!perfilEnEdicion" (click)="habilitarEdicionPerfil()"><span class="material-symbols-outlined" aria-hidden="true">edit</span> Editar</button>
+          </div>
+          <div class="perfil-row">
+            <div class="perfil-avatar-wrap">
+              <div class="perfil-avatar-grande" [class.clickable]="fotoPerfilUrl" (click)="fotoPerfilUrl && (verFotoAmpliada = true)">
+                <img *ngIf="fotoPerfilUrl" [src]="fotoPerfilUrl" alt="Foto de perfil">
+                <span *ngIf="!fotoPerfilUrl">{{ estudianteIniciales }}</span>
+              </div>
+              <label class="btn-editar-foto" for="inputFoto" title="Cambiar foto" *ngIf="perfilEnEdicion"><span class="material-symbols-outlined" aria-hidden="true">edit</span></label>
+              <input id="inputFoto" type="file" accept="image/*" (change)="onFotoSeleccionada($event)" hidden>
+            </div>
+            <div class="perfil-campos">
+              <div class="campo-grupo">
+                <label>Nombre Completo</label>
+                <input type="text" [value]="estudianteData?.nombre" disabled>
+              </div>
+              <div class="campo-grupo">
+                <label>Correo Institucional</label>
+                <input type="email" [value]="estudianteData?.correo" disabled>
+              </div>
+              <div class="campo-grupo">
+                <label>Correo Secundario <span style="font-weight:400; color:var(--est-muted);">(opcional)</span></label>
+                <input type="email"
+                       [ngModel]="correoSecundarioEditable"
+                       (ngModelChange)="correoSecundarioEditable = $event"
+                       [disabled]="!perfilEnEdicion"
+                       [class.input-error]="perfilEnEdicion && !correoSecundarioValido"
+                       placeholder="ej: tucorreo@gmail.com">
+                <span class="campo-error" *ngIf="perfilEnEdicion && !correoSecundarioValido">Ingresa un correo válido.</span>
+              </div>
+              <div class="campo-grupo">
+                <label>Número de Celular</label>
+                <div class="celular-input-wrap" [class.disabled]="!perfilEnEdicion">
+                  <span class="celular-prefijo">+56</span>
+                  <input type="tel" inputmode="numeric"
+                         [ngModel]="celularEditable"
+                         (ngModelChange)="onCelularChange($event)"
+                         [disabled]="!perfilEnEdicion"
+                         maxlength="9" placeholder="985632178">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="perfil-acciones-edicion" *ngIf="perfilEnEdicion">
+            <button class="btn-descartar" (click)="cancelarEdicionPerfil()">Cancelar</button>
+            <button class="btn-guardar" [disabled]="!perfilModificado || !correoSecundarioValido" (click)="guardarPerfil()">Guardar cambios</button>
+          </div>
+        </div>
+
+        <!-- Datos Institucionales -->
+        <div class="config-card datos-institucionales">
+          <h3 class="config-card-title"><span class="material-symbols-outlined" aria-hidden="true">assignment</span> Datos Institucionales</h3>
+          <p class="dato-inst"><span>Carrera</span><strong>{{ estudianteData?.carrera || 'No registrada' }}</strong></p>
+          <p class="dato-inst"><span>RUT</span><strong>{{ estudianteData?.rut || 'No registrado' }}</strong></p>
+        </div>
+
+        <!-- Seguridad -->
+        <div class="config-card">
+          <h3 class="config-card-title"><span class="material-symbols-outlined" aria-hidden="true">lock</span> Seguridad</h3>
+          <div class="setting-row">
+            <span>Contraseña</span>
+            <button class="btn-cambiar" (click)="abrirModalCambiarPassword()">Cambiar</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ AYUDA ══ -->
+    <div class="section" *ngIf="seccionActiva === 'ayuda'">
+      <div class="tabs-ayuda">
+        <button class="tab-ayuda" [class.active]="tabAyuda === 'faq'" (click)="tabAyuda = 'faq'">Preguntas frecuentes</button>
+        <button class="tab-ayuda" [class.active]="tabAyuda === 'mapa'" (click)="tabAyuda = 'mapa'">Mapa de SESAES</button>
+        <button class="tab-ayuda" [class.active]="tabAyuda === 'contacto'" (click)="tabAyuda = 'contacto'">Contacto</button>
+      </div>
+
+      <!-- Preguntas Frecuentes -->
+      <div class="config-card faq-card" *ngIf="tabAyuda === 'faq'">
+        <h3 class="config-card-title"><span class="material-symbols-outlined" aria-hidden="true">help</span> Preguntas Frecuentes</h3>
+        <div class="faq-lista">
+          <div class="faq-item" *ngFor="let faq of faqs" [class.abierta]="faq.abierta">
+            <button class="faq-pregunta" (click)="toggleFaq(faq)">
+              <span>{{ faq.pregunta }}</span>
+              <span class="material-symbols-outlined faq-chevron" aria-hidden="true">expand_more</span>
+            </button>
+            <div class="faq-respuesta" *ngIf="faq.abierta">
+              <p>{{ faq.respuesta }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mapa de SESAES — datos dinámicos del backend -->
+      <div class="config-card" *ngIf="tabAyuda === 'mapa'">
+        <h3 class="config-card-title"><span class="material-symbols-outlined" aria-hidden="true">location_on</span> Ubicación SESAES</h3>
+        <div class="mapa-wrap" *ngIf="infoCentro.direccion">
+          <iframe [src]="getMapaUrl()"
+                  width="100%" height="220" style="border:0;" loading="lazy"></iframe>
+        </div>
+        <p class="ubicacion-direccion" *ngIf="infoCentro.direccion">{{ infoCentro.direccion }}</p>
+        <p class="ubicacion-direccion" *ngIf="!infoCentro.direccion">Ubicación no configurada actualmente.</p>
+        <p class="ubicacion-direccion" *ngIf="infoCentro.telefono" style="font-size:12px;"><span class="material-symbols-outlined icono-inline" aria-hidden="true">call</span> {{ infoCentro.telefono }}</p>
+        <p class="ubicacion-direccion" *ngIf="infoCentro.correo_contacto" style="font-size:12px;"><span class="material-symbols-outlined icono-inline" aria-hidden="true">mail</span> {{ infoCentro.correo_contacto }}</p>
+        <p class="ubicacion-direccion" *ngIf="infoCentro.horario_atencion" style="font-size:12px;"><span class="material-symbols-outlined icono-inline" aria-hidden="true">schedule</span> {{ infoCentro.horario_atencion }}</p>
+        <button class="btn-cambiar" *ngIf="infoCentro.direccion" (click)="abrirComoLlegar()">Cómo llegar</button>
+      </div>
+
+      <!-- Contacto — reutiliza los mismos datos reales del backend -->
+      <div class="config-card" *ngIf="tabAyuda === 'contacto'">
+        <h3 class="config-card-title"><span class="material-symbols-outlined" aria-hidden="true">call</span> Contacto</h3>
+        <p class="dato-inst" *ngIf="infoCentro.correo_contacto"><span>Correo</span><strong>{{ infoCentro.correo_contacto }}</strong></p>
+        <p class="dato-inst" *ngIf="infoCentro.telefono"><span>Teléfono</span><strong>{{ infoCentro.telefono }}</strong></p>
+        <p class="dato-inst" *ngIf="infoCentro.direccion"><span>Ubicación</span><strong>{{ infoCentro.direccion }}</strong></p>
+        <p class="ubicacion-direccion" *ngIf="!infoCentro.correo_contacto && !infoCentro.telefono && !infoCentro.direccion">Los datos de contacto aún no están configurados.</p>
+        <a class="btn-cambiar" style="display:inline-block;text-decoration:none;margin-top:8px;" *ngIf="infoCentro.correo_contacto" [href]="'mailto:' + infoCentro.correo_contacto">Escribir un correo</a>
+      </div>
+
+    </div>
+
+    <!-- ══ MODAL: DETALLE DE ATENCIÓN (medicamento, motivo) ══ -->
+    <div class="modal-overlay-est" *ngIf="detalleAtencionAbierto" (click)="cerrarDetalleAtencion()">
+      <div class="modal-est" (click)="$event.stopPropagation()">
+        <div class="modal-header-est">
+          <h3>Detalle de la atención</h3>
+          <button class="modal-cerrar-est" (click)="cerrarDetalleAtencion()" aria-label="Cerrar"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        </div>
+
+        <div class="detalle-atencion-body" *ngIf="atencionSeleccionada as h">
+          <div class="detalle-atencion-fila">
+            <span class="detalle-atencion-label">Profesional</span>
+            <span class="detalle-atencion-valor">{{ h.profesional }} <small>({{ h.especialidad }})</small></span>
+          </div>
+          <div class="detalle-atencion-fila">
+            <span class="detalle-atencion-label">Fecha y hora</span>
+            <span class="detalle-atencion-valor">{{ fechaCorta(h.fecha) }} — {{ h.hora }}</span>
+          </div>
+          <div class="detalle-atencion-fila">
+            <span class="detalle-atencion-label">Motivo de consulta</span>
+            <span class="detalle-atencion-valor">{{ h.motivo_consulta || 'No especificado' }}</span>
+          </div>
+          <div class="detalle-atencion-fila" *ngIf="h.tipo && h.tipo !== 'normal'">
+            <span class="detalle-atencion-label">Tipo de atención</span>
+            <span class="detalle-atencion-valor"><app-tipo-cita-badge [tipo]="h.tipo"></app-tipo-cita-badge></span>
+          </div>
+
+          <div class="detalle-atencion-separador"></div>
+
+          <div class="detalle-atencion-fila" *ngIf="h.estado === 'completada'">
+            <span class="detalle-atencion-label">Medicamento suministrado</span>
+            <span class="detalle-atencion-valor">{{ h.medicamento || 'Sin medicamento suministrado en el centro.' }}</span>
+          </div>
+          <div class="detalle-atencion-fila" *ngIf="h.estado === 'completada'">
+            <span class="detalle-atencion-label">Documentos emitidos</span>
+            <span class="detalle-atencion-valor detalle-docs-est">
+              <span *ngIf="!h.documentos?.length">Ninguno</span>
+              <button type="button" class="detalle-doc-est" *ngFor="let d of h.documentos; trackBy: trackPorDocId"
+                      [class.anulado]="d.estado === 'anulado'" (click)="descargarDocumento(d)"
+                      [attr.aria-label]="'Descargar ' + d.nombre_tipo + ', folio ' + d.folio">
+                <span class="material-symbols-outlined" aria-hidden="true">{{ d.tipo === 'receta' ? 'prescriptions' : 'description' }}</span>
+                {{ d.nombre_tipo }} · {{ d.folio }}<span *ngIf="d.estado === 'anulado'"> (anulado)</span>
+              </button>
+            </span>
+          </div>
+          <div class="detalle-atencion-fila" *ngIf="h.estado === 'cancelada'">
+            <span class="detalle-atencion-label">Motivo de cancelación</span>
+            <span class="detalle-atencion-valor">{{ h.motivo_cancelacion || 'No informado' }}</span>
+          </div>
+        </div>
+
+        <div class="modal-footer-est">
+          <button class="btn-cerrar-modal-est" (click)="cerrarDetalleAtencion()">Cerrar</button>
+          <button class="btn-descargar-modal-est" *ngIf="atencionSeleccionada?.tiene_pdf" (click)="descargarPdf(atencionSeleccionada.id)"><span class="material-symbols-outlined icono-inline" aria-hidden="true">download</span> Descargar PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MODAL: CANCELAR CITA (con opción de reagendar) ══ -->
+    <div class="modal-overlay-est" *ngIf="modalCancelarAbierto" (click)="cerrarModalCancelar()">
+      <div class="modal-est" (click)="$event.stopPropagation()">
+        <div class="modal-header-est">
+          <h3>¿Qué deseas hacer con tu cita?</h3>
+          <button class="modal-cerrar-est" (click)="cerrarModalCancelar()" aria-label="Cerrar"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        </div>
+
+        <div class="detalle-atencion-body" *ngIf="citaParaCancelar as pc">
+          <div class="detalle-atencion-fila">
+            <span class="detalle-atencion-label">Profesional</span>
+            <span class="detalle-atencion-valor">{{ pc.cita.profesional }} <small>({{ pc.cita.especialidad }})</small></span>
+          </div>
+          <div class="detalle-atencion-fila">
+            <span class="detalle-atencion-label">Fecha y hora</span>
+            <span class="detalle-atencion-valor">{{ pc.cita.fecha }} — {{ pc.cita.hora }}</span>
+          </div>
+        </div>
+
+        <div class="modal-footer-est">
+          <button class="btn-cerrar-modal-est" (click)="confirmarCancelarYReagendar()"><span class="material-symbols-outlined icono-inline" aria-hidden="true">autorenew</span> Cancelar y reagendar</button>
+          <button class="btn-peligro-modal-est" (click)="confirmarSoloCancelar()">Sí, solo cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <app-photo-cropper *ngIf="imagenParaRecortar"
+      [imagenSrc]="imagenParaRecortar"
+      (recortada)="onFotoRecortada($event)"
+      (cancelado)="imagenParaRecortar = null">
+    </app-photo-cropper>
+
+    <app-photo-viewer *ngIf="verFotoAmpliada && fotoPerfilUrl"
+      [imagenSrc]="fotoPerfilUrl"
+      (cerrar)="verFotoAmpliada = false">
+    </app-photo-viewer>
+
+    <!-- ══ MODAL: CAMBIAR CONTRASEÑA ══ -->
+    <div class="modal-overlay-est" *ngIf="modalCambiarPasswordAbierto" (click)="cerrarModalCambiarPassword()">
+      <div class="modal-est" (click)="$event.stopPropagation()">
+        <div class="modal-header-est">
+          <h3><span class="material-symbols-outlined" aria-hidden="true">lock</span> Cambiar contraseña</h3>
+          <button class="modal-cerrar-est" [disabled]="guardandoCambioPassword" (click)="cerrarModalCambiarPassword()" aria-label="Cerrar"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        </div>
+        <div class="cuestionario-form-est">
+          <div class="cuestionario-campo-est">
+            <label>Contraseña actual</label>
+            <div class="password-control-est">
+              <input [type]="mostrarPasswordActual ? 'text' : 'password'"
+                     autocomplete="current-password"
+                     [(ngModel)]="passwordActual"
+                     placeholder="Ingresa tu contraseña actual">
+              <button type="button"
+                      class="btn-ojo-password-est"
+                      (click)="mostrarPasswordActual = !mostrarPasswordActual"
+                      [attr.aria-label]="mostrarPasswordActual ? 'Ocultar contraseña actual' : 'Mostrar contraseña actual'"
+                      [title]="mostrarPasswordActual ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+                <span class="material-symbols-outlined" aria-hidden="true">{{ mostrarPasswordActual ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="cuestionario-campo-est">
+            <label>Nueva contraseña</label>
+            <div class="password-control-est">
+              <input [type]="mostrarPasswordNueva ? 'text' : 'password'"
+                     autocomplete="new-password"
+                     [(ngModel)]="passwordNueva"
+                     placeholder="Crea una contraseña segura">
+              <button type="button"
+                      class="btn-ojo-password-est"
+                      (click)="mostrarPasswordNueva = !mostrarPasswordNueva"
+                      [attr.aria-label]="mostrarPasswordNueva ? 'Ocultar nueva contraseña' : 'Mostrar nueva contraseña'"
+                      [title]="mostrarPasswordNueva ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+                <span class="material-symbols-outlined" aria-hidden="true">{{ mostrarPasswordNueva ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+            <div class="password-reglas-est" aria-live="polite">
+              <span class="regla-password-est" [class.cumple]="passwordMinimo8">
+                <span class="material-symbols-outlined icono-regla" aria-hidden="true">{{ passwordMinimo8 ? 'check_circle' : 'radio_button_unchecked' }}</span> Mínimo 8 caracteres
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordTieneMayuscula">
+                <span class="material-symbols-outlined icono-regla" aria-hidden="true">{{ passwordTieneMayuscula ? 'check_circle' : 'radio_button_unchecked' }}</span> Una letra mayúscula
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordTieneMinuscula">
+                <span class="material-symbols-outlined icono-regla" aria-hidden="true">{{ passwordTieneMinuscula ? 'check_circle' : 'radio_button_unchecked' }}</span> Una letra minúscula
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordTieneNumero">
+                <span class="material-symbols-outlined icono-regla" aria-hidden="true">{{ passwordTieneNumero ? 'check_circle' : 'radio_button_unchecked' }}</span> Un número
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordTieneEspecial">
+                <span class="material-symbols-outlined icono-regla" aria-hidden="true">{{ passwordTieneEspecial ? 'check_circle' : 'radio_button_unchecked' }}</span> Un carácter especial
+              </span>
+              <span class="regla-password-est" [class.cumple]="passwordSinEspacios">
+                <span class="material-symbols-outlined icono-regla" aria-hidden="true">{{ passwordSinEspacios ? 'check_circle' : 'radio_button_unchecked' }}</span> Sin espacios
+              </span>
+            </div>
+          </div>
+          <div class="cuestionario-campo-est">
+            <label>Confirmar nueva contraseña</label>
+            <div class="password-control-est">
+              <input [type]="mostrarPasswordConfirmacion ? 'text' : 'password'"
+                     autocomplete="new-password"
+                     [(ngModel)]="passwordConfirmacion"
+                     placeholder="Repite la nueva contraseña">
+              <button type="button"
+                      class="btn-ojo-password-est"
+                      (click)="mostrarPasswordConfirmacion = !mostrarPasswordConfirmacion"
+                      [attr.aria-label]="mostrarPasswordConfirmacion ? 'Ocultar confirmación' : 'Mostrar confirmación'"
+                      [title]="mostrarPasswordConfirmacion ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+                <span class="material-symbols-outlined" aria-hidden="true">{{ mostrarPasswordConfirmacion ? 'visibility_off' : 'visibility' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <p class="cuestionario-error-est" *ngIf="errorCambioPassword">{{ errorCambioPassword }}</p>
+        <div class="modal-footer-est">
+          <button class="btn-cerrar-modal-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="cerrarModalCambiarPassword()">Cancelar</button>
+          <button class="btn-descargar-modal-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="guardarCambioPassword()">
+            {{ guardandoCambioPassword ? 'Guardando...' : 'Cambiar contraseña' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CONFIRMACIÓN: CAMBIO DE CONTRASEÑA ══ -->
+    <div class="modal-overlay-est modal-confirmacion-password-overlay-est"
+         *ngIf="modalConfirmarCambioPasswordAbierto"
+         (click)="cancelarConfirmacionCambioPassword()">
+      <div class="modal-est modal-confirmacion-password-est"
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="titulo-confirmar-password"
+           (click)="$event.stopPropagation()">
+        <div class="modal-header-est">
+          <h3 id="titulo-confirmar-password">Confirmar cambio de contraseña</h3>
+          <button class="modal-cerrar-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="cancelarConfirmacionCambioPassword()" aria-label="Cerrar"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        </div>
+
+        <p class="confirmacion-password-texto-est">
+          ¿Seguro que quieres cambiar tu contraseña?
+        </p>
+        <p class="confirmacion-password-ayuda-est">
+          Al continuar, deberás usar la nueva contraseña la próxima vez que inicies sesión.
+          SESAES enviará un aviso de seguridad a tu correo institucional.
+        </p>
+
+        <div class="modal-footer-est">
+          <button class="btn-cerrar-modal-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="cancelarConfirmacionCambioPassword()">
+            Cancelar
+          </button>
+          <button class="btn-descargar-modal-est"
+                  [disabled]="guardandoCambioPassword"
+                  (click)="confirmarCambioPassword()">
+            {{ guardandoCambioPassword ? 'Cambiando...' : 'Sí, cambiar contraseña' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MODAL BLOQUEANTE: PRIMER ACCESO (contraseña temporal) ══ -->
+    <div class="modal-overlay-est modal-overlay-bloqueante-est" *ngIf="modalPrimerAccesoAbierto">
+      <div class="modal-est">
+        <div class="modal-header-est">
+          <h3><span class="material-symbols-outlined" aria-hidden="true">waving_hand</span> ¡Bienvenido a SESAES!</h3>
+        </div>
+        <p class="cuestionario-intro-est">
+          Tu cuenta se creó con una contraseña temporal. Puedes elegir una nueva contraseña ahora,
+          o mantener la temporal y seguir usando el sistema con normalidad.
+        </p>
+
+        <div class="cuestionario-form-est">
+          <div class="cuestionario-campo-est">
+            <label>Nueva contraseña (opcional)</label>
+            <input type="password" [(ngModel)]="nuevaPasswordPrimerAcceso" placeholder="Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo" />
+          </div>
+          <div class="cuestionario-campo-est" *ngIf="nuevaPasswordPrimerAcceso">
+            <label>Confirma la nueva contraseña</label>
+            <input type="password" [(ngModel)]="confirmarPasswordPrimerAcceso" placeholder="Repite la contraseña" />
+          </div>
+        </div>
+
+        <p class="cuestionario-error-est" *ngIf="errorPrimerAcceso">{{ errorPrimerAcceso }}</p>
+
+        <div class="modal-footer-est">
+          <button class="btn-cerrar-modal-est" [disabled]="procesandoPrimerAcceso" (click)="mantenerPasswordActual()">
+            Mantener contraseña actual
+          </button>
+          <button class="btn-descargar-modal-est" [disabled]="procesandoPrimerAcceso || !nuevaPasswordPrimerAcceso" (click)="cambiarPasswordPrimerAcceso()">
+            {{ procesandoPrimerAcceso ? 'Guardando...' : 'Cambiar contraseña' }}
+          </button>
+        </div>
+      </div>
+    </div>

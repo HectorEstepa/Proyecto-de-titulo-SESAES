@@ -1,0 +1,52 @@
+<div class="config-nueva-layout">
+  <div class="card config-card">
+    <div class="card-header">
+      <h3 class="card-title">Capacidades clínicas por especialidad</h3>
+    </div>
+    <p class="card-desc">
+      Cada especialidad trae de fábrica lo propio de su profesión: un médico receta y emite justificativos sin
+      pedir permiso. Aquí se otorgan las autorizaciones adicionales que requieren supervisión (por ejemplo,
+      enfermería). Los cambios se aplican la próxima vez que el profesional abra "Completar atención".
+    </p>
+
+    <p class="cc-estado" *ngIf="cargando">Cargando…</p>
+    <p class="cc-error" *ngIf="errorCarga" role="alert">
+      {{ errorCarga }} <button type="button" class="cc-link" (click)="cargar()">Reintentar</button>
+    </p>
+    <p class="cc-estado" *ngIf="!cargando && !errorCarga && filas.length === 0">
+      Todavía no hay profesionales con especialidad registrada.
+    </p>
+
+    <section class="cc-fila" *ngFor="let f of filas">
+      <header class="cc-fila-cab">
+        <div>
+          <h4>{{ f.nombre }}</h4>
+          <span>{{ f.profesionales }} profesional{{ f.profesionales === 1 ? '' : 'es' }}</span>
+        </div>
+        <button type="button" class="cc-guardar" (click)="guardar(f)" [disabled]="!modificada(f) || f.guardando">
+          {{ f.guardando ? 'Guardando…' : 'Guardar cambios' }}
+        </button>
+      </header>
+
+      <ul class="cc-lista">
+        <li *ngFor="let c of catalogo" [class.cc-inactiva]="!c.activa_en_sistema">
+          <label>
+            <input type="checkbox"
+                   [checked]="marcada(f, c.valor)"
+                   [disabled]="!c.activa_en_sistema || f.guardando || deFabrica(f, c.valor)"
+                   (change)="alternar(f, c.valor)" />
+            <span class="cc-texto">
+              <strong>{{ c.nombre }}</strong>
+              <small>{{ c.descripcion }}</small>
+            </span>
+            <span class="cc-pronto" *ngIf="!c.activa_en_sistema">Próximamente</span>
+            <span class="cc-fabrica" *ngIf="deFabrica(f, c.valor)">Incluida por la especialidad</span>
+          </label>
+        </li>
+      </ul>
+
+      <p class="cc-ok" *ngIf="f.mensaje" role="status">{{ f.mensaje }}</p>
+      <p class="cc-error" *ngIf="f.error" role="alert">{{ f.error }}</p>
+    </section>
+  </div>
+</div>

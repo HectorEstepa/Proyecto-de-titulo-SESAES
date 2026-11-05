@@ -1,0 +1,105 @@
+<h2 class="patient-nombre-prof" style="margin-bottom:4px">Ayuda</h2>
+<p class="inicio-mini-sub-prof" style="margin-bottom:20px">Soporte, guías y respuestas para el uso de SESAES</p>
+
+<!-- Banner -->
+<div class="card-prof ayuda-banner-prof" *ngIf="!bannerCerrado">
+  <button class="ayuda-banner-cerrar-prof" (click)="bannerCerrado = true" title="Cerrar" aria-label="Cerrar"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+  <div class="ayuda-banner-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">menu_book</span></div>
+  <div class="ayuda-banner-texto-prof">
+    <h3>¿En qué te podemos ayudar?</h3>
+    <p>Encuentra aquí toda la información que necesitas para resolver tus dudas y aprovechar al máximo las funcionalidades de SESAES.</p>
+  </div>
+  <a class="btn-hero-primario-prof ayuda-banner-btn-prof" href="mailto:soporte@sesaes.cl"><span class="material-symbols-outlined icono-inline" aria-hidden="true">mail</span> Contactar a soporte</a>
+</div>
+
+<div class="ayuda-layout-prof">
+  <div>
+
+    <!-- Explora por temas -->
+    <h3 class="card-title-prof" style="margin-bottom:2px">Explora por temas</h3>
+    <p class="inicio-mini-sub-prof" style="margin-bottom:12px">Accede rápidamente a la información que necesitas</p>
+    <div class="ayuda-temas-grid-prof">
+      <button class="ayuda-tema-card-prof morado" (click)="irA('perfil')">
+        <span class="ayuda-tema-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">person</span></span>
+        <strong>Gestión de cuenta</strong>
+        <span>Accesos, permisos y perfil</span>
+      </button>
+      <button class="ayuda-tema-card-prof azul" (click)="irA('horario')">
+        <span class="ayuda-tema-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">calendar_today</span></span>
+        <strong>Agenda y citas</strong>
+        <span>Cómo revisar y gestionar tu horario</span>
+      </button>
+      <button class="ayuda-tema-card-prof verde" (click)="irA('historial-clinico')">
+        <span class="ayuda-tema-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">folder</span></span>
+        <strong>Historial clínico</strong>
+        <span>Consulta y registro de atenciones</span>
+      </button>
+      <button class="ayuda-tema-card-prof naranjo" (click)="irA('solicitudes')">
+        <span class="ayuda-tema-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">chat</span></span>
+        <strong>Solicitudes</strong>
+        <span>Citas por confirmar y horario</span>
+      </button>
+      <button class="ayuda-tema-card-prof rojo" (click)="irA('perfil')">
+        <span class="ayuda-tema-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">settings</span></span>
+        <strong>Configuración</strong>
+        <span>Preferencias y ajustes</span>
+      </button>
+      <a class="ayuda-tema-card-prof lila" href="mailto:soporte@sesaes.cl">
+        <span class="ayuda-tema-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">help</span></span>
+        <strong>Preguntas frecuentes</strong>
+        <span>Resuelve tus dudas comunes</span>
+      </a>
+    </div>
+
+    <!-- Guías y recursos -->
+    <div class="card-prof" style="margin-top:20px">
+      <h3 class="card-title-prof">Guías y recursos</h3>
+      <p class="inicio-mini-sub-prof" style="margin-bottom:10px">Material de apoyo para tu trabajo en SESAES</p>
+
+      <a class="ayuda-guia-item-prof" href="mailto:soporte@sesaes.cl">
+        <span class="ayuda-guia-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">description</span></span>
+        <div><strong>Manual de uso para profesionales</strong><span>Conoce todas las funcionalidades del sistema</span></div>
+        <span class="ayuda-guia-flecha-prof"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
+      </a>
+      <a class="ayuda-guia-item-prof" href="mailto:soporte@sesaes.cl">
+        <span class="ayuda-guia-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">help</span></span>
+        <div><strong>Preguntas frecuentes</strong><span>Respuestas a las dudas más comunes</span></div>
+        <span class="ayuda-guia-flecha-prof"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
+      </a>
+      <a class="ayuda-guia-item-prof" href="mailto:soporte@sesaes.cl">
+        <span class="ayuda-guia-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">campaign</span></span>
+        <div><strong>Novedades del sistema</strong><span>Mantente al día con las actualizaciones</span></div>
+        <span class="ayuda-guia-flecha-prof"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
+      </a>
+      <a class="ayuda-guia-item-prof" href="mailto:soporte@sesaes.cl">
+        <span class="ayuda-guia-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">lock</span></span>
+        <div><strong>Política de privacidad</strong><span>Información sobre el tratamiento de datos</span></div>
+        <span class="ayuda-guia-flecha-prof"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="card-prof side-card-prof ayuda-personalizada-prof">
+      <span class="ayuda-guia-icono-prof"><span class="material-symbols-outlined" aria-hidden="true">headset_mic</span></span>
+      <h3 class="card-title-prof">¿Necesitas ayuda personalizada?</h3>
+      <p class="inicio-mini-sub-prof">Nuestro equipo de soporte está disponible para orientarte y resolver tus consultas.</p>
+      <a class="ayuda-contacto-item-prof" href="mailto:soporte@sesaes.cl">
+        <span><span class="material-symbols-outlined icono-inline" aria-hidden="true">mail</span></span>
+        <div><strong>Escríbenos</strong><span>soporte&#64;sesaes.cl</span></div>
+      </a>
+      <div class="ayuda-contacto-item-prof">
+        <span><span class="material-symbols-outlined icono-inline" aria-hidden="true">schedule</span></span>
+        <div><strong>Horario de atención</strong><span>Lunes a jueves, 09:00 – 17:30 hrs. · Viernes, 09:00 – 16:30 hrs.</span></div>
+      </div>
+    </div>
+
+    <div class="card-prof side-card-prof">
+      <h3 class="card-title-prof">Enlaces útiles</h3>
+      <p class="inicio-mini-sub-prof" style="margin-bottom:8px">Acceso directo a herramientas importantes</p>
+      <a class="ayuda-enlace-item-prof" href="https://www.utem.cl" target="_blank" rel="noopener"><span class="material-symbols-outlined icono-inline" aria-hidden="true">account_balance</span> Portal institucional UTEM</a>
+      <a class="ayuda-enlace-item-prof" href="mailto:soporte@sesaes.cl"><span class="material-symbols-outlined icono-inline" aria-hidden="true">mail</span> Correo institucional</a>
+    </div>
+  </aside>
+</div>

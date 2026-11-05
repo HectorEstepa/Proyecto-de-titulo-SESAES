@@ -1,0 +1,88 @@
+/**
+ * SESAES — SearchInput (Fase 2.3)
+ *
+ * Todo color, espaciado, radio, tipografía e ícono viene de tokens.css.
+ * Cero valores hex nuevos. Mismos literales estructurales justificados
+ * que Input (altura 40px, transición .15s): ver comentario en
+ * shared/input/input.css.
+ */
+
+:host {
+  display: block;
+}
+
+.app-search-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  width: 100%;
+}
+
+.app-search-input__label {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+}
+
+.app-search-input__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.app-search-input__icon {
+  position: absolute;
+  left: var(--space-sm);
+  width: var(--icon-size-button);
+  height: var(--icon-size-button);
+  flex-shrink: 0;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.app-search-input__field {
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 var(--space-sm) 0 calc(var(--space-sm) * 2 + var(--icon-size-button));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-tight);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.app-search-input__field::placeholder {
+  color: var(--text-muted);
+}
+
+.app-search-input__field:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.app-search-input__field:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.app-search-input__field:disabled {
+  cursor: not-allowed;
+  color: var(--text-disabled);
+  background-color: var(--surface-card-alt);
+}
+
+.app-search-input__control--disabled .app-search-input__icon {
+  opacity: .6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-search-input__field {
+    transition: none;
+  }
+}

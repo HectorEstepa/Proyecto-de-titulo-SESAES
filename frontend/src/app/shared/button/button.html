@@ -1,0 +1,21 @@
+<button
+  class="btn"
+  [ngClass]="['btn--' + variant, 'btn--' + size]"
+  [class.btn--icon-only]="!hasVisibleLabel"
+  [class.btn--full-width]="fullWidth"
+  [type]="type"
+  [disabled]="isDisabled"
+  [attr.aria-busy]="loading ? 'true' : null"
+  [attr.aria-label]="resolvedAriaLabel"
+>
+  <span *ngIf="loading" class="btn__spinner" aria-hidden="true"></span>
+
+  <svg
+    *ngIf="!loading && icon"
+    class="btn__icon"
+    [lucideIcon]="icon"
+    aria-hidden="true"
+  ></svg>
+
+  <span *ngIf="hasVisibleLabel" class="btn__label">{{ label }}</span>
+</button>

@@ -1,0 +1,238 @@
+<div class="card">
+  <div class="historial-filtros-admin">
+    <div class="filtro-grupo">
+      <label>Buscar estudiante</label>
+      <input
+        [(ngModel)]="histFiltroEstudiante"
+        (ngModelChange)="histFiltroEstudianteChange.emit($event)"
+        placeholder="Nombre o RUT..."
+      />
+    </div>
+
+    <div class="filtro-grupo">
+      <label>Desde</label>
+      <input
+        type="date"
+        [(ngModel)]="histFiltroDesde"
+        (ngModelChange)="histFiltroDesdeChange.emit($event)"
+      />
+    </div>
+
+    <div class="filtro-grupo">
+      <label>Hasta</label>
+      <input
+        type="date"
+        [(ngModel)]="histFiltroHasta"
+        (ngModelChange)="histFiltroHastaChange.emit($event)"
+      />
+    </div>
+
+    <div class="filtro-grupo">
+      <label>Especialidad</label>
+      <select
+        [(ngModel)]="histFiltroEspecialidad"
+        (ngModelChange)="histFiltroEspecialidadChange.emit($event)"
+      >
+        <option value="">Todas</option>
+        <option *ngFor="let e of especialidades">{{ e }}</option>
+      </select>
+    </div>
+
+    <div class="filtro-grupo">
+      <label>Estado</label>
+      <select
+        [(ngModel)]="histFiltroEstado"
+        (ngModelChange)="histFiltroEstadoChange.emit($event)"
+      >
+        <option value="">Todos</option>
+        <option value="completada">Completada</option>
+        <option value="cancelada">Cancelada</option>
+        <option value="inasistencia">Inasistencia</option>
+        <option value="pendiente">Pendiente</option>
+      </select>
+    </div>
+
+    <div class="filtro-grupo">
+      <label>Carrera</label>
+      <input
+        [(ngModel)]="histFiltroCarrera"
+        (ngModelChange)="histFiltroCarreraChange.emit($event)"
+        placeholder="Ej: Derecho..."
+      />
+    </div>
+  </div>
+
+  <div class="historial-acciones">
+    <button class="btn-filtrar" (click)="aplicarFiltros.emit()">Aplicar Filtros</button>
+    <button class="btn-limpiar" (click)="limpiarFiltros.emit()">Limpiar</button>
+    <button class="btn-exportar-pdf" (click)="exportarHistorialPdf.emit()">↓ Exportar PDF</button>
+    <button class="btn-exportar-excel" (click)="exportarHistorialExcel.emit()">↓ Exportar Excel</button>
+  </div>
+
+  <!-- Exportación CGR -->
+  <div class="cgr-panel" *ngIf="puedeExportarCgr">
+    <h4 class="cgr-titulo"><span class="material-symbols-outlined modal-btn-icon">fact_check</span> Exportación CGR (Contraloría General de la República)</h4>
+    <p class="cgr-desc">Excluye automáticamente los registros de prueba según lo solicitado.</p>
+
+    <div class="cgr-selector">
+      <div class="cgr-campo">
+        <label>Año</label>
+        <select
+          [(ngModel)]="cgrAnio"
+          (ngModelChange)="cgrAnioChange.emit($event)"
+        >
+          <option *ngFor="let a of cgrAniosDisponibles" [value]="a">{{ a }}</option>
+        </select>
+      </div>
+
+      <div class="cgr-campo">
+        <label>Hasta fecha <span class="opcional">(opcional)</span></label>
+        <input
+          type="date"
+          [(ngModel)]="cgrFechaFin"
+          (ngModelChange)="cgrFechaFinChange.emit($event)"
+        />
+      </div>
+    </div>
+
+    <div class="cgr-btns">
+      <button class="btn-cgr" (click)="exportarCgr.emit()">
+        ↓ Atenciones {{ cgrAnio }}{{ cgrFechaFin ? ' (hasta ' + cgrFechaFin + ')' : '' }}
+      </button>
+
+      <button class="btn-cgr secondary" (click)="exportarAlumnos.emit()">
+        ↓ Listado de Alumnos
+      </button>
+    </div>
+  </div>
+
+  <!-- Estadísticas del estudiante -->
+  <div class="est-stats-panel" *ngIf="estadisticasEstudiante">
+    <div class="est-stats-titulo">
+      Resumen de <strong>{{ estadisticasEstudiante.nombre }}</strong>
+    </div>
+
+    <div class="est-stats-grid">
+      <div class="est-stat">
+        <span class="est-stat-num">{{ estadisticasEstudiante.total }}</span>
+        <span class="est-stat-label">Total citas</span>
+      </div>
+
+      <div class="est-stat green">
+        <span class="est-stat-num">{{ estadisticasEstudiante.completadas }}</span>
+        <span class="est-stat-label">Completadas</span>
+      </div>
+
+      <div class="est-stat red">
+        <span class="est-stat-num">{{ estadisticasEstudiante.canceladas }}</span>
+        <span class="est-stat-label">Canceladas</span>
+      </div>
+
+      <div class="est-stat orange">
+        <span class="est-stat-num">{{ estadisticasEstudiante.inasistencias }}</span>
+        <span class="est-stat-label">Inasistencias</span>
+      </div>
+    </div>
+  </div>
+
+  <table class="admin-tabla">
+    <thead>
+      <tr>
+        <th>ESTUDIANTE</th>
+        <th>ESPECIALIDAD</th>
+        <th>PROFESIONAL</th>
+        <th>FECHA Y HORA</th>
+        <th>TIPO</th>
+        <th>ESTADO</th>
+        <th>ACCIONES</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr *ngFor="let h of historialPaginado">
+        <td>
+          <div class="tabla-usuario">
+            <div class="mini-avatar" [style.background]="h.estudiante_foto_url ? null : colorAvatar(h.estudiante_id)">
+              <img *ngIf="h.estudiante_foto_url" [src]="h.estudiante_foto_url" alt="" />
+              <span *ngIf="!h.estudiante_foto_url">{{ inicialesEstudiante(h.estudiante) }}</span>
+            </div>
+            <div>
+              <strong>{{ h.estudiante }}</strong>
+              <span>{{ h.rut }}</span>
+              <span *ngIf="h.carrera">{{ h.carrera }}</span>
+            </div>
+          </div>
+        </td>
+
+        <td><span class="esp-badge">{{ h.especialidad }}</span></td>
+        <td>{{ h.profesional }}</td>
+        <td>{{ h.fecha }} — {{ h.hora }}</td>
+        <td>
+          <span class="tipo-badge sobrecupo" *ngIf="h.sobrecupo">Sobrecupo</span>
+          <span class="tipo-badge urgente" *ngIf="h.urgente">Urgente</span>
+          <span class="tipo-badge normal" *ngIf="!h.sobrecupo && !h.urgente">Normal</span>
+        </td>
+        <td><span class="estado-badge" [ngClass]="h.estado">{{ h.estado }}</span></td>
+
+        <td>
+          <div class="tabla-acciones">
+            <button
+              class="btn-tabla ver"
+              (click)="verDetalle.emit(h)"
+              title="Ver detalle"
+            >
+              <span class="material-symbols-outlined">visibility</span>
+            </button>
+
+            <button
+              class="btn-tabla descargar"
+              *ngIf="puedeDescargarPdf && h.tiene_pdf"
+              (click)="descargarPdf.emit(h.id)"
+              title="Descargar PDF"
+            >
+              ⬇️
+            </button>
+          </div>
+        </td>
+      </tr>
+
+      <tr *ngIf="historialPaginado.length === 0">
+        <td colspan="6" class="tabla-vacia">No hay registros con los filtros aplicados</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="paginacion">
+    <span>
+      Mostrando {{ historialAdmin.length === 0 ? 0 : (pagHist - 1) * 8 + 1 }}–{{ minVal(pagHist * 8, historialAdmin.length) }}
+      de {{ historialAdmin.length }} resultados
+    </span>
+
+    <div class="pag-btns">
+      <button
+        class="btn-pag"
+        [disabled]="pagHist === 1"
+        (click)="pagHist = pagHist - 1"
+      >
+        ‹
+      </button>
+
+      <button
+        class="btn-pag"
+        *ngFor="let p of getPaginasHist()"
+        [class.active]="p === pagHist"
+        (click)="pagHist = p"
+      >
+        {{ p }}
+      </button>
+
+      <button
+        class="btn-pag"
+        [disabled]="pagHist * 8 >= historialAdmin.length"
+        (click)="pagHist = pagHist + 1"
+      >
+        ›
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,26 @@
+<div class="co-caja">
+  <div class="co-cab">
+    <strong>Cuestionario previo a la atención</strong>
+    <span class="co-estado" [class.co-si]="solicitado && !yaExiste">
+      {{ yaExiste ? 'Ya completado' : (solicitado ? 'Se enviará al estudiante' : 'No se enviará') }}
+    </span>
+  </div>
+
+  <p class="co-texto" *ngIf="yaExiste">Este estudiante ya tiene su ficha de antecedentes; no hay nada que enviar.</p>
+
+  <ng-container *ngIf="!yaExiste">
+    <p class="co-texto">Es opcional: tú decides si este estudiante debe responderlo antes de su atención.</p>
+    <div class="co-acciones">
+      <button type="button" class="co-btn co-btn-prim" (click)="enviar()" [disabled]="guardando || solicitado">Enviar cuestionario</button>
+      <button type="button" class="co-btn" (click)="noEnviar()" [disabled]="guardando || !solicitado">No enviar</button>
+      <button type="button" class="co-link" (click)="usarAjusteGeneral()" [disabled]="guardando">Usar mi ajuste general</button>
+    </div>
+
+    <label class="co-ajuste" *ngIf="!cargandoAjuste">
+      <input type="checkbox" [checked]="porDefecto" [disabled]="guardando" (change)="cambiarAjusteGeneral($any($event.target).checked)" />
+      <span>Enviarlo por defecto a todos mis pacientes <small>(puedes omitirlo en casos puntuales)</small></span>
+    </label>
+  </ng-container>
+
+  <p class="co-error" *ngIf="error" role="alert">{{ error }}</p>
+</div>

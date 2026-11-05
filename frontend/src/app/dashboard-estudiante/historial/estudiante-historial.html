@@ -1,0 +1,81 @@
+<div class="atenciones-kpis">
+  <div class="atenciones-kpi">
+    <span class="atenciones-kpi-icono"><span class="material-symbols-outlined" aria-hidden="true">assignment</span></span>
+    <span class="atenciones-kpi-num">{{ totalAtenciones }}</span>
+    <span class="atenciones-kpi-label">Total de atenciones</span>
+  </div>
+  <div class="atenciones-kpi">
+    <span class="atenciones-kpi-icono exito"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span></span>
+    <span class="atenciones-kpi-num">{{ completadas }}</span>
+    <span class="atenciones-kpi-label">Completadas</span>
+  </div>
+  <div class="atenciones-kpi">
+    <span class="atenciones-kpi-icono peligro"><span class="material-symbols-outlined" aria-hidden="true">cancel</span></span>
+    <span class="atenciones-kpi-num">{{ canceladas }}</span>
+    <span class="atenciones-kpi-label">Canceladas</span>
+  </div>
+  <div class="atenciones-kpi">
+    <span class="atenciones-kpi-icono info"><span class="material-symbols-outlined" aria-hidden="true">description</span></span>
+    <span class="atenciones-kpi-num">{{ documentosEmitidos }}</span>
+    <span class="atenciones-kpi-label">Documentos emitidos</span>
+  </div>
+</div>
+
+<div class="atenciones-filtros">
+  <label class="atenciones-buscador">
+    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+    <input type="text" placeholder="Buscar por profesional o especialidad..." [(ngModel)]="filtroBusqueda" (keyup.enter)="filtrar()" aria-label="Buscar por profesional o especialidad">
+  </label>
+  <select [(ngModel)]="filtroEspecialidad" aria-label="Filtrar por especialidad">
+    <option value="">Todas las especialidades</option>
+    <option *ngFor="let e of especialidadesDisponibles" [value]="e">{{ e }}</option>
+  </select>
+  <input type="date" [(ngModel)]="filtroFecha" aria-label="Filtrar por fecha">
+  <button type="button" class="btn-filtrar" (click)="filtrar()">Filtrar</button>
+  <button type="button" class="btn-limpiar" (click)="limpiarFiltros()">Limpiar</button>
+</div>
+
+<p class="atenciones-vacio" *ngIf="historial.length === 0">Aún no tienes atenciones registradas.</p>
+<p class="atenciones-vacio" *ngIf="historial.length > 0 && historialMostrado.length === 0">No hay atenciones que coincidan con tu búsqueda.</p>
+
+<div class="atenciones-tabla-caja" *ngIf="historialMostrado.length > 0">
+  <table class="atenciones-tabla">
+    <thead>
+      <tr><th>Fecha</th><th>Profesional</th><th>Especialidad</th><th>Estado</th><th>Documentos</th><th>Acción</th></tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let h of historialMostrado" [class.tipo-sobrecupo]="h.tipo === 'sobrecupo'" [class.tipo-urgente]="h.tipo === 'urgente'">
+        <td data-label="Fecha"><span class="fecha-principal">{{ fechaCorta(h.fecha) }}</span><small>{{ h.hora }}</small></td>
+        <td data-label="Profesional"><div class="profesional-cell"><span class="mini-avatar">{{ h.iniciales }}</span><span>{{ h.profesional }}</span></div></td>
+        <td data-label="Especialidad">{{ h.especialidad }} <app-tipo-cita-badge [tipo]="h.tipo"></app-tipo-cita-badge></td>
+        <td data-label="Estado"><span class="estado-badge" [ngClass]="h.estado">{{ h.estado }}</span></td>
+        <td data-label="Documentos">
+          <span class="doc-iconos" *ngIf="h.documentos?.length">
+            <button type="button" class="doc-icono" *ngFor="let d of h.documentos; trackBy: trackPorDocumento"
+                    [class.anulado]="d.estado === 'anulado'"
+                    [title]="d.nombre_tipo + ' · Folio ' + d.folio + (d.estado === 'anulado' ? ' (anulado)' : '')"
+                    [attr.aria-label]="'Descargar ' + d.nombre_tipo + ', folio ' + d.folio"
+                    (click)="descargarDocumento.emit(d)">
+              <span class="material-symbols-outlined" aria-hidden="true">{{ iconoDocumento(d) }}</span>
+            </button>
+          </span>
+          <span class="sin-documentos" *ngIf="!h.documentos?.length">—</span>
+        </td>
+        <td data-label="Acción">
+          <div class="atencion-acciones" [class.con-menu]="(h.estado === 'completada' && h.tiene_pdf) || h.estado === 'cancelada'">
+            <button type="button" class="atencion-btn-detalle" (click)="verDetalle.emit(h)">Ver detalle</button>
+            <details class="atencion-menu" #menu *ngIf="(h.estado === 'completada' && h.tiene_pdf) || h.estado === 'cancelada'">
+              <summary aria-label="Más acciones"><span class="material-symbols-outlined" aria-hidden="true">expand_more</span></summary>
+              <div class="atencion-menu-lista">
+                <button type="button" *ngIf="h.estado === 'completada' && h.tiene_pdf" (click)="descargarPdf.emit(h.id); menu.open = false"><span class="material-symbols-outlined" aria-hidden="true">download</span> Descargar PDF</button>
+                <button type="button" *ngIf="h.estado === 'cancelada'" (click)="reagendar.emit(h); menu.open = false"><span class="material-symbols-outlined" aria-hidden="true">autorenew</span> Reagendar</button>
+              </div>
+            </details>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<p class="atenciones-conteo" *ngIf="historial.length > 0">Mostrando {{ historialMostrado.length }} de {{ totalAtenciones }} registros</p>

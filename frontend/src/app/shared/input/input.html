@@ -1,0 +1,54 @@
+<div class="app-input">
+  <label *ngIf="hasVisibleLabel" [for]="inputId" class="app-input__label">
+    {{ label }}<span *ngIf="required" class="app-input__required" aria-hidden="true"> *</span>
+  </label>
+
+  <div
+    class="app-input__control"
+    [class.app-input__control--error]="hasError"
+    [class.app-input__control--disabled]="disabled"
+  >
+    <input
+      [id]="inputId"
+      class="app-input__field"
+      [class.app-input__field--with-toggle]="isPasswordToggleVisible"
+      [type]="nativeType"
+      [value]="displayValue"
+      [placeholder]="placeholder"
+      [disabled]="disabled"
+      [readOnly]="readonly"
+      [required]="required"
+      [attr.autocomplete]="autocomplete ?? null"
+      [attr.aria-label]="resolvedAriaLabel"
+      [attr.aria-invalid]="hasError ? 'true' : null"
+      [attr.aria-describedby]="describedBy"
+      (input)="onNativeInput($event)"
+      (blur)="onBlur()"
+    />
+
+    <button
+      *ngIf="isPasswordToggleVisible"
+      type="button"
+      class="app-input__toggle"
+      [disabled]="disabled"
+      [attr.aria-label]="passwordToggleAriaLabel"
+      (click)="togglePasswordVisibility()"
+    >
+      <svg
+        *ngIf="!passwordVisible"
+        class="app-input__toggle-icon"
+        [lucideIcon]="lucideEye"
+        aria-hidden="true"
+      ></svg>
+      <svg
+        *ngIf="passwordVisible"
+        class="app-input__toggle-icon"
+        [lucideIcon]="lucideEyeOff"
+        aria-hidden="true"
+      ></svg>
+    </button>
+  </div>
+
+  <p *ngIf="hasError" class="app-input__error" [id]="errorId">{{ errorText }}</p>
+  <p *ngIf="hasHelper" class="app-input__helper" [id]="helperId">{{ helperText }}</p>
+</div>

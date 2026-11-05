@@ -1,0 +1,7 @@
+<div class="toast-contenedor">
+  <div *ngFor="let t of toastService.toasts()" class="toast" [ngClass]="t.tipo" (click)="toastService.cerrar(t.id)">
+    <span class="toast-icono">{{ icono(t.tipo) }}</span>
+    <span class="toast-mensaje">{{ t.mensaje }}</span>
+    <button class="toast-cerrar" (click)="toastService.cerrar(t.id); $event.stopPropagation()">✕</button>
+  </div>
+</div>

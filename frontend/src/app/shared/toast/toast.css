@@ -1,0 +1,84 @@
+/* Estilo oscuro fijo, independiente del tema claro/oscuro del dashboard
+   activo — evita tener que sincronizar el estado de tema entre los 3
+   dashboards (cada uno lo aplica de forma distinta) y da buen contraste
+   sin importar sobre qué fondo aparezca. */
+
+.toast-contenedor {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 380px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #1e2530;
+  border-left: 3px solid #64748b;
+  border-radius: 10px;
+  padding: 13px 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: toast-entrada 0.25s ease-out;
+}
+
+.toast.exito { border-left-color: #2dd4bf; }
+.toast.error { border-left-color: #f87171; }
+.toast.info  { border-left-color: #60a5fa; }
+
+.toast-icono {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.toast.exito .toast-icono { background: rgba(45,212,191,0.18); color: #2dd4bf; }
+.toast.error .toast-icono { background: rgba(248,113,113,0.18); color: #f87171; }
+.toast.info  .toast-icono { background: rgba(96,165,250,0.18); color: #60a5fa; }
+
+.toast-mensaje {
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: #e6edf3;
+}
+
+.toast-cerrar {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #6b7688;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px;
+  line-height: 1;
+}
+.toast-cerrar:hover { color: #e6edf3; }
+
+@keyframes toast-entrada {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 640px) {
+  .toast-contenedor {
+    top: auto;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    max-width: none;
+  }
+}

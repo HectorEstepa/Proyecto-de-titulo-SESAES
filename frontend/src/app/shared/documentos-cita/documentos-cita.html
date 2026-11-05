@@ -1,0 +1,32 @@
+<div class="dc-lista" *ngIf="documentos?.length">
+  <div class="dc-doc" *ngFor="let d of documentos" [class.dc-anulado]="d.estado === 'anulado'">
+    <span class="material-symbols-outlined dc-icono" aria-hidden="true">{{ d.tipo === 'receta' ? 'prescriptions' : 'description' }}</span>
+    <div class="dc-datos">
+      <strong>{{ d.nombre_tipo }}</strong>
+      <small>Folio {{ d.folio }}</small>
+    </div>
+    <span class="dc-etiqueta" *ngIf="d.estado === 'anulado'">Anulado</span>
+
+    <button type="button" class="dc-btn" (click)="descargar(d)" [disabled]="descargando !== null" [attr.aria-label]="'Descargar ' + d.nombre_tipo">
+      <span class="material-symbols-outlined" aria-hidden="true">download</span>
+      {{ descargando === d.id ? 'Descargando…' : 'PDF' }}
+    </button>
+    <button type="button" class="dc-btn dc-btn-peligro" *ngIf="modoProfesional && d.estado !== 'anulado'" (click)="pedirAnulacion(d)">
+      Anular
+    </button>
+  </div>
+
+  <div class="dc-anular" *ngIf="anulando" role="group" aria-label="Anular documento">
+    <label for="dc-motivo">Motivo para anular {{ anulando.nombre_tipo.toLowerCase() }} (folio {{ anulando.folio }})</label>
+    <input id="dc-motivo" type="text" maxlength="300" [(ngModel)]="motivo" placeholder="Ej: error en la dosis" />
+    <p class="dc-aviso">El estudiante verá el documento como anulado y recibirá un aviso. Podrás emitir uno nuevo.</p>
+    <div class="dc-acciones">
+      <button type="button" class="dc-btn" (click)="cancelarAnulacion()" [disabled]="enviando">Cancelar</button>
+      <button type="button" class="dc-btn dc-btn-peligro" (click)="confirmarAnulacion()" [disabled]="!motivoValido || enviando">
+        {{ enviando ? 'Anulando…' : 'Anular documento' }}
+      </button>
+    </div>
+  </div>
+
+  <p class="dc-error" *ngIf="error" role="alert">{{ error }}</p>
+</div>

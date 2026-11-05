@@ -1,0 +1,195 @@
+<div class="container">
+
+  <div class="stage">
+
+    <!-- PANEL IZQUIERDO -->
+    <div class="side">
+      <div class="deco-blob"></div>
+
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 40 40" fill="none">
+            <path d="M20 32C20 32 6 23.6 6 14.8 6 9.4 10.2 6 14.6 6c2.4 0 4.6 1.2 5.4 3 .8-1.8 3-3 5.4-3C29.8 6 34 9.4 34 14.8 34 23.6 20 32 20 32z" fill="none" stroke="#0d9488" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M20 12v9M15.5 16.5h9" stroke="#0d9488" stroke-width="2.4" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="brand-name-block">
+          <h2>SESAES</h2>
+          <span>UTEM · Salud Estudiantil</span>
+        </div>
+      </div>
+
+      <div class="tagline">
+        <h1>Tu salud,<br>más cerca de ti</h1>
+        <p>Plataforma de salud y bienestar para estudiantes de la UTEM.</p>
+      </div>
+
+      <div class="illustration">
+        <div class="pedestal"></div>
+        <div class="atom">
+          <div class="atom-ring ring1"><span class="atom-dot"></span></div>
+          <div class="atom-ring ring2"><span class="atom-dot"></span></div>
+          <div class="atom-ring ring3"><span class="atom-dot"></span></div>
+        </div>
+        <div class="core-circle">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 20.5c-.3 0-.6-.1-.8-.3l-6.7-5.9C2.7 12.7 2 11 2 9.2 2 6.3 4.3 4 7.2 4c1.7 0 3.3.8 4.3 2.2l.5.6.5-.6C13.5 4.8 15.1 4 16.8 4 19.7 4 22 6.3 22 9.2c0 1.8-.7 3.5-2.5 5.1l-6.7 5.9c-.2.2-.5.3-.8.3z" stroke="#0d9488" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M12 8v6.5M8.8 11.25h6.4" stroke="#0d9488" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="M8 3v4M16 3v4M3 10h18" />
+            </svg>
+          </div>
+          <div class="feature-text">
+            <strong>Agenda tu atención</strong>
+            <span>Reserva citas con diferentes especialidades de salud.</span>
+          </div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+              <path d="M9.5 12l1.8 1.8L15 10" />
+            </svg>
+          </div>
+          <div class="feature-text">
+            <strong>Atención segura</strong>
+            <span>Tus datos están protegidos con altos estándares.</span>
+          </div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21s-7-5.2-7-10.5a7 7 0 0114 0C19 15.8 12 21 12 21z" />
+              <circle cx="12" cy="10.5" r="2.4" />
+            </svg>
+          </div>
+          <div class="feature-text">
+            <strong>Cerca de ti</strong>
+            <span>Profesionales y servicios en tu universidad.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-foot">
+        <svg viewBox="0 0 40 40" fill="none">
+          <path d="M20 34C20 34 8 27 8 19.5 8 15 11.5 12 15.2 12c2 0 3.9 1 4.8 2.6C21 12.9 22.9 12 24.8 12c3.7 0 7.2 3 7.2 7.5C32 27 20 34 20 34z" stroke="#5c766e" stroke-width="1.6"/>
+        </svg>
+        <span>UTEM · Universidad Tecnológica Metropolitana<br>Salud Estudiantil al servicio de nuestra comunidad.</span>
+      </div>
+    </div>
+
+    <!-- PANEL FORMULARIO -->
+    <div class="form-panel">
+      <div class="form-card">
+
+        <h2 class="form-title">Iniciar sesión</h2>
+        <p class="form-sub">Accede con tus credenciales UTEM</p>
+
+        <div class="form">
+
+          <div class="field">
+            <span class="input-label">Correo institucional</span>
+            <div class="input-box" [class.error-border]="errorCorreo">
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0d4a42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <path d="M3 7l9 6 9-6" />
+              </svg>
+              <input
+                type="email"
+                placeholder="nombre@utem.cl"
+                [(ngModel)]="correo"
+                (blur)="validarCorreo()"
+                (keyup.enter)="onLogin()">
+            </div>
+            <span class="field-error" *ngIf="errorCorreo">Ingresa un correo @utem.cl válido</span>
+          </div>
+
+          <div class="field">
+            <span class="input-label">Contraseña</span>
+            <div class="input-box">
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0d4a42" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="10" width="16" height="10" rx="2" />
+                <path d="M8 10V7a4 4 0 018 0v3" />
+              </svg>
+              <input
+                [type]="mostrarPassword ? 'text' : 'password'"
+                placeholder="Ingresa tu contraseña"
+                [(ngModel)]="password"
+                (keyup.enter)="onLogin()">
+              <span class="toggle" (click)="togglePassword()">
+                <svg *ngIf="mostrarPassword" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#9ca3af" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <svg *ngIf="!mostrarPassword" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#9ca3af" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                </svg>
+              </span>
+            </div>
+          </div>
+
+          <div class="extras">
+            <label class="remember">
+              <input type="checkbox" [(ngModel)]="recordarme"> Recordarme
+            </label>
+            <span class="forgot">¿Olvidaste tu contraseña?</span>
+          </div>
+
+          <div class="error-msg" *ngIf="error" [class.shake]="error">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#e53935" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{{ error }}</span>
+          </div>
+
+          <button (click)="onLogin()" [disabled]="cargando || !correo || !password" [class.is-loading]="cargando">
+            <span *ngIf="!cargando" class="btn-content">
+              Iniciar sesión
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </span>
+            <span *ngIf="cargando" class="spinner-text">
+              <span class="spinner"></span>
+              Verificando...
+            </span>
+          </button>
+
+          <p *ngIf="cargandoLento" class="aviso-carga-lenta">
+            El servidor estaba inactivo y está despertando, esto puede tardar unos segundos…
+          </p>
+
+          <a class="btn-validar-doc" routerLink="/validar-documento">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17">
+              <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" />
+              <path d="M14 3v5h5M9.5 14.5l2 2 3.5-4" />
+            </svg>
+            Validar documento
+          </a>
+
+          <div class="trust-line">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" /></svg>
+            Utiliza tu correo institucional @utem.cl
+          </div>
+
+          <p class="soporte">¿Necesitas ayuda técnica? <span>Soporte SIAC</span></p>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <p>© 2026 SESAES - Universidad Tecnológica Metropolitana (UTEM). Todos los derechos reservados.</p>
+  </div>
+
+</div>

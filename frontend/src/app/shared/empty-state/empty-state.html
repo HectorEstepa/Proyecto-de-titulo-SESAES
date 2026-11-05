@@ -1,0 +1,18 @@
+<div class="app-empty-state">
+  <svg
+    *ngIf="icon"
+    class="app-empty-state__icon"
+    [lucideIcon]="icon"
+    aria-hidden="true"
+  ></svg>
+
+  <p class="app-empty-state__title">{{ title }}</p>
+
+  <p *ngIf="description?.trim()" class="app-empty-state__description">
+    {{ description }}
+  </p>
+
+  <div class="app-empty-state__action">
+    <ng-content></ng-content>
+  </div>
+</div>

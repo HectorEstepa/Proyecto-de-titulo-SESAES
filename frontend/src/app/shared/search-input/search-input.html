@@ -1,0 +1,25 @@
+<div class="app-search-input">
+  <label *ngIf="hasVisibleLabel" [for]="inputId" class="app-search-input__label">
+    {{ label }}
+  </label>
+
+  <div
+    class="app-search-input__control"
+    role="search"
+    [class.app-search-input__control--disabled]="disabled"
+  >
+    <svg class="app-search-input__icon" [lucideIcon]="lucideSearch" aria-hidden="true"></svg>
+
+    <input
+      [id]="inputId"
+      class="app-search-input__field"
+      type="text"
+      [value]="value"
+      [placeholder]="placeholder"
+      [disabled]="disabled"
+      [attr.aria-label]="resolvedAriaLabel"
+      (input)="onNativeInput($event)"
+      (blur)="onBlur()"
+    />
+  </div>
+</div>

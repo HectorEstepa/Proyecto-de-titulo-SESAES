@@ -1,0 +1,622 @@
+﻿<!-- dashboard-admin.html -->
+<div class="dashboard admin-shell" [class.tema-oscuro]="temaOscuro" [class.sidebar-abierta]="sidebarMovilAbierta">
+
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <div class="sidebar-overlay" *ngIf="sidebarMovilAbierta" (click)="toggleSidebarMovil()"></div>
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="temporal.jpg" alt="UTEM">
+      <div class="sidebar-logo-divider"></div>
+      <div class="sidebar-logo-text">
+        <span class="sidebar-logo-title">SESAES</span>
+        <span class="sidebar-logo-sub">Salud Estudiantil</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item" [class.active]="seccionActiva==='inicio'" (click)="navegarA('inicio')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        Inicio
+      </button>
+      <button class="nav-item" *ngIf="puedeAccederSeccion('horario')" [class.active]="seccionActiva==='horario'" (click)="navegarA('horario')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        Agenda
+      </button>
+      <button class="nav-item" *ngIf="puedeAccederSeccion('citas')" [class.active]="seccionActiva==='citas'" (click)="navegarA('citas')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        </svg>
+        Citas
+      </button>
+      <button class="nav-item" *ngIf="puedeAccederSeccion('profesional')" [class.active]="seccionActiva==='profesional'" (click)="navegarA('profesional')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+        Profesionales
+      </button>
+      <button class="nav-item" *ngIf="puedeAccederSeccion('estudiantes')" [class.active]="seccionActiva==='estudiantes'" (click)="navegarA('estudiantes')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+        </svg>
+        Estudiantes
+      </button>
+      <button class="nav-item" *ngIf="puedeAccederSeccion('historial')" [class.active]="seccionActiva==='historial'" (click)="navegarA('historial')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        Historial
+      </button>
+      <button class="nav-item" *ngIf="puedeAccederSeccion('reportes')" [class.active]="seccionActiva==='reportes'" (click)="navegarA('reportes')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+        Reportes
+      </button>
+      <button class="nav-item" *ngIf="puedeAccederSeccion('configuracion')" [class.active]="seccionActiva==='configuracion'" (click)="navegarA('configuracion')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+        Configuración
+      </button>
+      <!-- ══ SA-4: Administradores — visible SOLO con roles.gestionar (hoy, solo SUPERADMIN) ══ -->
+      <button class="nav-item" *ngIf="puedeAccederSeccion('administradores')" [class.active]="seccionActiva==='administradores'" (click)="navegarA('administradores')">
+        <span class="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>
+        Administradores
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="nav-item" [class.active]="seccionActiva==='miperfil'" (click)="navegarA('miperfil')">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+        Mi perfil
+      </button>
+      <button class="logout-btn" (click)="cerrarSesion()">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Cerrar sesión
+      </button>
+    </div>
+  </aside>
+
+  <!-- ═══════════════ MAIN ═══════════════ -->
+  <div class="main-wrapper">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <button class="btn-hamburguesa" (click)="toggleSidebarMovil()">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+  </button>
+  <div class="topbar-left">
+        <h1 class="topbar-title" *ngIf="seccionActiva!=='inicio' && !seccionConCabeceraPropia">{{ tituloSeccion }}</h1>
+        <h1 class="topbar-title" *ngIf="seccionActiva==='inicio'">Hola, {{ nombreUsuario }} <span class="material-symbols-outlined topbar-title-icon">{{ puedeVerInicioInstitucional ? 'workspace_premium' : 'waving_hand' }}</span></h1>
+        <span class="topbar-sub" *ngIf="!seccionConCabeceraPropia">{{ subtituloSeccion }}</span>
+      </div>
+      <div class="topbar-actions">
+        <div class="topbar-buscador">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" placeholder="Buscar estudiante o profesional..." [(ngModel)]="busquedaGlobal" (input)="buscarGlobal()" autocomplete="off" />
+          <div class="buscador-dropdown" *ngIf="busquedaGlobal.trim().length >= 2">
+            <div *ngIf="buscandoGlobal" class="buscador-cargando">Buscando...</div>
+            <ng-container *ngIf="!buscandoGlobal">
+              <div *ngIf="!hayResultadosBusquedaGlobal" class="buscador-vacio">Sin resultados para "{{ busquedaGlobal }}"</div>
+              <div *ngIf="resultadosBusquedaGlobal.profesionales.length > 0" class="buscador-grupo-titulo">Profesionales</div>
+              <div *ngFor="let p of resultadosBusquedaGlobal.profesionales" class="buscador-opcion" (click)="irAProfesionalDesdeBusqueda(p)">
+                <strong>{{ p.nombre }}</strong><span>{{ p.especialidad }}</span>
+              </div>
+              <div *ngIf="resultadosBusquedaGlobal.estudiantes.length > 0" class="buscador-grupo-titulo">Estudiantes</div>
+              <div *ngFor="let e of resultadosBusquedaGlobal.estudiantes" class="buscador-opcion" (click)="irAEstudianteDesdeBusqueda(e)">
+                <strong>{{ e.nombre }}</strong><span>{{ e.rut }} · {{ e.carrera }}</span>
+              </div>
+            </ng-container>
+          </div>
+        </div>
+        <button class="tema-toggle-btn" (click)="toggleTema()" [title]="temaOscuro ? 'Modo claro' : 'Modo oscuro'">
+          <svg *ngIf="!temaOscuro" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg *ngIf="temaOscuro" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+          </svg>
+        </button>
+        <button class="topbar-icon-btn" (click)="toggleNotificaciones()">
+          <span class="material-symbols-outlined">notifications</span>
+          <span class="notif-badge" *ngIf="notifNoLeidas > 0">{{ notifNoLeidas }}</span>
+        </button>
+        <div class="topbar-perfil">
+          <div class="admin-avatar-topbar" *ngIf="!fotoUsuarioUrl">{{ inicialesUsuario }}</div>
+          <img *ngIf="fotoUsuarioUrl" [src]="fotoUsuarioUrl" class="admin-avatar-img-topbar" alt="Foto de perfil" />
+          <div class="topbar-perfil-info">
+            <span class="topbar-perfil-nombre">{{ nombreUsuario }}</span>
+            <span class="topbar-perfil-rol">{{ rolVisual }}</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- PANEL NOTIFICACIONES -->
+    <div class="notif-panel" *ngIf="notifPanelAbierto">
+      <div class="notif-panel-header">
+        <label class="notif-select-all">
+          <input type="checkbox" [checked]="todasNotifSeleccionadas" (change)="toggleSeleccionarTodasNotif()" [disabled]="notificaciones.length===0" />
+          <span>Notificaciones</span>
+        </label>
+        <button class="notif-leer-todas" (click)="marcarTodasLeidas()" *ngIf="!hayNotifSeleccionadas">Marcar todas como leídas</button>
+      </div>
+
+      <div class="notif-acciones-masivas" *ngIf="hayNotifSeleccionadas">
+        <span>{{ notifSeleccionadas.length }} seleccionada{{ notifSeleccionadas.length === 1 ? '' : 's' }}</span>
+        <div class="notif-acciones-masivas-btns">
+          <button (click)="marcarSeleccionadasLeidas()"><span class="material-symbols-outlined notif-btn-icon">done_all</span> Marcar leídas</button>
+          <button class="danger" (click)="eliminarNotifSeleccionadas()"><span class="material-symbols-outlined notif-btn-icon">delete</span> Eliminar</button>
+        </div>
+      </div>
+
+      <div class="notif-lista">
+        <div *ngIf="notificaciones.length === 0" class="notif-vacia">Sin notificaciones</div>
+        <div *ngFor="let n of notificaciones" class="notif-item" [class.no-leida]="!n.leida" [class.seleccionada]="n.seleccionada">
+          <label class="notif-checkbox" (click)="$event.stopPropagation()">
+            <input type="checkbox" [(ngModel)]="n.seleccionada" />
+          </label>
+          <div class="notif-contenido" (click)="marcarLeida(n)">
+            <div class="notif-icono" [ngClass]="n.tipo"><span class="material-symbols-outlined">{{ n.tipo==='cancelacion' ? 'event_busy' : 'info' }}</span></div>
+            <div class="notif-texto">
+              <p>{{ n.mensaje }}</p>
+              <span>{{ n.fecha_creacion | date:'dd/MM HH:mm' }}</span>
+            </div>
+          </div>
+          <div class="notif-item-acciones">
+            <button *ngIf="!n.leida" title="Marcar como leída" (click)="marcarLeida(n)"><span class="material-symbols-outlined">check</span></button>
+            <button title="Eliminar" (click)="eliminarNotificacion(n)"><span class="material-symbols-outlined">delete</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <main class="main-content">
+
+      <!-- ══ INICIO ══ -->
+      <!-- Selector de vista (vistaInicio): 'pendiente' mientras el contexto
+           efectivo no llega (no se monta ninguna); luego 'institucional'
+           (SUPERADMIN) u 'operativa' (ADMIN). El Inicio ADMIN conserva su
+           etiqueta original tal cual: solo queda dentro del selector. -->
+      <ng-container [ngSwitch]="vistaInicio">
+        <ng-container *ngSwitchCase="'institucional'">
+          <app-superadmin-inicio
+            *ngIf="seccionActiva==='inicio'"
+            [puedeIrA]="puedeIrADestinoInicioFn"
+            (navegar)="onNavegarDesdeInicioInstitucional($event)"
+          ></app-superadmin-inicio>
+        </ng-container>
+
+        <ng-container *ngSwitchCase="'operativa'">
+      <app-admin-inicio
+        *ngIf="seccionActiva==='inicio'"
+        [puedeVerAgenda]="hasPermission('agenda.ver')"
+        [puedeGestionarAgenda]="hasPermission('agenda.gestionar')"
+        [estadisticas]="estadisticas"
+        [resumenDia]="resumenDia"
+        [actualizandoDisponibilidad]="actualizandoDisponibilidad"
+        [graficoEspecialidad]="graficoEspecialidad"
+        [graficoSemana]="graficoSemana"
+        [proximasCitas]="proximasCitas"
+        [actividadReciente]="actividadReciente"
+        [(filtroGraficoAnio)]="filtroGraficoAnio"
+        [(filtroGraficoCarrera)]="filtroGraficoCarrera"
+        (recargarGraficoEspecialidad)="cargarGraficoEspecialidad()"
+        (exportarEspecialidad)="exportarEspecialidadExcel()"
+        (exportarSemana)="exportarSemanaExcel()"
+        (verAgenda)="navegarA('horario')"
+        (marcarInasistenciaCita)="marcarInasistencia($event)"
+        (cancelarCita)="cancelarCitaAdmin($event)"
+        (actualizarDisponibilidad)="cargarResumenDia()"
+      ></app-admin-inicio>
+        </ng-container>
+      </ng-container>
+
+<!-- ══ HORARIO ══ -->
+      <app-admin-horario
+        *ngIf="seccionActiva==='horario' && puedeAccederSeccion('horario')"
+        [puedeGestionarAgenda]="hasPermission('agenda.gestionar')"
+        [solicitudesHorarioAdmin]="solicitudesHorarioAdmin"
+        [especialidades]="especialidades"
+        [profesionalesFiltrados]="profesionalesFiltrados"
+        [(filtroEspecialidad)]="filtroEspecialidad"
+        [(filtroProfesionalId)]="filtroProfesionalId"
+        [profesionalActual]="profesionalActual"
+        [profesionalActualBloqueado]="profesionalActualBloqueado"
+        [semanaActual]="semanaActual"
+        [semanaLabel]="semanaLabel"
+        [periodoLabel]="periodoLabel"
+        [vista]="vistaAgenda"
+        [diaActual]="diaAgenda"
+        [mesCeldas]="mesCeldas"
+        [diaResumenFn]="horarioDiaResumenFn"
+        [horasGrilla]="horasGrilla"
+        [(diaSeleccionado)]="diaSeleccionado"
+        [citasDiaSeleccionado]="citasDiaSeleccionado"
+        [citasHorario]="citasHorarioAgenda"
+        [diasCerrados]="diasCerrados"
+        [bloqueEstadoFn]="horarioBloqueEstadoFn"
+        [bloqueCitasFn]="horarioBloqueCitasFn"
+        [bloqueSobrecupoDisponibleFn]="horarioBloqueSobrecupoDisponibleFn"
+        [formatearFechaFn]="horarioFormatearFechaFn"
+        [esFeriadoFn]="horarioEsFeriadoFn"
+        [nombreFeriadoFn]="horarioNombreFeriadoFn"
+        (aprobarSolicitud)="aprobarSolicitudHorario($event)"
+        (rechazarSolicitud)="rechazarSolicitudHorario($event)"
+        (filtrar)="filtrarProfesionales()"
+        (recargarHorario)="cargarHorarioProfesional()"
+        (abrirNuevaCita)="abrirModalNuevaCita()"
+        (imprimir)="imprimirAgenda()"
+        (vistaChange)="cambiarVistaAgenda($event)"
+        (abrirDia)="abrirDiaAgenda($event)"
+        (anterior)="agendaAnterior()"
+        (siguiente)="agendaSiguiente()"
+        (hoy)="agendaHoy()"
+        (bloqueClick)="clickBloque($event.fecha, $event.hora)"
+        (cancelarCita)="cancelarCitaAdmin($event)"
+      ></app-admin-horario>
+
+<!-- ══ CITAS ══ -->
+      <app-admin-citas
+        *ngIf="seccionActiva==='citas' && puedeAccederSeccion('citas')"
+        [puedeGestionarAgenda]="hasPermission('agenda.gestionar')"
+        [puedeVerProfesionales]="puedeAccederSeccion('profesional')"
+        [citasVersion]="citasVersion"
+        (verDetalle)="verDetalleCita($event)"
+        (marcarPrioridad)="marcarPrioridadCita($event.cita, $event.urgente)"
+        (cancelarCita)="cancelarCitaAdmin($event)"
+        (irAHorario)="navegarA('horario')"
+        (irAAgenda)="navegarA('horario')"
+        (irAProfesionales)="navegarA('profesional')"
+      ></app-admin-citas>
+
+      <!-- ══ PROFESIONALES ══ -->
+      <app-admin-profesionales
+        *ngIf="seccionActiva==='profesional' && puedeAccederSeccion('profesional')"
+        [puedeGestionarProfesionales]="hasPermission('profesionales.gestionar')"
+        [profesionales]="profesionales"
+        [especialidades]="especialidades"
+        [profesionalesActivos]="profesionalesActivos"
+        [profesionalesConIncidencia]="profesionalesConIncidencia"
+        (crearProfesional)="onCrearProfesional($event)"
+        (cambiarEstado)="onCambiarEstadoProfesional($event)"
+        (cambiarDuracion)="onCambiarDuracionProfesional($event)"
+        (cambiarTratamiento)="onCambiarTratamientoProfesional($event)"
+        (cambiarColorIdentificador)="onCambiarColorIdentificador($event)"
+        (eliminarProfesional)="onEliminarProfesional($event)"
+        (errorValidacion)="onErrorValidacionProfesional($event)"
+      ></app-admin-profesionales>
+
+      <!-- ══ ESTUDIANTES ══ -->
+      <app-admin-estudiantes
+        *ngIf="seccionActiva==='estudiantes' && puedeAccederSeccion('estudiantes')"
+        [estudiantesAdmin]="estudiantesAdmin"
+        [estudiantesTotal]="estudiantesTotal"
+        [estudiantesPagina]="estudiantesPagina"
+        [estudiantesPorPagina]="estudiantesPorPagina"
+        [estudiantesCargando]="estudiantesCargando"
+        [(estudiantesFiltroQ)]="estudiantesFiltroQ"
+        [(estudiantesFiltroCarrera)]="estudiantesFiltroCarrera"
+        [modalPerfilEstudianteAbierto]="modalPerfilEstudianteAbierto"
+        [perfilEstudianteCargando]="perfilEstudianteCargando"
+        [fichaEstudianteSeleccionado]="fichaEstudianteSeleccionado"
+        [(histEstudianteQ)]="histEstudianteQ"
+        [modalDetalleCitaEstudianteAbierto]="modalDetalleCitaEstudianteAbierto"
+        [citaDetalleEstudiante]="citaDetalleEstudiante"
+        [puedeGestionarAgenda]="hasPermission('agenda.gestionar')"
+        (buscar)="buscarEstudiantesAdmin()"
+        (limpiar)="limpiarFiltrosEstudiantes()"
+        (cambiarPagina)="irAPaginaEstudiantes($event)"
+        (verPerfil)="verPerfilEstudianteAdmin($event)"
+        (cerrarPerfil)="cerrarModalPerfilEstudiante()"
+        (buscarHistorialEstudiante)="buscarHistorialEstudiante()"
+        (cambiarPaginaHistorialEstudiante)="cambiarPaginaHistorialEstudiante($event)"
+        (verDetalleCita)="verDetalleCitaEstudiante($event)"
+        (cerrarDetalleCita)="cerrarDetalleCitaEstudiante()"
+        (cancelarCitaDesdeFicha)="cancelarCitaDesdeFichaEstudiante($event)"
+      ></app-admin-estudiantes>
+
+<!-- ══ REPORTES ══ -->
+      <app-admin-reportes
+        *ngIf="seccionActiva==='reportes' && puedeAccederSeccion('reportes')"
+        [reportesResumen]="reportesResumen"
+        [reportesCargando]="reportesCargando"
+        [reportesError]="reportesError"
+        [(reportesTabActiva)]="reportesTabActiva"
+        [especialidades]="especialidades"
+        [listaProfesionales]="listaProfesionalesReportes"
+        [(reportesFiltroFechaInicio)]="reportesFiltroFechaInicio"
+        [(reportesFiltroFechaFin)]="reportesFiltroFechaFin"
+        [(reportesFiltroEspecialidad)]="reportesFiltroEspecialidad"
+        [(reportesFiltroCarrera)]="reportesFiltroCarrera"
+        [(reportesFiltroProfesionalId)]="reportesFiltroProfesionalId"
+        [(reportesFiltroEstado)]="reportesFiltroEstado"
+        [(reportesFiltroPrioridad)]="reportesFiltroPrioridad"
+        [puedeExportarCgr]="puedeExportarCgr"
+        [(cgrAnio)]="cgrAnio"
+        [cgrAniosDisponibles]="cgrAniosDisponibles"
+        [(cgrFechaFin)]="cgrFechaFin"
+        (aplicarFiltros)="aplicarFiltrosReportes()"
+        (limpiarFiltros)="limpiarFiltrosReportes()"
+        (reintentar)="cargarReportesResumen()"
+        (irAHistorial)="navegarA('historial')"
+        (exportarReportesExcel)="exportarReportesExcel()"
+        (exportarReportesPdf)="exportarReportesPdf()"
+        (exportarCgr)="exportarCGR()"
+        (exportarAlumnos)="exportarListadoAlumnos()"
+      ></app-admin-reportes>
+
+<!-- ══ MI PERFIL (SA-1.2 — fuente: Usuario vía GET /usuarios/me) ══ -->
+      <app-admin-perfil
+        *ngIf="seccionActiva==='miperfil'"
+        [usuario]="usuarioPerfil"
+        [perfilCargado]="perfilCargado"
+        [cargandoPerfil]="cargandoPerfil"
+        (guardarPerfil)="onGuardarPerfilAdmin($event)"
+      ></app-admin-perfil>
+
+      <!-- ══ SA-4: ADMINISTRADORES — el hijo es dueño de su propio HTTP; el
+           shell solo decide si se renderiza (sección activa + permiso) ══ -->
+      <app-admin-administradores
+        *ngIf="seccionActiva==='administradores' && puedeAccederSeccion('administradores')"
+        (sesionAdministrativaActualizada)="onSesionAdministrativaActualizada()"
+      ></app-admin-administradores>
+
+      <!-- ══ HISTORIAL ══ -->
+      <app-admin-historial
+        *ngIf="seccionActiva==='historial' && puedeAccederSeccion('historial')"
+        [historialAdmin]="historialAdmin"
+        [especialidades]="especialidades"
+        [estadisticasEstudiante]="estadisticasEstudiante"
+        [(histFiltroEstudiante)]="histFiltroEstudiante"
+        [(histFiltroDesde)]="histFiltroDesde"
+        [(histFiltroHasta)]="histFiltroHasta"
+        [(histFiltroEspecialidad)]="histFiltroEspecialidad"
+        [(histFiltroEstado)]="histFiltroEstado"
+        [(histFiltroCarrera)]="histFiltroCarrera"
+        [(cgrAnio)]="cgrAnio"
+        [cgrAniosDisponibles]="cgrAniosDisponibles"
+        [(cgrFechaFin)]="cgrFechaFin"
+        [puedeExportarCgr]="puedeExportarCgr"
+        [puedeDescargarPdf]="false"
+        (aplicarFiltros)="cargarHistorial()"
+        (limpiarFiltros)="limpiarFiltrosHistorial()"
+        (exportarHistorialPdf)="exportarHistorialPdf()"
+        (exportarHistorialExcel)="exportarHistorialExcel()"
+        (exportarCgr)="exportarCGR()"
+        (exportarAlumnos)="exportarListadoAlumnos()"
+        (verDetalle)="verDetalleCita($event)"
+        (descargarPdf)="descargarPdf($event)"
+      ></app-admin-historial>
+
+<!-- ══ CONFIGURACIÓN ══ -->
+      <app-admin-configuracion
+        *ngIf="seccionActiva==='configuracion' && puedeAccederSeccion('configuracion')"
+        [configTabActiva]="configTabActiva"
+        (configTabActivaChange)="cambiarTabConfig($event)"
+        [configCentro]="configCentro"
+        [centroEnEdicion]="centroEnEdicion"
+        [centroModificado]="centroModificado"
+        [guardandoConfig]="guardandoConfig"
+        [configCitas]="configCitas"
+        [guardandoConfigCitas]="guardandoConfigCitas"
+        [diasCerrados]="diasCerrados"
+        [nuevoDiaCerrado]="nuevoDiaCerrado"
+        [creandoDiaCerrado]="creandoDiaCerrado"
+        [hoyISO]="hoyISO"
+        [usuariosDelSistema]="usuariosDelSistema"
+        [usuariosSubTab]="usuariosSubTab"
+        (usuariosSubTabChange)="usuariosSubTab=$event"
+        [usuariosBusqueda]="usuariosBusqueda"
+        (usuariosBusquedaChange)="usuariosBusqueda=$event"
+        [usuariosFiltroRol]="usuariosFiltroRol"
+        (usuariosFiltroRolChange)="usuariosFiltroRol=$event"
+        [usuariosFiltroEstado]="usuariosFiltroEstado"
+        (usuariosFiltroEstadoChange)="usuariosFiltroEstado=$event"
+        (buscarUsuarios)="buscarUsuariosEstudiantes()"
+        [usuariosEstudiantes]="usuariosEstudiantes"
+        [usuariosEstudiantesTotal]="usuariosEstudiantesTotal"
+        [usuariosEstudiantesPagina]="usuariosEstudiantesPagina"
+        [usuariosEstudiantesPorPagina]="usuariosEstudiantesPorPagina"
+        [usuariosEstudiantesCargando]="usuariosEstudiantesCargando"
+        [totalPaginasUsuariosEstudiantes]="totalPaginasUsuariosEstudiantes"
+        (cambiarPaginaUsuariosEstudiantes)="cambiarPaginaUsuariosEstudiantes($event)"
+        [usuariosProfesionales]="profesionales"
+        [usuariosAdministradores]="usuariosAdministradores"
+        [puedeVerAdministradoresUsuarios]="puedeVerAdministradoresUsuarios"
+        [usuarioSeleccionado]="usuarioSeleccionado"
+        [usuarioSeleccionadoTipo]="usuarioSeleccionadoTipo"
+        (seleccionarUsuarioPerfil)="seleccionarUsuarioPerfil($event.usuario, $event.tipo)"
+        (cerrarPerfilUsuario)="cerrarPerfilUsuario()"
+        [perfilTabActiva]="perfilTabActiva"
+        (perfilTabActivaChange)="cambiarPerfilTab($event)"
+        [perfilHorarios]="perfilHorarios"
+        [perfilHorariosCargando]="perfilHorariosCargando"
+        [puedeVerHorariosPerfil]="puedeConfigHorarios"
+        [puedeGestionarAusenciasProfesional]="hasPermission('profesionales.gestionar')"
+        [puedeVerAusenciasBasicoProfesional]="hasPermission('profesionales.ver')"
+        [auditoria]="auditoria"
+        [auditFiltroDesde]="auditFiltroDesde"
+        (auditFiltroDesdeChange)="auditFiltroDesde=$event"
+        [auditFiltroHasta]="auditFiltroHasta"
+        (auditFiltroHastaChange)="auditFiltroHasta=$event"
+        [cargandoAuditoria]="cargandoAuditoria"
+        [puedeConfigGeneral]="puedeConfigGeneral"
+        [puedeConfigCitas]="puedeConfigCitas"
+        [puedeConfigHorarios]="puedeConfigHorarios"
+        [puedeConfigUsuarios]="puedeConfigUsuarios"
+        [puedeConfigCapacidades]="puedeConfigCapacidades"
+        [puedeVerAuditoria]="puedeVerAuditoria"
+        (habilitarEdicionCentro)="habilitarEdicionCentro()"
+        (cancelarEdicionCentro)="cancelarEdicionCentro()"
+        (guardarInfoCentro)="guardarInfoCentro()"
+        (guardarConfiguracionCitas)="guardarConfiguracionCitas()"
+        (crearDiaCerrado)="crearDiaCerrado()"
+        (verCitasDiaCerrado)="verCitasDiaCerrado($event)"
+        (reabrirDiaCerrado)="reabrirDiaCerrado($event)"
+        (cargarAuditoria)="cargarAuditoria()"
+        (exportarAuditoriaExcel)="exportarAuditoriaExcel()"
+        (exportarAuditoriaPdf)="exportarAuditoriaPdf()"
+      ></app-admin-configuracion>
+</main>
+
+  
+  </div>
+
+  <!-- MODAL: DETALLE DE CITA (Historial) -->
+  <div class="modal-overlay" *ngIf="modalDetalleCitaAbierto" (click)="cerrarModalDetalleCita()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Detalle de la cita</h3>
+        <button class="modal-cerrar" (click)="cerrarModalDetalleCita()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div *ngIf="citaDetalle" class="prof-datos-grid">
+        <div class="dato-row"><span class="dato-label">Estudiante</span><span class="dato-val">{{ citaDetalle.estudiante }}</span></div>
+        <div class="dato-row"><span class="dato-label">RUT</span><span class="dato-val">{{ citaDetalle.rut || '—' }}</span></div>
+        <div class="dato-row" *ngIf="citaDetalle.carrera"><span class="dato-label">Carrera</span><span class="dato-val">{{ citaDetalle.carrera }}</span></div>
+        <div class="dato-row"><span class="dato-label">Especialidad</span><span class="dato-val">{{ citaDetalle.especialidad }}</span></div>
+        <div class="dato-row"><span class="dato-label">Profesional</span><span class="dato-val">{{ citaDetalle.profesional }}</span></div>
+        <div class="dato-row"><span class="dato-label">Fecha</span><span class="dato-val">{{ citaDetalle.fecha }}</span></div>
+        <div class="dato-row"><span class="dato-label">Hora</span><span class="dato-val">{{ citaDetalle.hora }}</span></div>
+        <div class="dato-row"><span class="dato-label">Estado</span><span class="estado-badge" [ngClass]="citaDetalle.estado">{{ citaDetalle.estado }}</span></div>
+        <div class="dato-row"><span class="dato-label">Prioridad</span><span class="dato-val">{{ citaDetalle.urgente ? 'Urgente' : 'Normal' }}</span></div>
+        <div class="dato-row" *ngIf="citaDetalle.sobrecupo"><span class="dato-label">Sobrecupo</span><span class="dato-val">Sí</span></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancelar-modal" (click)="cerrarModalDetalleCita()">Cerrar</button>
+        <button class="btn-guardar-modal" *ngIf="citaDetalle?.tiene_pdf" (click)="descargarPdf(citaDetalle.id)">⬇ Descargar PDF</button>
+        <button class="btn-cancelar-modal btn-peligro-modal" *ngIf="hasPermission('agenda.gestionar') && citaDetalle?.estado === 'pendiente'"
+                (click)="cancelarCitaAdmin(citaDetalle); cerrarModalDetalleCita()">Cancelar cita</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NUEVA CITA -->
+  <div class="modal-overlay" *ngIf="modalCitaAbierto && hasPermission('agenda.gestionar')" (click)="cerrarModalCita()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Nueva Cita{{ nuevaCita.urgente ? ' — URGENTE' : '' }}{{ nuevaCita.sobrecupo ? ' — SOBRECUPO' : '' }}</h3>
+        <button class="modal-cerrar" (click)="cerrarModalCita()" aria-label="Cerrar">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <p class="aviso-sobrecupo-modal" *ngIf="nuevaCita.sobrecupo">
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        Estás creando una cita como <strong>sobrecupo</strong>. El sistema volverá a validar la disponibilidad al confirmar.
+      </p>
+      <div class="campo-grupo" style="margin-bottom:12px; position:relative">
+        <label>Buscar estudiante (nombre o RUT) *</label>
+        <input [(ngModel)]="busquedaEstudiante" placeholder="Escribe 3 caracteres o más..."
+            (input)="buscarEstudiante()" autocomplete="off" />
+        <div class="estudiante-dropdown" *ngIf="resultadosEstudiante.length > 0">
+          <div *ngFor="let est of resultadosEstudiante" class="estudiante-opcion" (click)="seleccionarEstudiante(est)">
+            <strong>{{ est.nombre }}</strong>
+            <span>{{ est.rut }} · {{ est.carrera }}</span>
+          </div>
+        </div>
+        <div class="buscando-label" *ngIf="buscandoEstudiante">Buscando...</div>
+      </div>
+      <div class="form-grid">
+        <div class="campo-grupo"><label>Fecha</label><input type="date" [(ngModel)]="nuevaCita.fecha" /></div>
+        <div class="campo-grupo"><label>Hora</label><input [(ngModel)]="nuevaCita.hora" placeholder="09:00" /></div>
+        <div class="campo-grupo" style="grid-column: 1 / -1">
+          <label>Observaciones (opcional)</label>
+          <input [(ngModel)]="nuevaCita.observaciones" placeholder="Motivo de la cita" />
+        </div>
+        <!-- A.4.7A — motivo del sobrecupo: campo SEPARADO de observaciones,
+             exigido por backend para cualquier sobrecupo efectivo. Solo
+             aparece cuando esta cita ya viene marcada como sobrecupo. -->
+        <div class="campo-grupo" style="grid-column: 1 / -1" *ngIf="nuevaCita.sobrecupo">
+          <label>Motivo del sobrecupo *</label>
+          <textarea [(ngModel)]="nuevaCita.sobrecupo_motivo" rows="3"
+              placeholder="Explica por qué corresponde autorizar este sobrecupo"></textarea>
+          <span class="campo-error" *ngIf="nuevaCita.sobrecupo && !(nuevaCita.sobrecupo_motivo || '').trim()">
+            Debes indicar el motivo del sobrecupo.
+          </span>
+        </div>
+        <div class="campo-grupo toggle-row" style="grid-column: 1 / -1" *ngIf="mostrarToggleUrgente">
+          <span>¿Es urgente?</span>
+          <div class="toggle" [class.on]="nuevaCita.urgente" (click)="nuevaCita.urgente = !nuevaCita.urgente"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancelar-modal" (click)="cerrarModalCita()">Cancelar</button>
+        <button class="btn-guardar-modal"
+            [disabled]="creandoCita || (nuevaCita.sobrecupo && !(nuevaCita.sobrecupo_motivo || '').trim())"
+            (click)="crearCitaDesdeHorario()">{{ creandoCita ? 'Creando…' : 'Confirmar Cita' }}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRMAR SOBRECUPO -->
+  <div class="modal-overlay" *ngIf="sobrecupoConfirmAbierto && hasPermission('agenda.gestionar') && hasPermission('agenda.sobrecupo')" (click)="cancelarSobrecupo()">
+    <div class="modal" (click)="$event.stopPropagation()" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3>
+          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+          Confirmar sobrecupo
+        </h3>
+        <button class="modal-cerrar" (click)="cancelarSobrecupo()" aria-label="Cerrar">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <p style="font-size: 13.5px; color: #475569; line-height: 1.5; margin: 0 0 20px 0;">
+        {{ sobrecupoPendiente?.mensaje }}
+      </p>
+      <div class="modal-footer">
+        <button class="btn-cancelar-modal" (click)="cancelarSobrecupo()">Cancelar</button>
+        <button class="btn-guardar-modal" (click)="confirmarSobrecupo()">Sí, continuar</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- MODAL: CITAS CANCELADAS POR UN DÍA CERRADO -->
+  <div class="modal-overlay" *ngIf="modalCitasDiaCerradoAbierto" (click)="modalCitasDiaCerradoAbierto = false">
+    <div class="modal" (click)="$event.stopPropagation()" style="max-width: 560px;">
+      <div class="modal-header">
+        <h3>Citas canceladas — {{ diaCerradoSeleccionado?.fecha }}</h3>
+        <button class="modal-cerrar" (click)="modalCitasDiaCerradoAbierto = false"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <p class="modal-desc">
+        Estas son las citas que se cancelaron automáticamente al cerrar este día.
+        Si un estudiante llama para reagendar, aquí tienes su información y la del profesional.
+      </p>
+      <div *ngIf="cargandoCitasDiaCerrado" class="tabla-vacia">Cargando...</div>
+      <table class="admin-tabla" *ngIf="!cargandoCitasDiaCerrado && citasDiaCerradoSeleccionado.length > 0">
+        <thead>
+          <tr><th>Hora</th><th>Estudiante</th><th>RUT</th><th>Profesional</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let c of citasDiaCerradoSeleccionado">
+            <td>{{ c.hora }}</td>
+            <td>{{ c.estudiante }}<br><small class="texto-gris">{{ c.correo }}</small></td>
+            <td>{{ c.rut }}</td>
+            <td>{{ c.profesional }}<br><small class="texto-gris">{{ c.especialidad }}</small></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="tabla-vacia" *ngIf="!cargandoCitasDiaCerrado && citasDiaCerradoSeleccionado.length === 0">
+        No había citas pendientes ese día.
+      </p>
+    </div>
+  </div>
+
+</div>

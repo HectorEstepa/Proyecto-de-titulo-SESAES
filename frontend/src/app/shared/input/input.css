@@ -1,0 +1,158 @@
+/**
+ * SESAES — Input (Fase 2.3)
+ *
+ * Todo color, espaciado, radio, tipografía e ícono viene de tokens.css.
+ * Cero valores hex nuevos.
+ *
+ * Literales estructurales sin token semántico equivalente:
+ * - Altura del control (40px): mismo criterio que Button (Fase 2.2) —
+ *   tokens.css no define una escala de alturas de componente y --space-*
+ *   es para separación, no para dimensión de un control.
+ * - Duración de transición .15s: coincide con el patrón ya usado en
+ *   Button (Fase 2.2) para border-color/box-shadow.
+ * - Tamaño del ícono del toggle (18px): se reutiliza --icon-size-button,
+ *   igual que Button, porque tokens.css no define un tamaño de ícono
+ *   separado para controles de formulario.
+ */
+
+:host {
+  display: block;
+}
+
+.app-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  width: 100%;
+}
+
+.app-input__label {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+}
+
+.app-input__required {
+  color: var(--tone-danger);
+}
+
+.app-input__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.app-input__field {
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background-color: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-tight);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.app-input__field::placeholder {
+  color: var(--text-muted);
+}
+
+.app-input__field:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.app-input__field:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.app-input__field:disabled {
+  cursor: not-allowed;
+  color: var(--text-disabled);
+  background-color: var(--surface-card-alt);
+}
+
+.app-input__control--error .app-input__field {
+  border-color: var(--tone-danger-border);
+}
+
+.app-input__control--error .app-input__field:focus-visible {
+  border-color: var(--tone-danger);
+}
+
+/* ------------------------------------------------------------
+   Toggle de contraseña
+   ------------------------------------------------------------ */
+.app-input__control--disabled .app-input__toggle {
+  cursor: not-allowed;
+}
+
+.app-input__toggle {
+  position: absolute;
+  right: var(--space-2xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.app-input__toggle:hover:not(:disabled) {
+  color: var(--text-primary);
+  background-color: var(--surface-hover);
+}
+
+.app-input__toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.app-input__toggle:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.app-input__toggle-icon {
+  width: var(--icon-size-button);
+  height: var(--icon-size-button);
+  flex-shrink: 0;
+}
+
+.app-input__field--with-toggle {
+  padding-right: calc(var(--space-2xs) + 32px);
+}
+
+/* ------------------------------------------------------------
+   Error / helper
+   ------------------------------------------------------------ */
+.app-input__error {
+  margin: 0;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-xs);
+  color: var(--tone-danger);
+}
+
+.app-input__helper {
+  margin: 0;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-input__field {
+    transition: none;
+  }
+}

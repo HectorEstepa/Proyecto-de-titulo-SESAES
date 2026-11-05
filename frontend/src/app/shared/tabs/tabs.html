@@ -1,0 +1,18 @@
+<div class="app-tabs" role="tablist">
+  <button
+    #tabButton
+    *ngFor="let tab of tabs; let i = index"
+    type="button"
+    role="tab"
+    class="app-tabs__tab"
+    [class.app-tabs__tab--active]="isActive(tab.id)"
+    [id]="tabButtonId(tab.id)"
+    [attr.aria-controls]="panelId(tab.id)"
+    [attr.aria-selected]="isActive(tab.id) ? 'true' : 'false'"
+    [attr.tabindex]="isActive(tab.id) ? 0 : -1"
+    (click)="selectTab(tab.id)"
+    (keydown)="onKeydown($event, i)"
+  >
+    {{ tab.label }}
+  </button>
+</div>

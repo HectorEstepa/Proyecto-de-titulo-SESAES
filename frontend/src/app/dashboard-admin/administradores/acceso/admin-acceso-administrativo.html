@@ -1,0 +1,147 @@
+<div class="access-overlay" (click)="solicitarCierre()">
+  <section class="access-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="access-title">
+    <header class="access-header">
+      <div>
+        <h3 id="access-title">
+          <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+          Permisos y alcance
+        </h3>
+        <p>{{ admin.nombre || admin.correo }} · {{ admin.correo }}</p>
+      </div>
+      <button type="button" class="icon-button" (click)="solicitarCierre()" [disabled]="guardando" aria-label="Cerrar">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </header>
+
+    <div *ngIf="cargando" class="access-state">Cargando configuración...</div>
+
+    <ng-container *ngIf="!cargando">
+      <div *ngIf="errorCarga" class="access-alert error" role="alert">
+        <span class="material-symbols-outlined" aria-hidden="true">error</span>
+        <span>{{ errorCarga }}</span>
+      </div>
+
+      <ng-container *ngIf="!errorCarga">
+        <div *ngIf="!configurado" class="access-alert info">
+          <span class="material-symbols-outlined" aria-hidden="true">shield_lock</span>
+          <div>
+            <strong>Cuenta sin acceso administrativo configurado</strong>
+            <span>Permanece sin permisos efectivos hasta que guardes una configuración.</span>
+          </div>
+        </div>
+
+        <div *ngIf="errorGuardado" class="access-alert error" role="alert">
+          <span class="material-symbols-outlined" aria-hidden="true">error</span>
+          <span>{{ errorGuardado }}</span>
+        </div>
+
+        <div class="access-content">
+          <section class="access-section">
+            <div class="section-heading">
+              <span class="step">1</span>
+              <div>
+                <h4>Perfil administrativo</h4>
+                <p>El perfil define el máximo de permisos que se pueden delegar.</p>
+              </div>
+            </div>
+
+            <div class="profile-grid">
+              <label class="profile-option" *ngFor="let item of perfilesDisponibles" [class.selected]="form.perfil === item.perfil">
+                <input
+                  type="radio"
+                  name="perfilAcceso"
+                  [value]="item.perfil"
+                  [(ngModel)]="form.perfil"
+                  (ngModelChange)="cambiarPerfil()"
+                  [disabled]="guardando"
+                />
+                <span class="material-symbols-outlined" aria-hidden="true">
+                  {{ item.perfil.startsWith('secretaria') ? 'support_agent' : 'admin_panel_settings' }}
+                </span>
+                <div>
+                  <strong>{{ perfilVisual(item.perfil) }}</strong>
+                  <small>{{ item.tipo_alcance === 'institucional' ? 'Alcance institucional' : 'Alcance por especialidades' }}</small>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <section class="access-section" *ngIf="perfilSeleccionado">
+            <div class="section-heading between">
+              <div class="heading-group">
+                <span class="step">2</span>
+                <div>
+                  <h4>Permisos delegados</h4>
+                  <p>Selecciona solo las acciones que esta cuenta necesita realizar.</p>
+                </div>
+              </div>
+              <span class="count-badge">{{ form.permisos.length }} seleccionados</span>
+            </div>
+
+            <div class="permission-grid">
+              <label class="permission-option" *ngFor="let permiso of permisosDisponibles">
+                <input
+                  type="checkbox"
+                  [checked]="permisoSeleccionado(permiso)"
+                  (change)="cambiarPermiso(permiso, $any($event.target).checked)"
+                  [disabled]="guardando"
+                />
+                <span>{{ permisoVisual(permiso) }}</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="access-section" *ngIf="perfilSeleccionado">
+            <div class="section-heading">
+              <span class="step">3</span>
+              <div>
+                <h4>Alcance</h4>
+                <p *ngIf="!requiereEspecialidades">Este perfil opera con alcance institucional.</p>
+                <p *ngIf="requiereEspecialidades">Indica las especialidades sobre las que puede operar esta cuenta.</p>
+              </div>
+            </div>
+
+            <div *ngIf="!requiereEspecialidades" class="scope-card">
+              <span class="material-symbols-outlined" aria-hidden="true">apartment</span>
+              <div>
+                <strong>Institucional</strong>
+                <span>El alcance no se limita a especialidades específicas.</span>
+              </div>
+            </div>
+
+            <div *ngIf="requiereEspecialidades" class="specialty-block">
+              <div class="specialty-input">
+                <input
+                  [(ngModel)]="form.nuevaEspecialidad"
+                  (keyup.enter)="agregarEspecialidad()"
+                  placeholder="Ej. Odontología"
+                  [disabled]="guardando"
+                  aria-label="Agregar especialidad al alcance"
+                />
+                <button type="button" (click)="agregarEspecialidad()" [disabled]="guardando || !form.nuevaEspecialidad.trim()">Agregar</button>
+              </div>
+
+              <div class="chips" *ngIf="form.especialidades.length > 0">
+                <span class="chip" *ngFor="let especialidad of form.especialidades">
+                  {{ especialidad }}
+                  <button type="button" (click)="quitarEspecialidad(especialidad)" [disabled]="guardando" [attr.aria-label]="'Quitar ' + especialidad">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                  </button>
+                </span>
+              </div>
+
+              <p *ngIf="form.especialidades.length === 0" class="scope-warning">Debes agregar al menos una especialidad.</p>
+            </div>
+          </section>
+        </div>
+      </ng-container>
+
+      <footer class="access-actions">
+        <button type="button" class="secondary" (click)="solicitarCierre()" [disabled]="guardando">Cancelar</button>
+        <button type="button" class="primary" (click)="guardar()" [disabled]="!!errorCarga || !formularioValido || guardando">
+          {{ guardando ? 'Guardando...' : 'Guardar acceso' }}
+        </button>
+      </footer>
+    </ng-container>
+  </section>
+</div>

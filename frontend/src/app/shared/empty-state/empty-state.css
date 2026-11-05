@@ -1,0 +1,51 @@
+/**
+ * SESAES — EmptyState (Fase 2.3)
+ *
+ * Todo color, espaciado, radio, tipografía e ícono viene de tokens.css.
+ * Cero valores hex nuevos. `--icon-size-empty-state` ya existe en
+ * tokens.css (Fase 1), reservado para este componente.
+ */
+
+:host {
+  display: block;
+}
+
+.app-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-xs);
+  padding: var(--space-xl) var(--space-md);
+}
+
+.app-empty-state__icon {
+  width: var(--icon-size-empty-state);
+  height: var(--icon-size-empty-state);
+  color: var(--text-muted);
+  margin-bottom: var(--space-xs);
+}
+
+.app-empty-state__title {
+  margin: 0;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.app-empty-state__description {
+  margin: 0;
+  max-width: 32rem;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.app-empty-state__action {
+  margin-top: var(--space-xs);
+}
+
+.app-empty-state__action:empty {
+  margin-top: 0;
+}

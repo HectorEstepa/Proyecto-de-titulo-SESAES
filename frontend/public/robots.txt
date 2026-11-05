@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://proyecto-de-titulo-sesaes.vercel.app/sitemap.xml

@@ -1,0 +1,344 @@
+﻿<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">Estudiantes</h3>
+
+    <div class="card-header-actions">
+      <input
+        class="search-input"
+        placeholder="Buscar por nombre o RUT..."
+        [(ngModel)]="estudiantesFiltroQ"
+        (ngModelChange)="estudiantesFiltroQChange.emit($event)"
+        (keyup.enter)="buscar.emit()"
+      />
+
+      <input
+        class="search-input"
+        placeholder="Carrera..."
+        [(ngModel)]="estudiantesFiltroCarrera"
+        (ngModelChange)="estudiantesFiltroCarreraChange.emit($event)"
+        (keyup.enter)="buscar.emit()"
+        style="max-width:180px"
+      />
+
+      <button class="btn-filtrar" (click)="buscar.emit()">Buscar</button>
+      <button class="btn-limpiar" (click)="limpiar.emit()">Limpiar</button>
+    </div>
+  </div>
+
+  <p class="card-desc">
+    El administrador consulta esta información; los datos clínicos permanecen protegidos.
+  </p>
+
+  <div *ngIf="estudiantesCargando" class="tabla-vacia">Cargando...</div>
+
+  <table class="admin-tabla" *ngIf="!estudiantesCargando">
+    <thead>
+      <tr>
+        <th>NOMBRE</th>
+        <th>RUT</th>
+        <th>CARRERA</th>
+        <th>ACCIONES</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr *ngFor="let e of estudiantesAdmin">
+        <td>
+          <div class="tabla-usuario">
+            <div class="mini-avatar" [style.background]="e.foto_url ? null : colorAvatar(e.id)">
+              <img *ngIf="e.foto_url" [src]="e.foto_url" alt="" />
+              <span *ngIf="!e.foto_url">{{ inicialesDe(e.nombre) }}</span>
+            </div>
+            <div>
+              <strong>{{ e.nombre }}</strong>
+              <span>{{ e.correo }}</span>
+            </div>
+          </div>
+        </td>
+
+        <td>{{ e.rut || '—' }}</td>
+        <td>{{ e.carrera || '—' }}</td>
+
+        <td>
+          <button class="btn-tabla-acciones" (click)="verPerfil.emit(e)">
+            Ver ficha
+          </button>
+        </td>
+      </tr>
+
+      <tr *ngIf="estudiantesAdmin.length === 0">
+        <td colspan="4" class="tabla-vacia">
+          No hay estudiantes con los filtros aplicados
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="paginacion" *ngIf="!estudiantesCargando">
+    <span>
+      Mostrando
+      {{ estudiantesTotal === 0 ? 0 : (estudiantesPagina - 1) * estudiantesPorPagina + 1 }}–{{ minVal(estudiantesPagina * estudiantesPorPagina, estudiantesTotal) }}
+      de {{ estudiantesTotal }} estudiantes
+    </span>
+
+    <div class="pag-btns">
+      <button
+        class="btn-pag"
+        [disabled]="estudiantesPagina === 1"
+        (click)="cambiarPagina.emit(estudiantesPagina - 1)"
+      >
+        ‹
+      </button>
+
+      <button
+        class="btn-pag"
+        *ngFor="let p of getPaginasEstudiantes()"
+        [class.active]="p === estudiantesPagina"
+        (click)="cambiarPagina.emit(p)"
+      >
+        {{ p }}
+      </button>
+
+      <button
+        class="btn-pag"
+        [disabled]="estudiantesPagina * estudiantesPorPagina >= estudiantesTotal"
+        (click)="cambiarPagina.emit(estudiantesPagina + 1)"
+      >
+        ›
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: FICHA ESTUDIANTE -->
+<div
+  class="modal-overlay"
+  *ngIf="modalPerfilEstudianteAbierto"
+  (click)="cerrarPerfil.emit()"
+>
+  <div class="modal modal-ficha-est" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Ficha del estudiante</h3>
+      <button class="modal-cerrar" (click)="cerrarPerfil.emit()"><span class="material-symbols-outlined">close</span></button>
+    </div>
+
+    <div *ngIf="perfilEstudianteCargando" class="tabla-vacia">
+      Cargando...
+    </div>
+
+    <div *ngIf="!perfilEstudianteCargando && fichaEstudianteSeleccionado">
+      <!-- Cabecera -->
+      <div class="gestionar-cabecera">
+        <div class="mini-avatar avatar-lg" [style.background]="fichaEstudianteSeleccionado.foto_url ? null : colorAvatar(fichaEstudianteSeleccionado.id)">
+          <img *ngIf="fichaEstudianteSeleccionado.foto_url" [src]="fichaEstudianteSeleccionado.foto_url" alt="" />
+          <span *ngIf="!fichaEstudianteSeleccionado.foto_url">{{ fichaEstudianteSeleccionado.iniciales || inicialesDe(fichaEstudianteSeleccionado.nombre) }}</span>
+        </div>
+        <div class="gestionar-cabecera-info">
+          <h4>{{ fichaEstudianteSeleccionado.nombre }}</h4>
+          <span class="esp-badge">{{ fichaEstudianteSeleccionado.carrera || 'Sin carrera' }}</span>
+        </div>
+        <span class="estado-badge" [ngClass]="fichaEstudianteSeleccionado.activo === false ? 'inactivo' : 'activo'">
+          ● {{ fichaEstudianteSeleccionado.activo === false ? 'Inactivo' : 'Activo' }}
+        </span>
+      </div>
+
+      <!-- Resumen de citas -->
+      <div class="est-stats-grid" style="margin-bottom:16px">
+        <div class="est-stat">
+          <span class="est-stat-num">{{ fichaEstudianteSeleccionado.citas_totales ?? 0 }}</span>
+          <span class="est-stat-label">Citas totales</span>
+        </div>
+        <div class="est-stat green">
+          <span class="est-stat-num">{{ fichaEstudianteSeleccionado.citas_atendidas ?? 0 }}</span>
+          <span class="est-stat-label">Atendidas</span>
+        </div>
+        <div class="est-stat orange">
+          <span class="est-stat-num">{{ fichaEstudianteSeleccionado.citas_pendientes ?? 0 }}</span>
+          <span class="est-stat-label">Pendientes</span>
+        </div>
+        <div class="est-stat red">
+          <span class="est-stat-num">{{ fichaEstudianteSeleccionado.citas_canceladas ?? 0 }}</span>
+          <span class="est-stat-label">Canceladas</span>
+        </div>
+      </div>
+
+      <!-- Datos del estudiante -->
+      <div class="gestionar-card">
+        <div class="gestionar-card-titulo">
+          <span class="material-symbols-outlined">badge</span>
+          <div>
+            <p class="gestionar-card-h">Datos del estudiante</p>
+            <p class="gestionar-card-sub">Información académica y de contacto.</p>
+          </div>
+        </div>
+        <div class="gestionar-card-datos gestionar-card-datos-2col">
+          <div class="dato-row">
+            <span class="material-symbols-outlined dato-icono">fingerprint</span>
+            <div><span class="dato-label">RUT</span><span class="dato-val">{{ fichaEstudianteSeleccionado.rut || '—' }}</span></div>
+          </div>
+          <div class="dato-row">
+            <span class="material-symbols-outlined dato-icono">mail</span>
+            <div><span class="dato-label">Correo institucional</span><span class="dato-val">{{ fichaEstudianteSeleccionado.correo || '—' }}</span></div>
+          </div>
+          <div class="dato-row">
+            <span class="material-symbols-outlined dato-icono">school</span>
+            <div><span class="dato-label">Carrera</span><span class="dato-val">{{ fichaEstudianteSeleccionado.carrera || '—' }}</span></div>
+          </div>
+          <div class="dato-row">
+            <span class="material-symbols-outlined dato-icono">call</span>
+            <div><span class="dato-label">Teléfono (opcional)</span><span class="dato-val">{{ fichaEstudianteSeleccionado.telefono || '—' }}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historial de atenciones -->
+      <div class="gestionar-card">
+        <div class="gestionar-card-titulo" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px">
+          <div style="display:flex; gap:10px; align-items:flex-start">
+            <span class="material-symbols-outlined">history</span>
+            <div>
+              <p class="gestionar-card-h">Historial de atenciones</p>
+              <p class="gestionar-card-sub">Registro administrativo de citas y atenciones realizadas por el estudiante.</p>
+            </div>
+          </div>
+          <input
+            class="search-input"
+            style="width:300px; max-width:100%"
+            placeholder="Buscar por profesional, especialidad..."
+            [(ngModel)]="histEstudianteQ"
+            (ngModelChange)="histEstudianteQChange.emit($event)"
+            (keyup.enter)="buscarHistorialEstudiante.emit()"
+          />
+        </div>
+
+        <table class="admin-tabla" *ngIf="fichaEstudianteSeleccionado.historial?.length > 0">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Profesional</th>
+              <th>Especialidad</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let a of fichaEstudianteSeleccionado.historial">
+              <td>{{ a.fecha }} — {{ a.hora }}</td>
+              <td>{{ a.profesional }}</td>
+              <td>{{ a.especialidad }}</td>
+              <td>
+                <span class="tipo-badge sobrecupo" *ngIf="a.tipo === 'sobrecupo'">Sobrecupo</span>
+                <span class="tipo-badge urgente" *ngIf="a.urgente">Urgente</span>
+                <span class="tipo-badge normal" *ngIf="a.tipo !== 'sobrecupo' && !a.urgente">Normal</span>
+              </td>
+              <td><span class="estado-badge" [ngClass]="a.estado">{{ a.estado }}</span></td>
+              <td><button class="btn-tabla-acciones" (click)="verDetalleCita.emit(a)">Ver detalle</button></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="tabla-vacia" *ngIf="!fichaEstudianteSeleccionado.historial?.length">
+          Sin atenciones registradas.
+        </p>
+
+        <div class="paginacion" *ngIf="fichaEstudianteSeleccionado.historial_total > 0" style="margin-top:10px">
+          <span>
+            Mostrando
+            {{ (fichaEstudianteSeleccionado.historial_pagina - 1) * fichaEstudianteSeleccionado.historial_por_pagina + 1 }}–{{ minVal(fichaEstudianteSeleccionado.historial_pagina * fichaEstudianteSeleccionado.historial_por_pagina, fichaEstudianteSeleccionado.historial_total) }}
+            de {{ fichaEstudianteSeleccionado.historial_total }} atenciones
+          </span>
+          <div class="pag-btns">
+            <button
+              class="btn-pag"
+              [disabled]="fichaEstudianteSeleccionado.historial_pagina === 1"
+              (click)="cambiarPaginaHistorialEstudiante.emit(fichaEstudianteSeleccionado.historial_pagina - 1)"
+            >‹</button>
+            <button
+              class="btn-pag"
+              *ngFor="let p of getPaginasHistorial()"
+              [class.active]="p === fichaEstudianteSeleccionado.historial_pagina"
+              (click)="cambiarPaginaHistorialEstudiante.emit(p)"
+            >{{ p }}</button>
+            <button
+              class="btn-pag"
+              [disabled]="fichaEstudianteSeleccionado.historial_pagina * fichaEstudianteSeleccionado.historial_por_pagina >= fichaEstudianteSeleccionado.historial_total"
+              (click)="cambiarPaginaHistorialEstudiante.emit(fichaEstudianteSeleccionado.historial_pagina + 1)"
+            >›</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="aviso-confidencialidad">
+        <span class="material-symbols-outlined">shield</span>
+        <span>Por seguridad y confidencialidad, los datos clínicos del estudiante están restringidos. Solo se muestra información administrativa de sus citas y atenciones.</span>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-cancelar-modal" (click)="cerrarPerfil.emit()">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE DE UNA CITA (dentro de la ficha del estudiante) -->
+<div
+  class="modal-overlay"
+  *ngIf="modalDetalleCitaEstudianteAbierto"
+  (click)="cerrarDetalleCita.emit()"
+>
+  <div class="modal" style="width:420px" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Detalle de la cita</h3>
+      <button class="modal-cerrar" (click)="cerrarDetalleCita.emit()">✕</button>
+    </div>
+
+    <div *ngIf="citaDetalleEstudiante" class="prof-datos-grid">
+      <div class="dato-row">
+        <span class="dato-label">Estudiante</span>
+        <span class="dato-val">{{ fichaEstudianteSeleccionado?.nombre }}</span>
+      </div>
+      <div class="dato-row">
+        <span class="dato-label">Profesional</span>
+        <span class="dato-val">{{ citaDetalleEstudiante.profesional }}</span>
+      </div>
+      <div class="dato-row">
+        <span class="dato-label">Especialidad</span>
+        <span class="dato-val">{{ citaDetalleEstudiante.especialidad }}</span>
+      </div>
+      <div class="dato-row">
+        <span class="dato-label">Fecha</span>
+        <span class="dato-val">{{ citaDetalleEstudiante.fecha }}</span>
+      </div>
+      <div class="dato-row">
+        <span class="dato-label">Hora</span>
+        <span class="dato-val">{{ citaDetalleEstudiante.hora }}</span>
+      </div>
+      <div class="dato-row">
+        <span class="dato-label">Tipo</span>
+        <span class="tipo-badge sobrecupo" *ngIf="citaDetalleEstudiante.tipo === 'sobrecupo'">Sobrecupo</span>
+        <span class="tipo-badge normal" *ngIf="citaDetalleEstudiante.tipo !== 'sobrecupo'">Normal</span>
+      </div>
+      <div class="dato-row" *ngIf="citaDetalleEstudiante.urgente">
+        <span class="dato-label">Prioridad</span>
+        <span class="tipo-badge urgente">Urgente</span>
+      </div>
+      <div class="dato-row">
+        <span class="dato-label">Estado</span>
+        <span class="estado-badge" [ngClass]="citaDetalleEstudiante.estado">{{ citaDetalleEstudiante.estado }}</span>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button
+        class="btn-eliminar-prof"
+        style="width:auto; padding:9px 16px"
+        *ngIf="puedeCancelarCita(citaDetalleEstudiante)"
+        (click)="cancelarCitaDesdeFicha.emit(citaDetalleEstudiante)"
+      >Cancelar cita</button>
+      <button class="btn-cancelar-modal" (click)="cerrarDetalleCita.emit()">Cerrar</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,78 @@
+<div class="card config-card" style="max-width:560px">
+  <div class="card-header">
+    <h3 class="card-title">Perfil del {{ rolVisual }}</h3>
+    <button class="btn-editar-perfil" *ngIf="perfilCargado && !adminPerfilEnEdicion" (click)="habilitarEdicionPerfilAdmin()"><span class="material-symbols-outlined" aria-hidden="true">edit</span> Editar</button>
+  </div>
+
+  <p *ngIf="cargandoPerfil" class="config-seccion-titulo">Cargando tu perfil…</p>
+
+  <p *ngIf="!cargandoPerfil && !perfilCargado" class="config-seccion-titulo">No se pudo cargar tu perfil.</p>
+
+  <ng-container *ngIf="perfilCargado">
+  <div class="perfil-foto-row">
+    <div class="perfil-foto-preview" [class.clickable]="fotoActual" (click)="fotoActual && (verFotoAmpliada = true)">
+      <img *ngIf="fotoActual" [src]="fotoActual" alt="Foto" />
+      <div *ngIf="!fotoActual" class="perfil-foto-placeholder">{{ inicialesUsuario }}</div>
+    </div>
+    <label class="btn-subir-foto" *ngIf="adminPerfilEnEdicion">
+      <input type="file" accept="image/*" (change)="onFotoSeleccionada($event)" style="display:none" />
+      <span class="material-symbols-outlined" aria-hidden="true">photo_camera</span> Cambiar foto
+    </label>
+  </div>
+  <div class="campo-grupo" style="margin-bottom:12px">
+    <label>Nombre completo</label>
+    <input [(ngModel)]="configPerfil.nombre" [disabled]="!adminPerfilEnEdicion" placeholder="Nombre completo" />
+  </div>
+  <div class="campo-grupo" style="margin-bottom:12px">
+    <label>Correo</label>
+    <input [value]="usuario.correo" disabled />
+  </div>
+  <div class="campo-grupo" style="margin-bottom:12px">
+    <label>Teléfono</label>
+    <input [(ngModel)]="configPerfil.telefono" [disabled]="!adminPerfilEnEdicion" placeholder="Teléfono" />
+  </div>
+  <div class="campo-grupo" style="margin-bottom:12px">
+    <label>Rol</label>
+    <input [value]="rolVisual" disabled />
+  </div>
+  <p class="config-seccion-titulo">Cambiar contraseña</p>
+  <div class="form-grid">
+    <div class="campo-grupo">
+      <label>Contraseña actual</label>
+      <div class="password-wrap">
+        <input [type]="mostrarContrasenaActual ? 'text' : 'password'" [(ngModel)]="configPerfil.contrasena_actual" [disabled]="!adminPerfilEnEdicion" placeholder="••••••" />
+        <button class="btn-ojo" (click)="mostrarContrasenaActual = !mostrarContrasenaActual" type="button" [attr.aria-label]="mostrarContrasenaActual ? 'Ocultar contraseña actual' : 'Mostrar contraseña actual'"><span class="material-symbols-outlined" aria-hidden="true">{{ mostrarContrasenaActual ? 'visibility_off' : 'visibility' }}</span></button>
+      </div>
+    </div>
+    <div class="campo-grupo">
+      <label>Nueva contraseña</label>
+      <div class="password-wrap">
+        <input [type]="mostrarContrasenaaNueva ? 'text' : 'password'" [(ngModel)]="configPerfil.contrasena_nueva" [disabled]="!adminPerfilEnEdicion" placeholder="••••••" />
+        <button class="btn-ojo" (click)="mostrarContrasenaaNueva = !mostrarContrasenaaNueva" type="button" [attr.aria-label]="mostrarContrasenaaNueva ? 'Ocultar nueva contraseña' : 'Mostrar nueva contraseña'"><span class="material-symbols-outlined" aria-hidden="true">{{ mostrarContrasenaaNueva ? 'visibility_off' : 'visibility' }}</span></button>
+      </div>
+    </div>
+    <div class="campo-grupo">
+      <label>Confirmar nueva contraseña</label>
+      <div class="password-wrap">
+        <input [type]="mostrarContrasenaConf ? 'text' : 'password'" [(ngModel)]="configPerfil.contrasena_conf" [disabled]="!adminPerfilEnEdicion" placeholder="••••••" />
+        <button class="btn-ojo" (click)="mostrarContrasenaConf = !mostrarContrasenaConf" type="button" [attr.aria-label]="mostrarContrasenaConf ? 'Ocultar confirmación de contraseña' : 'Mostrar confirmación de contraseña'"><span class="material-symbols-outlined" aria-hidden="true">{{ mostrarContrasenaConf ? 'visibility_off' : 'visibility' }}</span></button>
+      </div>
+    </div>
+  </div>
+  <div class="perfil-acciones-edicion" *ngIf="adminPerfilEnEdicion">
+    <button class="btn-cancelar-modal" (click)="cancelarEdicionPerfilAdmin()">Cancelar</button>
+    <button class="btn-guardar-config" [disabled]="!perfilAdminModificado" (click)="guardarPerfilAdmin()">Guardar cambios</button>
+  </div>
+  </ng-container>
+</div>
+
+<app-photo-cropper *ngIf="imagenParaRecortar"
+  [imagenSrc]="imagenParaRecortar"
+  (recortada)="onFotoRecortada($event)"
+  (cancelado)="imagenParaRecortar = null">
+</app-photo-cropper>
+
+<app-photo-viewer *ngIf="verFotoAmpliada && fotoActual"
+  [imagenSrc]="fotoActual"
+  (cerrar)="verFotoAmpliada = false">
+</app-photo-viewer>

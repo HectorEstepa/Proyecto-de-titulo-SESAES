@@ -1,0 +1,177 @@
+<!-- 1. Estadísticas -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue">
+              <span class="material-symbols-outlined">calendar_month</span>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Reservas de hoy</span>
+              <span class="stat-num">{{ estadisticas.reservas_hoy }}</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green">
+              <span class="material-symbols-outlined">manage_accounts</span>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Profesionales activos</span>
+              <span class="stat-num">{{ estadisticas.profesionales_activos }}</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon teal">
+              <span class="material-symbols-outlined">schedule</span>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Horas disponibles</span>
+              <span class="stat-num">{{ estadisticas.horas_disponibles }}</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange">
+              <span class="material-symbols-outlined">priority_high</span>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Solicitudes urgentes</span>
+              <span class="stat-num urgente">{{ estadisticas.urgentes }}</span>
+            </div>
+            <span class="urgente-badge" *ngIf="estadisticas.urgentes > 0">URGENTE</span>
+          </div>
+        </div>
+
+        <!-- 2. Gráficos -->
+        <div class="graficos-grid">
+          <div class="card grafico-card">
+            <div class="card-header">
+              <h3 class="card-title">Citas por especialidad</h3>
+              <div class="grafico-filtros">
+                <select [(ngModel)]="filtroGraficoAnio" (change)="cargarGraficoEspecialidad()">
+                  <option *ngFor="let a of aniosDisponiblesGrafico" [value]="a">{{ a }}</option>
+                </select>
+                <!-- Filtro por carrera oculto en Inicio (vivirá en Reportes). El contrato
+                     [(filtroGraficoCarrera)] se conserva intacto para no romper el shell. -->
+                <button class="btn-exportar-small" (click)="exportarEspecialidadExcel()"><span class="material-symbols-outlined">download</span> Excel</button>
+              </div>
+            </div>
+            <div class="grafico-canvas-wrap">
+              <canvas #chartEspecialidad></canvas>
+            </div>
+            <div class="grafico-leyenda">
+              <span *ngFor="let item of graficoEspecialidad; let i = index" class="leyenda-chip">
+                <span class="leyenda-dot" [style.background]="coloresGrafico[i % coloresGrafico.length]"></span>
+                {{ item.especialidad }} {{ item.porcentaje }}%
+              </span>
+              <span *ngIf="graficoEspecialidad.length === 0" class="tabla-vacia">Sin datos</span>
+            </div>
+          </div>
+
+          <div class="card grafico-card">
+            <div class="card-header">
+              <h3 class="card-title">Citas por semana</h3>
+              <button class="btn-exportar-small" (click)="exportarSemanaExcel()"><span class="material-symbols-outlined">download</span> Excel</button>
+            </div>
+            <div class="grafico-canvas-wrap">
+              <canvas #chartSemana></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Disponibilidad Hoy + Calendario -->
+        <div class="inicio-grid">
+          <div class="card disponibilidad-card">
+            <div class="card-header">
+              <h3 class="card-title">Disponibilidad Hoy</h3>
+              <button *ngIf="puedeVerAgenda" class="btn-refresh-disponibilidad" [disabled]="actualizandoDisponibilidad" (click)="refrescarDisponibilidad()" title="Actualizar disponibilidad">
+                <span class="material-symbols-outlined" [class.girando]="actualizandoDisponibilidad">refresh</span>
+              </button>
+            </div>
+            <div class="disponibilidad-lista">
+              <div *ngFor="let prof of resumenDia" class="disponibilidad-item">
+                <span class="disp-icono" [ngClass]="'disp-' + prof.estado"><span class="material-symbols-outlined">{{ getIconoEstadoProf(prof.estado) }}</span></span>
+                <span class="disp-info">
+                  <span class="disp-nombre">{{ nombreConTratamiento(prof) }}</span>
+                  <span class="disp-especialidad">{{ prof.especialidad }}</span>
+                </span>
+                <span class="disp-estado" [ngClass]="'disp-' + prof.estado">
+                  {{ prof.estado === 'activo' ? 'Activo' : prof.estado === 'licencia' ? 'En licencia médica' : 'Inasistencia' }}
+                  <span *ngIf="prof.estado === 'activo' && prof.citas_hoy !== undefined"> ({{ prof.citas_hoy }} citas hoy)</span>
+                </span>
+              </div>
+              <div *ngIf="resumenDia.length === 0" class="tabla-vacia">Sin datos de disponibilidad</div>
+            </div>
+          </div>
+
+          <!-- Calendario del mes (solo visual) -->
+          <div class="card inicio-calendario">
+            <div class="calendario-header">
+              <button class="cal-nav-btn" (click)="calMesAnterior()"><span class="material-symbols-outlined">chevron_left</span></button>
+              <span>{{ calNombreMesVisible }}</span>
+              <button class="cal-nav-btn" (click)="calMesSiguiente()"><span class="material-symbols-outlined">chevron_right</span></button>
+            </div>
+            <div class="cal-grid-dias-nombre-admin">
+              <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+            </div>
+            <div class="cal-grid-admin">
+              <div *ngFor="let dia of calDiasMes" class="cal-celda-admin" [class.vacia]="!dia" [class.clickeable]="dia" (click)="seleccionarDiaInfo(dia)">
+                <span *ngIf="dia" [class.hoy]="dia.esHoy" [class.feriado]="esFeriado(dia.fecha)" [title]="nombreFeriado(dia.fecha)">{{ dia.num }}</span>
+              </div>
+            </div>
+            <div class="info-dia-admin" *ngIf="diaSeleccionadoInfo && infoDelDia(diaSeleccionadoInfo).length > 0">
+              <span class="info-dia-admin-item" *ngFor="let info of infoDelDia(diaSeleccionadoInfo)">{{ info }}</span>
+            </div>
+            <p class="info-dia-admin-vacio" *ngIf="diaSeleccionadoInfo && infoDelDia(diaSeleccionadoInfo).length === 0">
+              Nada especial que celebrar este día.
+            </p>
+          </div>
+        </div>
+
+        <!-- 4. Próximas Citas + Actividad Reciente -->
+        <div class="inicio-grid">
+          <div class="card proximas-citas-card">
+            <div class="card-header">
+              <h3 class="card-title">Próximas Citas</h3>
+              <button *ngIf="puedeVerAgenda" class="btn-ver-agenda" (click)="navegarA('horario')">Ver agenda completa <span class="material-symbols-outlined">arrow_forward</span></button>
+            </div>
+            <table class="admin-tabla">
+              <thead>
+                <tr>
+                  <th>ESTUDIANTE</th><th>ESPECIALIDAD</th><th>PROFESIONAL</th><th>FECHA</th><th>HORARIO</th><th *ngIf="puedeGestionarAgenda">ACCIONES</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let cita of proximasCitas">
+                  <td>
+                    <div class="tabla-usuario">
+                      <div class="mini-avatar">{{ cita.estudiante | slice:0:2 }}</div>
+                      <div><strong>{{ cita.estudiante }}</strong><span>{{ cita.rut }}</span></div>
+                    </div>
+                  </td>
+                  <td><span class="esp-badge">{{ cita.especialidad }}</span></td>
+                  <td>{{ cita.profesional }}</td>
+                  <td><span class="fecha-cell">{{ formatearFecha(cita.fecha) }}</span></td>
+                  <td><div class="horario-cell">{{ cita.hora }}</div></td>
+                  <td *ngIf="puedeGestionarAgenda">
+                    <div class="tabla-acciones">
+                      <button class="btn-tabla inasistencia" (click)="marcarInasistencia(cita)" title="Marcar inasistencia"><span class="material-symbols-outlined">person_off</span></button>
+                      <button class="btn-tabla cancelar" (click)="cancelarCitaAdmin(cita)" title="Cancelar cita"><span class="material-symbols-outlined">delete</span></button>
+                    </div>
+                  </td>
+                </tr>
+                <tr *ngIf="proximasCitas.length === 0">
+                  <td [attr.colspan]="puedeGestionarAgenda ? 6 : 5" class="tabla-vacia">No hay citas próximas</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card actividad-card">
+            <h3 class="card-title">Actividad Reciente</h3>
+            <div class="actividad-lista">
+              <div *ngFor="let item of actividadReciente" class="actividad-item">
+                <div class="actividad-icono" [ngClass]="item.tipo"></div>
+                <div class="actividad-texto"><p>{{ item.mensaje }}</p><span>{{ item.tiempo }}</span></div>
+              </div>
+              <div *ngIf="actividadReciente.length === 0" class="tabla-vacia">Sin actividad reciente</div>
+            </div>
+          </div>
+        </div>

@@ -1,0 +1,31 @@
+# Python / backend
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment
+.env
+
+# Angular / Node
+node_modules/
+.angular/
+dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Archivos de trabajo locales
+*.zip
+*.patch
+fix_*.py
+tmp_ajustes/
+backend/gen_hash.py

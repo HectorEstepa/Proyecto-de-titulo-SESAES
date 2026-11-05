@@ -1,0 +1,35 @@
+<dialog
+  #dialogEl
+  class="modal-dialog"
+  [ngClass]="'modal-dialog--' + size"
+  [attr.aria-labelledby]="resolvedAriaLabelledBy"
+  [attr.aria-label]="resolvedAriaLabel"
+  (pointerdown)="onBackdropPointerDown($event)"
+  (click)="onBackdropClick($event)"
+  (cancel)="onNativeCancel($event)"
+  (close)="onNativeClose()"
+>
+  <div class="modal-panel" (click)="$event.stopPropagation()">
+    <div class="modal-header" *ngIf="hasVisibleTitle || showCloseButton">
+      <h2 *ngIf="hasVisibleTitle" [id]="titleId" class="modal-title">{{ title }}</h2>
+
+      <button
+        *ngIf="showCloseButton"
+        type="button"
+        class="modal-close"
+        aria-label="Cerrar"
+        (click)="onCloseButtonClick()"
+      >
+        <svg [lucideIcon]="lucideX" aria-hidden="true"></svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <ng-content></ng-content>
+    </div>
+
+    <div class="modal-footer">
+      <ng-content select="[modalFooter]"></ng-content>
+    </div>
+  </div>
+</dialog>

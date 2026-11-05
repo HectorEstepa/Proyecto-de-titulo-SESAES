@@ -1,0 +1,311 @@
+<!-- ══ RESUMEN ══ -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon blue"><span class="material-symbols-outlined" aria-hidden="true">group</span></div>
+    <div class="stat-info">
+      <span class="stat-label">Total cuentas</span>
+      <span class="stat-num">{{ totalAdministradores }}</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green"><span class="material-symbols-outlined" aria-hidden="true">check_circle</span></div>
+    <div class="stat-info">
+      <span class="stat-label">Activas</span>
+      <span class="stat-num">{{ totalActivos }}</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon teal"><span class="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span></div>
+    <div class="stat-info">
+      <span class="stat-label">Superadministradores</span>
+      <span class="stat-num">{{ totalSuperadmins }}</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon orange"><span class="material-symbols-outlined" aria-hidden="true">block</span></div>
+    <div class="stat-info">
+      <span class="stat-label">Inactivas</span>
+      <span class="stat-num">{{ totalInactivos }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LISTADO ══ -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><span class="material-symbols-outlined" aria-hidden="true">manage_accounts</span> Cuentas administrativas</h3>
+    <div class="card-header-actions">
+      <button class="btn-nueva-cita-top" (click)="abrirModalCrear()">
+        <span class="material-symbols-outlined" aria-hidden="true">person_add</span> Nueva cuenta
+      </button>
+    </div>
+  </div>
+
+  <div class="historial-filtros-admin">
+    <div class="filtro-grupo">
+      <label>Buscar</label>
+      <input [(ngModel)]="filtroTexto" placeholder="Nombre o correo..." />
+    </div>
+    <div class="filtro-grupo">
+      <label>Rol</label>
+      <select [(ngModel)]="filtroRol">
+        <option value="">Todos</option>
+        <option value="admin">Administrador</option>
+        <option value="superadmin">Superadministrador</option>
+      </select>
+    </div>
+    <div class="filtro-grupo">
+      <label>Estado</label>
+      <select [(ngModel)]="filtroEstado">
+        <option value="">Todos</option>
+        <option value="activo">Activas</option>
+        <option value="inactivo">Inactivas</option>
+      </select>
+    </div>
+  </div>
+  <div class="historial-acciones">
+    <button class="btn-limpiar" (click)="limpiarFiltros()">Limpiar filtros</button>
+  </div>
+
+  <p *ngIf="errorListado" class="tabla-vacia">{{ errorListado }}</p>
+
+  <div *ngIf="cargando" class="tabla-vacia">Cargando...</div>
+
+  <ng-container *ngIf="!cargando && !errorListado">
+    <!-- ══ Desktop/tablet: tabla estructurada (scroped SA-4) ══ -->
+    <div class="admins-desktop-table">
+      <table class="admin-tabla">
+        <thead>
+          <tr><th>CUENTA</th><th>ROL</th><th>ESTADO</th><th>ACCIONES</th></tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let a of administradoresFiltrados">
+            <td>
+              <div class="tabla-usuario">
+                <div class="mini-avatar">{{ iniciales(a) }}</div>
+                <div><strong>{{ a.nombre || 'Sin nombre' }}</strong><span>{{ a.correo }}</span></div>
+              </div>
+            </td>
+            <td><span class="rol-badge" [ngClass]="a.rol">{{ rolVisual(a.rol) }}</span></td>
+            <td><span class="estado-badge" [ngClass]="a.activo ? 'activo' : 'inactivo'">{{ a.activo ? 'Activa' : 'Inactiva' }}</span></td>
+            <td>
+              <div class="tabla-acciones">
+                <button
+                  class="btn-tabla"
+                  *ngIf="a.rol === 'admin'"
+                  [disabled]="procesandoId === a.id"
+                  (click)="abrirAccesoAdministrativo(a)"
+                  title="Configurar permisos y alcance"
+                  aria-label="Configurar permisos y alcance"
+                ><span class="material-symbols-outlined" aria-hidden="true">tune</span></button>
+
+                <button
+                  class="btn-tabla"
+                  *ngIf="a.activo"
+                  [disabled]="procesandoId === a.id"
+                  (click)="pedirConfirmacionDesactivar(a)"
+                  title="Desactivar cuenta"
+                  aria-label="Desactivar cuenta"
+                ><span class="material-symbols-outlined" aria-hidden="true">toggle_off</span></button>
+                <button
+                  class="btn-tabla"
+                  *ngIf="!a.activo"
+                  [disabled]="procesandoId === a.id"
+                  (click)="cambiarEstado(a, true)"
+                  title="Activar cuenta"
+                  aria-label="Activar cuenta"
+                ><span class="material-symbols-outlined" aria-hidden="true">toggle_on</span></button>
+
+                <button
+                  class="btn-tabla"
+                  *ngIf="a.rol === 'admin'"
+                  [disabled]="procesandoId === a.id"
+                  (click)="pedirConfirmacionRol(a, 'superadmin')"
+                  title="Promover a Superadministrador"
+                  aria-label="Promover a Superadministrador"
+                ><span class="material-symbols-outlined" aria-hidden="true">upgrade</span></button>
+                <button
+                  class="btn-tabla"
+                  *ngIf="a.rol === 'superadmin'"
+                  [disabled]="procesandoId === a.id"
+                  (click)="pedirConfirmacionRol(a, 'admin')"
+                  title="Degradar a Administrador"
+                  aria-label="Degradar a Administrador"
+                ><span class="material-symbols-outlined" aria-hidden="true">sync_alt</span></button>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="administradoresFiltrados.length === 0">
+            <td colspan="4" class="tabla-vacia">No hay cuentas administrativas con los filtros aplicados</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ══ Mobile real: tarjetas por cuenta (scoped SA-4, sin scroll horizontal) ══ -->
+    <div class="admins-mobile-list">
+      <div class="admins-mobile-card" *ngFor="let a of administradoresFiltrados">
+        <div class="admins-mobile-card-header">
+          <div class="mini-avatar">{{ iniciales(a) }}</div>
+          <div>
+            <strong>{{ a.nombre || 'Sin nombre' }}</strong>
+            <span>{{ a.correo }}</span>
+          </div>
+        </div>
+        <div class="admins-mobile-card-body">
+          <div class="admins-mobile-card-row">
+            <span class="admins-mobile-card-label">Rol</span>
+            <span class="rol-badge" [ngClass]="a.rol">{{ rolVisual(a.rol) }}</span>
+          </div>
+          <div class="admins-mobile-card-row">
+            <span class="admins-mobile-card-label">Estado</span>
+            <span class="estado-badge" [ngClass]="a.activo ? 'activo' : 'inactivo'">{{ a.activo ? 'Activa' : 'Inactiva' }}</span>
+          </div>
+        </div>
+        <div class="admins-mobile-card-acciones tabla-acciones">
+          <button
+            class="btn-tabla"
+            *ngIf="a.rol === 'admin'"
+            [disabled]="procesandoId === a.id"
+            (click)="abrirAccesoAdministrativo(a)"
+            title="Configurar permisos y alcance"
+            aria-label="Configurar permisos y alcance"
+          ><span class="material-symbols-outlined" aria-hidden="true">tune</span></button>
+
+          <button
+            class="btn-tabla"
+            *ngIf="a.activo"
+            [disabled]="procesandoId === a.id"
+            (click)="pedirConfirmacionDesactivar(a)"
+            title="Desactivar cuenta"
+            aria-label="Desactivar cuenta"
+          ><span class="material-symbols-outlined" aria-hidden="true">toggle_off</span></button>
+          <button
+            class="btn-tabla"
+            *ngIf="!a.activo"
+            [disabled]="procesandoId === a.id"
+            (click)="cambiarEstado(a, true)"
+            title="Activar cuenta"
+            aria-label="Activar cuenta"
+          ><span class="material-symbols-outlined" aria-hidden="true">toggle_on</span></button>
+
+          <button
+            class="btn-tabla"
+            *ngIf="a.rol === 'admin'"
+            [disabled]="procesandoId === a.id"
+            (click)="pedirConfirmacionRol(a, 'superadmin')"
+            title="Promover a Superadministrador"
+            aria-label="Promover a Superadministrador"
+          ><span class="material-symbols-outlined" aria-hidden="true">upgrade</span></button>
+          <button
+            class="btn-tabla"
+            *ngIf="a.rol === 'superadmin'"
+            [disabled]="procesandoId === a.id"
+            (click)="pedirConfirmacionRol(a, 'admin')"
+            title="Degradar a Administrador"
+            aria-label="Degradar a Administrador"
+          ><span class="material-symbols-outlined" aria-hidden="true">sync_alt</span></button>
+        </div>
+      </div>
+      <p *ngIf="administradoresFiltrados.length === 0" class="tabla-vacia">No hay cuentas administrativas con los filtros aplicados</p>
+    </div>
+  </ng-container>
+</div>
+
+<app-admin-acceso-administrativo
+  *ngIf="adminAccesoSeleccionado as adminAcceso"
+  [admin]="adminAcceso"
+  (cerrar)="cerrarAccesoAdministrativo()"
+></app-admin-acceso-administrativo>
+
+<!-- ══ MODAL: CONFIRMACIÓN DE ACCIÓN SENSIBLE (SA-4) ══ -->
+<div class="modal-overlay" *ngIf="modalConfirmAbierto" (click)="cancelarConfirmacion()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="card-header">
+      <h3 class="card-title">{{ tituloConfirmacion }}</h3>
+      <button class="btn-tabla" (click)="cancelarConfirmacion()" title="Cerrar" aria-label="Cerrar">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <p>{{ mensajeConfirmacion }}</p>
+    <p *ngIf="adminEnConfirmacion">
+      Cuenta: <strong>{{ adminEnConfirmacion.nombre || adminEnConfirmacion.correo }}</strong>
+    </p>
+
+    <div class="perfil-acciones-edicion">
+      <button class="btn-cancelar-modal" (click)="cancelarConfirmacion()">Cancelar</button>
+      <button class="btn-guardar-config" (click)="confirmarAccionPendiente()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: NUEVA CUENTA ══ -->
+<div class="modal-overlay" *ngIf="modalCrearAbierto" (click)="cerrarModalCrear()">
+  <div class="modal" (click)="$event.stopPropagation()">
+    <div class="card-header">
+      <h3 class="card-title">Nueva cuenta administrativa</h3>
+      <button class="btn-tabla" (click)="cerrarModalCrear()" title="Cerrar">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    <p *ngIf="mensajeErrorModal" class="tabla-vacia">{{ mensajeErrorModal }}</p>
+
+    <div class="form-grid">
+      <div class="campo-grupo">
+        <label>Correo</label>
+        <input
+          type="email"
+          [(ngModel)]="nuevoAdmin.correo"
+          placeholder="nombre@utem.cl"
+          autocomplete="email"
+          [disabled]="guardando"
+        />
+        <small *ngIf="nuevoAdmin.correo.trim() && !correoCreacionValido">
+          Solo se permiten correos institucionales @utem.cl.
+        </small>
+      </div>
+      <div class="campo-grupo">
+        <label>Rol</label>
+        <select [(ngModel)]="nuevoAdmin.rol" [disabled]="guardando">
+          <option value="admin">Administrador</option>
+          <option value="superadmin">Superadministrador</option>
+        </select>
+      </div>
+      <div class="campo-grupo">
+        <label>Nombre (opcional)</label>
+        <input [(ngModel)]="nuevoAdmin.nombre" placeholder="Nombre completo" [disabled]="guardando" />
+      </div>
+      <div class="campo-grupo">
+        <label>Teléfono (opcional)</label>
+        <input [(ngModel)]="nuevoAdmin.telefono" placeholder="Teléfono" [disabled]="guardando" />
+      </div>
+      <div class="campo-grupo" style="grid-column: 1 / -1">
+        <label>Contraseña</label>
+        <div class="password-wrap">
+          <input
+            [type]="mostrarPassword ? 'text' : 'password'"
+            [(ngModel)]="nuevoAdmin.password"
+            placeholder="••••••••"
+            [disabled]="guardando"
+            autocomplete="new-password"
+          />
+          <button
+            class="btn-ojo"
+            type="button"
+            (click)="mostrarPassword = !mostrarPassword"
+            [attr.aria-label]="mostrarPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+          ><span class="material-symbols-outlined" aria-hidden="true">{{ mostrarPassword ? 'visibility_off' : 'visibility' }}</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="perfil-acciones-edicion">
+      <button class="btn-cancelar-modal" (click)="cerrarModalCrear()" [disabled]="guardando">Cancelar</button>
+      <button class="btn-guardar-config" [disabled]="!creacionValida || guardando" (click)="crearAdministrador()">
+        {{ guardando ? 'Creando...' : 'Crear cuenta' }}
+      </button>
+    </div>
+  </div>
+</div>

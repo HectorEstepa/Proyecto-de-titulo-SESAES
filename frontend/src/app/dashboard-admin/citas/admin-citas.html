@@ -1,0 +1,352 @@
+<section class="citas-page" aria-label="Gestión de citas">
+
+  <!-- ═══════════════ KPIs ═══════════════ -->
+  <div class="citas-kpis">
+    <article class="citas-kpi" *ngFor="let k of kpis; trackBy: trackKpi" [attr.data-kpi]="k.clave">
+      <span class="citas-kpi-icono" [ngClass]="'tono-' + k.clave" aria-hidden="true">
+        <span class="material-symbols-outlined">{{ k.icono }}</span>
+      </span>
+      <div class="citas-kpi-cuerpo">
+        <span class="citas-kpi-etiqueta">{{ k.etiqueta }}</span>
+        <strong class="citas-kpi-valor">{{ k.valor }}</strong>
+        <span class="citas-kpi-delta" *ngIf="k.delta as d" [ngClass]="'delta-' + d.tono">
+          <span class="material-symbols-outlined" aria-hidden="true">{{ iconoDelta(d.direccion) }}</span>
+          {{ d.texto }}
+        </span>
+        <span class="citas-kpi-nota" *ngIf="k.nota">{{ k.nota }}</span>
+      </div>
+    </article>
+  </div>
+
+  <div class="citas-layout">
+
+    <!-- ═══════════════ Columna principal ═══════════════ -->
+    <div class="citas-principal">
+
+      <!-- Filtros -->
+      <div class="citas-filtros" role="search">
+        <div class="citas-busqueda">
+          <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          <input
+            type="search"
+            [ngModel]="citasFiltroEstudiante"
+            (ngModelChange)="actualizarBusqueda($event)"
+            placeholder="Buscar estudiante o profesional..."
+            aria-label="Buscar por estudiante, RUT o profesional"
+            autocomplete="off"
+          />
+        </div>
+
+        <label class="citas-campo">
+          <span class="citas-campo-etiqueta">Tipo de servicio</span>
+          <span class="citas-select">
+            <select [ngModel]="citasFiltroServicio" (ngModelChange)="actualizarServicio($event)">
+              <option value="">Todos</option>
+              <option *ngFor="let e of especialidades" [value]="e">{{ e }}</option>
+            </select>
+            <span class="material-symbols-outlined citas-select-flecha" aria-hidden="true">expand_more</span>
+          </span>
+        </label>
+
+        <label class="citas-campo">
+          <span class="citas-campo-etiqueta">Estado</span>
+          <span class="citas-select">
+            <select [ngModel]="citasFiltroEstado" (ngModelChange)="seleccionarEstado($event)">
+              <option value="">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="completada">Completada</option>
+              <option value="cancelada">Cancelada</option>
+              <option value="inasistencia">Inasistencia</option>
+            </select>
+            <span class="material-symbols-outlined citas-select-flecha" aria-hidden="true">expand_more</span>
+          </span>
+        </label>
+
+        <label class="citas-campo">
+          <span class="citas-campo-etiqueta">Rango de fechas</span>
+          <span class="citas-select con-icono">
+            <span class="material-symbols-outlined citas-select-icono" aria-hidden="true">calendar_month</span>
+            <select [ngModel]="citasFiltroRango" (ngModelChange)="cambiarRango($event)">
+              <option *ngFor="let o of opcionesRango" [value]="o.valor">{{ o.etiqueta }}</option>
+            </select>
+            <span class="material-symbols-outlined citas-select-flecha" aria-hidden="true">expand_more</span>
+          </span>
+        </label>
+      </div>
+
+      <!-- Listado -->
+      <div class="citas-lista">
+
+        <div class="citas-tabs-fila">
+          <div class="citas-tabs" role="tablist" aria-label="Filtrar por estado de la cita">
+            <button
+              *ngFor="let t of tabsVisibles; trackBy: trackTab"
+              type="button"
+              role="tab"
+              class="citas-tab"
+              [class.activa]="citasFiltroEstado === t.valor"
+              [attr.aria-selected]="citasFiltroEstado === t.valor"
+              (click)="seleccionarEstado(t.valor)"
+            >{{ t.etiqueta }}</button>
+          </div>
+
+          <div class="citas-tabs-extra">
+            <button
+              type="button"
+              class="citas-chip-filtro"
+              [class.activa]="citasFiltroPrioridad === 'urgente'"
+              [attr.aria-pressed]="citasFiltroPrioridad === 'urgente'"
+              (click)="alternarSoloUrgentes()"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+              Solo urgentes
+            </button>
+            <button type="button" class="citas-link" *ngIf="hayFiltrosActivos" (click)="limpiarFiltrosCitas()">
+              Limpiar filtros
+            </button>
+          </div>
+        </div>
+
+        <!-- Cargando -->
+        <div class="citas-estado" *ngIf="citasCargando" role="status">
+          <span class="material-symbols-outlined citas-girando" aria-hidden="true">progress_activity</span>
+          <p class="citas-estado-titulo">Cargando citas…</p>
+        </div>
+
+        <!-- Error -->
+        <div class="citas-estado" *ngIf="!citasCargando && citasError" role="alert">
+          <span class="citas-estado-icono peligro" aria-hidden="true">
+            <span class="material-symbols-outlined">cloud_off</span>
+          </span>
+          <p class="citas-estado-titulo">No se pudieron cargar las citas</p>
+          <p class="citas-estado-desc">Revisa tu conexión e inténtalo de nuevo.</p>
+          <button type="button" class="citas-btn-primario" (click)="cargarCitas()">
+            <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+            Reintentar
+          </button>
+        </div>
+
+        <!-- Vacío -->
+        <div class="citas-estado" *ngIf="!citasCargando && !citasError && citasFiltradas.length === 0">
+          <span class="citas-estado-icono" aria-hidden="true">
+            <span class="material-symbols-outlined">event_busy</span>
+          </span>
+          <ng-container *ngIf="citasAdmin.length === 0; else sinCoincidencias">
+            <p class="citas-estado-titulo">No hay citas en este período</p>
+            <p class="citas-estado-desc">Prueba con otro rango de fechas para ver más resultados.</p>
+            <button type="button" class="citas-btn-secundario" *ngIf="citasFiltroRango !== 'todas'" (click)="verTodasLasFechas()">
+              Ver todas las fechas
+            </button>
+          </ng-container>
+          <ng-template #sinCoincidencias>
+            <p class="citas-estado-titulo">Ninguna cita coincide con los filtros</p>
+            <p class="citas-estado-desc">Cambia la búsqueda o quita algún filtro.</p>
+            <button type="button" class="citas-btn-secundario" (click)="limpiarFiltrosCitas()">Limpiar filtros</button>
+          </ng-template>
+        </div>
+
+        <!-- Tabla -->
+        <div class="citas-tabla-scroll" *ngIf="!citasCargando && !citasError && citasFiltradas.length > 0">
+          <table class="citas-tabla">
+            <thead>
+              <tr>
+                <th scope="col" class="col-num"><span class="citas-solo-lectores">N.º</span></th>
+                <th scope="col">Estudiante</th>
+                <th scope="col">Especialidad</th>
+                <th scope="col">Profesional</th>
+                <th scope="col">Fecha y hora</th>
+                <th scope="col">Prioridad</th>
+                <th scope="col">Estado</th>
+                <th scope="col" class="col-acciones"><span class="citas-solo-lectores">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let c of citasPaginadas; let i = index; trackBy: trackCita" [class.urgente]="c.urgente">
+                <td class="col-num" data-label="">{{ numeroFila(i) }}</td>
+                <td class="celda-estudiante" data-label="">
+                  <div class="citas-persona">
+                    <span
+                      class="citas-avatar"
+                      [ngClass]="claseAvatar(c)"
+                      aria-hidden="true"
+                      [style.backgroundImage]="c.estudiante_foto_url ? 'url(' + c.estudiante_foto_url + ')' : null"
+                    >{{ c.estudiante_foto_url ? '' : iniciales(c.estudiante) }}</span>
+                    <div class="citas-persona-datos">
+                      <strong>{{ c.estudiante }}</strong>
+                      <span>{{ c.rut }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td data-label="Especialidad"><span class="citas-chip-esp">{{ c.especialidad }}</span></td>
+                <td data-label="Profesional">{{ c.profesional }}</td>
+                <td data-label="Fecha y hora">
+                  <div class="citas-fecha">
+                    <span>{{ c.fecha }}</span>
+                    <span>{{ c.hora }}</span>
+                  </div>
+                </td>
+                <td data-label="Prioridad">
+                  <div class="citas-etiquetas">
+                    <span class="citas-chip-urgente" *ngIf="c.urgente">
+                      <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                      Urgente
+                    </span>
+                    <span class="citas-chip-sobrecupo" *ngIf="c.sobrecupo">
+                      <span class="material-symbols-outlined" aria-hidden="true">event_repeat</span>
+                      Sobrecupo
+                    </span>
+                    <span class="citas-texto-suave" *ngIf="!c.urgente && !c.sobrecupo">Normal</span>
+                  </div>
+                </td>
+                <td data-label="Estado">
+                  <span class="citas-estado-chip" [ngClass]="'est-' + c.estado">{{ etiquetaEstado(c.estado) }}</span>
+                </td>
+                <td class="col-acciones" data-label="">
+                  <div class="citas-acciones">
+                    <button
+                      type="button"
+                      class="citas-btn-acciones citas-btn-menu"
+                      (click)="alternarMenu(c, $event)"
+                      [attr.aria-label]="'Acciones para la cita de ' + c.estudiante"
+                      aria-haspopup="menu"
+                      [attr.aria-expanded]="menuCita === c"
+                    >
+                      Acciones
+                      <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Paginación -->
+        <div class="citas-pie" *ngIf="!citasCargando && !citasError && citasFiltradas.length > 0">
+          <span class="citas-pie-texto">Mostrando {{ desde }} – {{ hasta }} de {{ citasFiltradas.length }} citas</span>
+          <nav class="citas-paginas" aria-label="Paginación de citas" *ngIf="totalPaginas > 1">
+            <button type="button" class="citas-pag-btn" [disabled]="pagCitas === 1" (click)="irAPagina(pagCitas - 1)" aria-label="Página anterior">
+              <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+            </button>
+            <ng-container *ngFor="let p of paginas; trackBy: trackPagina">
+              <span class="citas-pag-elipsis" *ngIf="p.elipsis" aria-hidden="true">…</span>
+              <button
+                type="button"
+                class="citas-pag-btn"
+                *ngIf="!p.elipsis"
+                [class.activa]="p.num === pagCitas"
+                [attr.aria-current]="p.num === pagCitas ? 'page' : null"
+                [attr.aria-label]="'Página ' + p.num"
+                (click)="irAPagina(p.num)"
+              >{{ p.num }}</button>
+            </ng-container>
+            <button type="button" class="citas-pag-btn" [disabled]="pagCitas === totalPaginas" (click)="irAPagina(pagCitas + 1)" aria-label="Página siguiente">
+              <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+            </button>
+          </nav>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ Columna lateral ═══════════════ -->
+    <aside class="citas-lateral" aria-label="Accesos rápidos y ayuda">
+      <section class="citas-panel">
+        <h2 class="citas-panel-titulo">Acciones rápidas</h2>
+        <div class="citas-accion-lista">
+          <button type="button" class="citas-accion tono-mint" *ngIf="puedeGestionarAgenda" (click)="onIrAHorario()">
+            <span class="citas-accion-icono" aria-hidden="true"><span class="material-symbols-outlined">calendar_add_on</span></span>
+            <span class="citas-accion-texto">
+              <strong>Agendar cita</strong>
+              <small>Nueva cita para un estudiante</small>
+            </span>
+            <span class="material-symbols-outlined citas-accion-flecha" aria-hidden="true">chevron_right</span>
+          </button>
+
+          <button type="button" class="citas-accion tono-lavanda" (click)="onIrAAgenda()">
+            <span class="citas-accion-icono" aria-hidden="true"><span class="material-symbols-outlined">calendar_month</span></span>
+            <span class="citas-accion-texto">
+              <strong>Ver agenda</strong>
+              <small>Calendario completo</small>
+            </span>
+            <span class="material-symbols-outlined citas-accion-flecha" aria-hidden="true">chevron_right</span>
+          </button>
+
+          <button type="button" class="citas-accion tono-azul" *ngIf="puedeVerProfesionales" (click)="onIrAProfesionales()">
+            <span class="citas-accion-icono" aria-hidden="true"><span class="material-symbols-outlined">manage_accounts</span></span>
+            <span class="citas-accion-texto">
+              <strong>Gestionar profesionales</strong>
+              <small>Ver y editar especialidades</small>
+            </span>
+            <span class="material-symbols-outlined citas-accion-flecha" aria-hidden="true">chevron_right</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="citas-consejo">
+        <span class="citas-consejo-icono" aria-hidden="true"><span class="material-symbols-outlined">lightbulb</span></span>
+        <div>
+          <strong>Consejo</strong>
+          <p>Puedes filtrar por especialidad, estado o rango de fechas para encontrar la información más rápido.</p>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- Menú contextual de la fila (posición fija para no quedar recortado por el scroll de la tabla) -->
+  <div
+    class="citas-menu"
+    role="menu"
+    *ngIf="menuCita"
+    [style.top.px]="menuPos.top"
+    [style.bottom.px]="menuPos.bottom"
+    [style.right.px]="menuPos.right"
+  >
+    <button
+      type="button"
+      role="menuitem"
+      class="citas-menu-item"
+      data-accion="detalle"
+      (click)="onVerDetalle(menuCita)"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+      Ver detalles
+    </button>
+
+    <ng-container *ngIf="tieneAccionesMutables(menuCita)">
+      <div class="citas-menu-separador" role="separator"></div>
+
+      <button
+        type="button"
+        role="menuitem"
+        class="citas-menu-item"
+        data-accion="urgente"
+        *ngIf="!menuCita.urgente"
+        (click)="onMarcarPrioridad(menuCita, true)"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        Marcar como urgente
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        class="citas-menu-item"
+        data-accion="normal"
+        *ngIf="menuCita.urgente"
+        (click)="onMarcarPrioridad(menuCita, false)"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">undo</span>
+        Quitar prioridad urgente
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        class="citas-menu-item peligro"
+        data-accion="cancelar"
+        (click)="onCancelarCita(menuCita)"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
+        Cancelar cita
+      </button>
+    </ng-container>
+  </div>
+</section>

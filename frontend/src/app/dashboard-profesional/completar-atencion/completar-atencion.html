@@ -1,0 +1,304 @@
+<div class="ca-overlay" role="dialog" aria-modal="true" aria-labelledby="ca-titulo">
+  <div class="ca-page">
+
+    <button class="ca-volver" type="button" (click)="cerrar()">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span> Volver a la atención
+    </button>
+
+    <h1 id="ca-titulo">Completar atención</h1>
+    <p class="ca-sub">Registra la atención y, si corresponde, emite la receta y el justificativo.</p>
+
+    <!-- Paciente -->
+    <div class="ca-paciente">
+      <div class="ca-avatar" aria-hidden="true">{{ (paciente.nombre || '?').charAt(0) }}</div>
+      <div class="ca-paciente-datos">
+        <strong>{{ paciente.nombre }}</strong>
+        <span>
+          <ng-container *ngIf="paciente.rut">RUT {{ paciente.rut }}</ng-container>
+          <ng-container *ngIf="paciente.rut && paciente.carrera"> · </ng-container>
+          <ng-container *ngIf="paciente.carrera">{{ paciente.carrera }}</ng-container>
+        </span>
+      </div>
+      <div class="ca-paciente-cita">
+        <span>Atención del</span>
+        <strong>{{ fechaLegible(cita.fecha) }} · {{ cita.hora }}</strong>
+      </div>
+    </div>
+
+    <div class="ca-banner ca-banner-info" *ngIf="borradorRecuperado">
+      Recuperamos lo que habías escrito antes de salir.
+      <button type="button" class="ca-link" (click)="empezarDeCero()">Empezar de cero</button>
+    </div>
+
+    <div class="ca-banner ca-banner-error" *ngIf="error" role="alert">{{ error }}</div>
+
+    <div class="ca-grid">
+
+      <!-- ═════════ COLUMNA PRINCIPAL ═════════ -->
+      <div class="ca-main">
+
+        <!-- PASO 1: EDITAR -->
+        <ng-container *ngIf="paso === 'editar'">
+
+          <section class="ca-card">
+            <h2>Registro de la atención</h2>
+
+            <div class="ca-campo" *ngIf="puedeMedicamento">
+              <label for="ca-med-sum">Medicamento suministrado <span class="ca-opc">(opcional)</span></label>
+              <input id="ca-med-sum" type="text" [(ngModel)]="medicamento" placeholder="Ej: Ibuprofeno 400 mg administrado en consulta" />
+              <small>Es el que se entregó durante la atención; no es una receta.</small>
+            </div>
+
+            <div class="ca-campo">
+              <label for="ca-obs">Observaciones de la atención <span class="ca-opc">(opcional)</span></label>
+              <textarea id="ca-obs" rows="4" [(ngModel)]="observaciones" placeholder="Notas clínicas, indicaciones, seguimiento..."></textarea>
+            </div>
+          </section>
+
+          <p class="ca-cargando" *ngIf="cargandoCapacidades">Cargando opciones de tu especialidad…</p>
+
+          <p class="ca-nota" *ngIf="sinDocumentosHabilitados">
+            Tu especialidad no tiene habilitada la emisión de recetas ni de justificativos.
+          </p>
+
+          <!-- RECETA -->
+          <section class="ca-card" *ngIf="puedeReceta">
+            <div class="ca-card-cab">
+              <div>
+                <h2>Receta médica</h2>
+                <p>¿Se emite receta médica en esta atención? Si lo desactivas, no se genera ninguna.</p>
+              </div>
+              <label class="ca-switch">
+                <input type="checkbox" role="switch" [(ngModel)]="recetaActiva" aria-label="Emitir receta médica" />
+                <span class="ca-switch-pista"></span>
+              </label>
+            </div>
+
+            <div *ngIf="recetaActiva" class="ca-cuerpo">
+              <div class="ca-item" *ngFor="let it of items; let i = index">
+                <div class="ca-item-cab">
+                  <strong>Medicamento {{ i + 1 }}</strong>
+                  <button type="button" class="ca-quitar" (click)="quitarMedicamento(i)" *ngIf="items.length > 1">Quitar</button>
+                </div>
+
+                <div class="ca-campo">
+                  <label [for]="'ca-m-' + i">Medicamento *</label>
+                  <input [id]="'ca-m-' + i" type="text" maxlength="200" [(ngModel)]="it.medicamento" placeholder="Principio activo, concentración y forma" />
+                </div>
+
+                <div class="ca-fila ca-fila-4">
+                  <div class="ca-campo">
+                    <label [for]="'ca-d-' + i">Dosis *</label>
+                    <input [id]="'ca-d-' + i" type="text" maxlength="200" [(ngModel)]="it.dosis" placeholder="Ej: 1 cápsula" />
+                  </div>
+                  <div class="ca-campo">
+                    <label [for]="'ca-v-' + i">Vía *</label>
+                    <select [id]="'ca-v-' + i" [(ngModel)]="it.via">
+                      <option *ngFor="let v of vias" [value]="v">{{ v }}</option>
+                    </select>
+                  </div>
+                  <div class="ca-campo">
+                    <label [for]="'ca-f-' + i">Frecuencia *</label>
+                    <input [id]="'ca-f-' + i" type="text" maxlength="200" [(ngModel)]="it.frecuencia" placeholder="Cada 8 horas" />
+                  </div>
+                  <div class="ca-campo">
+                    <label [for]="'ca-p-' + i">Período *</label>
+                    <input [id]="'ca-p-' + i" type="text" maxlength="200" [(ngModel)]="it.periodo" placeholder="Ej: 7 días" />
+                  </div>
+                </div>
+
+                <div class="ca-fila ca-fila-2">
+                  <div class="ca-campo">
+                    <label [for]="'ca-c-' + i">Cantidad a entregar <span class="ca-opc">(opcional)</span></label>
+                    <input [id]="'ca-c-' + i" type="text" maxlength="100" [(ngModel)]="it.cantidad" placeholder="Ej: 21 unidades" />
+                  </div>
+                  <div class="ca-campo">
+                    <label [for]="'ca-b-' + i">Alternativa comercial <span class="ca-opc">(opcional)</span></label>
+                    <input [id]="'ca-b-' + i" type="text" maxlength="200" [(ngModel)]="it.marca" placeholder="Marca o laboratorio" />
+                  </div>
+                </div>
+
+                <div class="ca-campo">
+                  <label [for]="'ca-i-' + i">Indicación de administración <span class="ca-opc">(opcional)</span></label>
+                  <input [id]="'ca-i-' + i" type="text" maxlength="500" [(ngModel)]="it.indicacion" placeholder="Ej: 1 en la mañana, con el almuerzo" />
+                </div>
+              </div>
+
+              <button type="button" class="ca-agregar" (click)="agregarMedicamento()" [disabled]="items.length >= maxItems">
+                + Agregar medicamento
+              </button>
+            </div>
+          </section>
+
+          <!-- JUSTIFICATIVO -->
+          <section class="ca-card" *ngIf="puedeJustificativo">
+            <div class="ca-card-cab">
+              <div>
+                <h2>Justificativo médico</h2>
+                <p>Certifica la atención y, si corresponde, el reposo. No incluye diagnóstico.</p>
+              </div>
+              <label class="ca-switch">
+                <input type="checkbox" role="switch" [(ngModel)]="justActiva" aria-label="Emitir justificativo médico" />
+                <span class="ca-switch-pista"></span>
+              </label>
+            </div>
+
+            <div *ngIf="justActiva" class="ca-cuerpo">
+              <div class="ca-fila ca-fila-3">
+                <div class="ca-campo">
+                  <label for="ca-j-mod">Modalidad</label>
+                  <select id="ca-j-mod" [(ngModel)]="just.modalidad">
+                    <option value="Presencial">Presencial</option>
+                    <option value="Remota">Remota</option>
+                  </select>
+                </div>
+                <div class="ca-campo">
+                  <label for="ca-j-tipo">Tipo de atención</label>
+                  <select id="ca-j-tipo" [(ngModel)]="just.tipo_atencion">
+                    <option value="Consulta">Consulta</option>
+                    <option value="Control">Control</option>
+                    <option value="Urgencia">Urgencia</option>
+                  </select>
+                </div>
+                <div class="ca-campo">
+                  <label for="ca-j-motivo">Motivo de consulta <span class="ca-opc">(opcional)</span></label>
+                  <input id="ca-j-motivo" type="text" maxlength="200" [(ngModel)]="just.motivo_consulta" placeholder="Ej: Consulta médica" />
+                </div>
+              </div>
+
+              <label class="ca-check">
+                <input type="checkbox" [(ngModel)]="just.reposo" /> Indicar reposo
+              </label>
+
+              <div class="ca-fila ca-fila-3" *ngIf="just.reposo">
+                <div class="ca-campo">
+                  <label for="ca-j-desde">Desde *</label>
+                  <input id="ca-j-desde" type="date" [(ngModel)]="just.reposo_desde" />
+                </div>
+                <div class="ca-campo">
+                  <label for="ca-j-hasta">Hasta *</label>
+                  <input id="ca-j-hasta" type="date" [min]="just.reposo_desde" [(ngModel)]="just.reposo_hasta" />
+                </div>
+                <div class="ca-campo ca-dias" *ngIf="diasReposo">
+                  <span>Días de reposo</span><strong>{{ diasReposo }}</strong>
+                </div>
+              </div>
+
+              <div class="ca-campo">
+                <label for="ca-j-rest">Restricciones de actividad <span class="ca-opc">(opcional)</span></label>
+                <input id="ca-j-rest" type="text" maxlength="500" [(ngModel)]="just.restricciones" placeholder="Ej: sin educación física ni laboratorio" />
+              </div>
+
+              <div class="ca-fila ca-fila-2">
+                <div class="ca-campo">
+                  <label for="ca-j-ctrl">Control sugerido <span class="ca-opc">(opcional)</span></label>
+                  <input id="ca-j-ctrl" type="date" [(ngModel)]="just.control_sugerido" />
+                </div>
+                <div class="ca-campo">
+                  <label for="ca-j-obs">Observaciones <span class="ca-opc">(opcional)</span></label>
+                  <input id="ca-j-obs" type="text" maxlength="500" [(ngModel)]="just.observaciones" placeholder="Texto para efectos administrativos" />
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </ng-container>
+
+        <!-- PASO 2: REVISAR -->
+        <section class="ca-card ca-revision" *ngIf="paso === 'revisar'">
+          <h2>Revisa antes de guardar</h2>
+          <p class="ca-sub-card">Al guardar, la atención queda completada y los documentos se emiten. Un documento emitido no se puede editar; solo anular.</p>
+
+          <dl class="ca-rev-lista">
+            <div *ngIf="puedeMedicamento && medicamento.trim()"><dt>Medicamento suministrado</dt><dd>{{ medicamento }}</dd></div>
+            <div><dt>Observaciones</dt><dd>{{ observaciones.trim() || 'Sin observaciones' }}</dd></div>
+
+            <div *ngIf="recetaActiva && puedeReceta">
+              <dt>Receta médica</dt>
+              <dd>
+                <ul>
+                  <li *ngFor="let it of items">
+                    <ng-container *ngIf="itemValido(it)">
+                      <strong>{{ it.medicamento }}</strong> — {{ it.dosis }}, {{ it.via }}, {{ it.frecuencia }}, {{ it.periodo }}
+                    </ng-container>
+                  </li>
+                </ul>
+              </dd>
+            </div>
+            <div *ngIf="!(recetaActiva && puedeReceta) && puedeReceta"><dt>Receta médica</dt><dd>No se emite</dd></div>
+
+            <div *ngIf="justActiva && puedeJustificativo">
+              <dt>Justificativo médico</dt>
+              <dd>
+                {{ just.modalidad }} · {{ just.tipo_atencion }}<br>
+                <ng-container *ngIf="just.reposo">Reposo del {{ fechaLegible(just.reposo_desde) }} al {{ fechaLegible(just.reposo_hasta) }} ({{ diasReposo }} día{{ diasReposo === 1 ? '' : 's' }})</ng-container>
+                <ng-container *ngIf="!just.reposo">Sin reposo</ng-container>
+              </dd>
+            </div>
+            <div *ngIf="!(justActiva && puedeJustificativo) && puedeJustificativo"><dt>Justificativo médico</dt><dd>No se emite</dd></div>
+          </dl>
+        </section>
+
+        <!-- ACCIONES -->
+        <div class="ca-acciones">
+          <button type="button" class="ca-btn ca-btn-sec" (click)="cerrar()" [disabled]="enviando">Cancelar</button>
+
+          <ng-container *ngIf="paso === 'editar'">
+            <button type="button" class="ca-btn ca-btn-sec" (click)="guardarBorrador(true)">Guardar borrador</button>
+            <button type="button" class="ca-btn ca-btn-prim" (click)="irARevisar()" [disabled]="!puedeRevisar || cargandoCapacidades">Revisar y completar</button>
+          </ng-container>
+
+          <ng-container *ngIf="paso === 'revisar'">
+            <button type="button" class="ca-btn ca-btn-sec" (click)="volverAEditar()" [disabled]="enviando">Volver a editar</button>
+            <button type="button" class="ca-btn ca-btn-prim" (click)="guardarYCompletar()" [disabled]="enviando">
+              {{ enviando ? 'Guardando…' : 'Guardar y completar atención' }}
+            </button>
+          </ng-container>
+        </div>
+        <p class="ca-borrador" *ngIf="borradorGuardadoA && paso === 'editar'">Borrador guardado a las {{ borradorGuardadoA }}</p>
+      </div>
+
+      <!-- ═════════ RESUMEN EN VIVO ═════════ -->
+      <aside class="ca-resumen" aria-label="Resumen de la atención">
+        <h2>Resumen de la atención</h2>
+
+        <ul class="ca-res-lista">
+          <li>
+            <span>Observaciones</span>
+            <strong>{{ observaciones.trim() ? 'Registradas' : 'Sin observaciones' }}</strong>
+          </li>
+          <li *ngIf="puedeMedicamento">
+            <span>Medicamento suministrado</span>
+            <strong>{{ medicamento.trim() ? 'Sí' : 'No' }}</strong>
+          </li>
+          <li *ngIf="puedeReceta">
+            <span>Receta médica</span>
+            <strong *ngIf="recetaActiva">{{ itemsCompletos }} medicamento{{ itemsCompletos === 1 ? '' : 's' }}</strong>
+            <strong *ngIf="!recetaActiva">No se emite</strong>
+          </li>
+          <li *ngIf="puedeJustificativo">
+            <span>Justificativo médico</span>
+            <strong *ngIf="justActiva && just.reposo && diasReposo">Reposo {{ diasReposo }} día{{ diasReposo === 1 ? '' : 's' }}</strong>
+            <strong *ngIf="justActiva && !(just.reposo && diasReposo)">Sin reposo</strong>
+            <strong *ngIf="!justActiva">No se emite</strong>
+          </li>
+        </ul>
+
+        <div class="ca-envio" [class.ca-envio-doc]="hayDocumentos">
+          <strong>Se enviará al estudiante</strong>
+          <p *ngIf="hayDocumentos">
+            Al guardar, <ng-container *ngIf="recetaActiva && puedeReceta">la receta</ng-container><ng-container *ngIf="recetaActiva && puedeReceta && justActiva && puedeJustificativo"> y </ng-container><ng-container *ngIf="justActiva && puedeJustificativo">el justificativo</ng-container>
+            llegarán a su historial con código de verificación.
+          </p>
+          <p *ngIf="!hayDocumentos">No se emitirá ningún documento. El resumen de la atención queda en su historial.</p>
+        </div>
+
+        <div class="ca-pendientes" *ngIf="problemas.length" role="status">
+          <strong>Falta resolver</strong>
+          <ul><li *ngFor="let p of problemas">{{ p }}</li></ul>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</div>

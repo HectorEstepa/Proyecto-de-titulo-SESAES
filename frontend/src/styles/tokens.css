@@ -1,0 +1,253 @@
+/* ============================================================
+   SESAES — Design tokens (Fase 1)
+   Fuente única de verdad para colores, tipografía, espaciado,
+   radios, sombras e iconografía. Los 3 dashboards (Administrador,
+   Profesional, Estudiante) deben consumir estas variables en vez
+   de valores hardcodeados.
+
+   Modo oscuro: se activa agregando la clase `.tema-oscuro` al
+   <body> (mecanismo existente, sin cambios:
+   document.body.classList.toggle('tema-oscuro', ...)).
+   ============================================================ */
+
+:root {
+  /* ------------------------------------------------------------
+     1. TIPOGRAFÍA
+     ------------------------------------------------------------ */
+  --font-family-base: 'Outfit', 'Inter', 'Manrope', system-ui, sans-serif;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --font-size-xs: 0.75rem;   /* 12px */
+  --font-size-sm: 0.8125rem; /* 13px */
+  --font-size-base: 0.875rem;/* 14px */
+  --font-size-md: 1rem;      /* 16px */
+  --font-size-lg: 1.125rem;  /* 18px */
+  --font-size-xl: 1.375rem;  /* 22px */
+  --font-size-2xl: 1.75rem;  /* 28px */
+
+  --line-height-tight: 1.2;
+  --line-height-base: 1.5;
+
+  /* ------------------------------------------------------------
+     2. MARCA / COLOR PRINCIPAL
+     ------------------------------------------------------------ */
+  --color-brand: #168C80;
+  --color-brand-hover: #10766D;
+  --color-brand-active: #0C5C55;
+  --color-brand-contrast: #FFFFFF;
+
+  --color-sidebar-accent: #626D9B; /* azul-lavanda */
+
+  /* ------------------------------------------------------------
+     3. SUPERFICIES (modo claro)
+     ------------------------------------------------------------ */
+  --surface-bg: #F6F8F8;
+  --surface-card: #FFFFFF;
+  --surface-card-alt: #F0F3F3;
+  --surface-sidebar: #626D9B;
+  --surface-overlay: rgba(15, 23, 22, 0.48);
+  --surface-hover: rgba(22, 140, 128, 0.08);
+  --surface-pressed: rgba(22, 140, 128, 0.14);
+
+  /* ------------------------------------------------------------
+     4. TEXTO (modo claro)
+     ------------------------------------------------------------ */
+  --text-primary: #20312F;
+  --text-secondary: #4B5C59;
+  --text-muted: #7C8B88;
+  --text-disabled: #A6B2B0;
+  --text-on-brand: #FFFFFF;
+  --text-on-sidebar: #FFFFFF;
+  --text-link: var(--color-brand);
+
+  /* ------------------------------------------------------------
+     5. BORDES (modo claro)
+     ------------------------------------------------------------ */
+  --border-subtle: #E3E9E8;
+  --border-default: #D2DBDA;
+  --border-strong: #B7C3C1;
+  --border-focus: var(--color-brand);
+
+  /* ------------------------------------------------------------
+     6. ESTADOS SEMÁNTICOS (tonos genéricos — el mapeo de cada
+     estado real del negocio → tono se define en Fase 2)
+     ------------------------------------------------------------ */
+  --tone-success: #20A875;
+  --tone-success-bg: #E3F6EE;
+  --tone-success-border: #A9E4CB;
+
+  --tone-info: #4F7FD7;
+  --tone-info-bg: #E9EFFB;
+  --tone-info-border: #B9CBF1;
+
+  --tone-warning: #E99A24;
+  --tone-warning-bg: #FCF1DF;
+  --tone-warning-border: #F5D69C;
+
+  --tone-danger: #D95757;
+  --tone-danger-bg: #FBE9E9;
+  --tone-danger-border: #F0BCBC;
+
+  --tone-lavender: #8B65CF;
+  --tone-lavender-bg: #EFE9FA;
+  --tone-lavender-border: #D3C2F0;
+
+  --tone-neutral: #64748B;
+  --tone-neutral-bg: #EDEFF2;
+  --tone-neutral-border: #D3D8DF;
+
+  /* ------------------------------------------------------------
+     7. TABLAS
+     ------------------------------------------------------------ */
+  --table-header-bg: #EEF2F2;
+  --table-header-text: var(--text-secondary);
+  --table-row-bg: var(--surface-card);
+  --table-row-alt-bg: #FAFBFB;
+  --table-row-hover-bg: var(--surface-hover);
+  --table-border: var(--border-subtle);
+  --table-action-icon: var(--text-secondary);
+  --table-action-icon-hover: var(--color-brand);
+
+  /* ------------------------------------------------------------
+     8. GRÁFICOS (paleta categórica para chart.js)
+     ------------------------------------------------------------ */
+  --chart-series-1: var(--color-brand);
+  --chart-series-2: var(--color-sidebar-accent);
+  --chart-series-3: var(--tone-warning);
+  --chart-series-4: var(--tone-info);
+  --chart-series-5: var(--tone-danger);
+  --chart-series-6: var(--tone-lavender);
+  --chart-grid-line: var(--border-subtle);
+  --chart-axis-text: var(--text-muted);
+
+  /* ------------------------------------------------------------
+     9. ESPACIADO
+     ------------------------------------------------------------ */
+  --space-2xs: 0.25rem; /* 4px */
+  --space-xs: 0.5rem;   /* 8px */
+  --space-sm: 0.75rem;  /* 12px */
+  --space-md: 1rem;     /* 16px */
+  --space-lg: 1.5rem;   /* 24px */
+  --space-xl: 2rem;     /* 32px */
+  --space-2xl: 3rem;    /* 48px */
+
+  /* ------------------------------------------------------------
+     10. RADIOS
+     ------------------------------------------------------------ */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  /* ------------------------------------------------------------
+     11. SOMBRAS
+     ------------------------------------------------------------ */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 23, 0.06);
+  --shadow-md: 0 4px 12px rgba(16, 24, 23, 0.08);
+  --shadow-lg: 0 12px 32px rgba(16, 24, 23, 0.14);
+  --shadow-focus-ring: 0 0 0 3px rgba(22, 140, 128, 0.35);
+
+  /* ------------------------------------------------------------
+     12. ICONOGRAFÍA (@lucide/angular)
+     ------------------------------------------------------------ */
+  --icon-stroke-width: 1.75;
+  --icon-size-sidebar: 20px;
+  --icon-size-button: 18px;
+  --icon-size-table-action: 18px;
+  --icon-size-kpi: 24px;
+  --icon-size-empty-state: 36px;
+
+  /* ------------------------------------------------------------
+     13. BREAKPOINTS (referencia; usados vía media queries, no
+     como variables aplicables directamente en todos los navegadores,
+     pero se documentan aquí como fuente única de verdad)
+     ------------------------------------------------------------ */
+  --bp-tablet: 1024px;
+  --bp-mobile: 640px;
+}
+
+/* ============================================================
+   MODO OSCURO
+   ============================================================ */
+.tema-oscuro {
+  /* Superficies */
+  --surface-bg: #1F2233;
+  --surface-card: #303448;
+  --surface-card-alt: #383D54;
+  --surface-sidebar: #24283A;
+  --surface-overlay: rgba(8, 10, 18, 0.6);
+  --surface-hover: rgba(91, 202, 189, 0.10);
+  --surface-pressed: rgba(91, 202, 189, 0.16);
+
+  /* Marca (ajustada para contraste sobre fondo oscuro) */
+  --color-brand: #5BCABD;
+  --color-brand-hover: #7BD8CD;
+  --color-brand-active: #46B0A3;
+  --color-brand-contrast: #16232B;
+
+  --color-sidebar-accent: #8279E7;
+
+  /* Texto */
+  --text-primary: #E9EDF3;
+  --text-secondary: #B7C0D4;
+  --text-muted: #8891A8;
+  --text-disabled: #5C6480;
+  --text-on-brand: #16232B;
+  --text-on-sidebar: #F1F2FA;
+  --text-link: var(--color-brand);
+
+  /* Bordes */
+  --border-subtle: #383D54;
+  --border-default: #454B66;
+  --border-strong: #565D80;
+  --border-focus: var(--color-brand);
+
+  /* Estados semánticos */
+  --tone-success: #3FCE96;
+  --tone-success-bg: rgba(63, 206, 150, 0.14);
+  --tone-success-border: rgba(63, 206, 150, 0.35);
+
+  --tone-info: #7AA2F0;
+  --tone-info-bg: rgba(122, 162, 240, 0.14);
+  --tone-info-border: rgba(122, 162, 240, 0.35);
+
+  --tone-warning: #F0B754;
+  --tone-warning-bg: rgba(240, 183, 84, 0.14);
+  --tone-warning-border: rgba(240, 183, 84, 0.35);
+
+  --tone-danger: #EF7E7E;
+  --tone-danger-bg: rgba(239, 126, 126, 0.14);
+  --tone-danger-border: rgba(239, 126, 126, 0.35);
+
+  --tone-lavender: #8279E7;
+  --tone-lavender-bg: rgba(130, 121, 231, 0.16);
+  --tone-lavender-border: rgba(130, 121, 231, 0.38);
+
+  --tone-neutral: #96A0BC;
+  --tone-neutral-bg: rgba(150, 160, 188, 0.14);
+  --tone-neutral-border: rgba(150, 160, 188, 0.32);
+
+  /* Tablas */
+  --table-header-bg: #282C40;
+  --table-header-text: var(--text-secondary);
+  --table-row-bg: var(--surface-card);
+  --table-row-alt-bg: #2A2E42;
+  --table-row-hover-bg: var(--surface-hover);
+  --table-border: var(--border-subtle);
+  --table-action-icon: var(--text-secondary);
+  --table-action-icon-hover: var(--color-brand);
+
+  /* Gráficos */
+  --chart-grid-line: var(--border-subtle);
+  --chart-axis-text: var(--text-muted);
+
+  /* Sombras (más sutiles sobre fondo oscuro) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-focus-ring: 0 0 0 3px rgba(91, 202, 189, 0.4);
+}

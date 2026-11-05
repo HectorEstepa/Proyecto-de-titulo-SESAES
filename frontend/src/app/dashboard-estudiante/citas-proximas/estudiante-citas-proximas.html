@@ -1,0 +1,29 @@
+  <h3 class="subsection-title">Próximas citas</h3>
+  <div class="citas-lista">
+    <div class="cita-card" [class.cita-card-vencida]="citaPendienteVencida(cita)" *ngFor="let cita of citas; let i = index">
+      <p class="cita-aviso-vencida" *ngIf="citaPendienteVencida(cita)">
+        <span class="material-symbols-outlined icono-inline" aria-hidden="true">hourglass_top</span> Esta hora ya pasó y tu profesional aún no la registra como atendida. No significa que no hayas asistido — puedes cancelarla mientras se actualiza.
+      </p>
+      <div class="cita-card-row">
+        <div class="cita-avatar">{{ cita.iniciales || cita.especialidad?.substring(0,2) }}</div>
+        <div class="cita-info">
+          <span class="cita-badge">{{ cita.especialidad }}</span> <app-tipo-cita-badge [tipo]="cita.tipo"></app-tipo-cita-badge>
+          <p class="cita-nombre">{{ cita.profesional }}</p>
+          <p class="cita-profesional">{{ cita.especialidad }}</p>
+        </div>
+        <div class="cita-fecha">
+          <span class="cita-label">FECHA</span>
+          <span class="cita-valor">{{ cita.fecha }}</span>
+          <span class="cita-label">HORA</span>
+          <span class="cita-valor">{{ cita.hora }}</span>
+        </div>
+        <div class="cita-acciones">
+          <button class="btn-cancelar" [disabled]="!puedeCancelar(cita)" (click)="cancelar.emit({ index: i, cita })">Cancelar</button>
+          <p class="cita-aviso-cancelacion" *ngIf="!puedeCancelar(cita)">{{ avisoCancelacion(cita) }}</p>
+        </div>
+      </div>
+    </div>
+    <div *ngIf="citas.length === 0" style="text-align:center;color:var(--est-muted);padding:32px;font-size:14px;">
+      No tienes citas próximas. <button class="btn-reagendar" (click)="solicitarNueva.emit()">Agendar una hora</button>
+    </div>
+  </div>

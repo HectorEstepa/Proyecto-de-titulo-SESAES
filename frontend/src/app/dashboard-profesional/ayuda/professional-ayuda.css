@@ -1,0 +1,326 @@
+:host {
+  display: block;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+.patient-nombre-prof {
+  font-size: 20px;
+  margin-bottom: 4px;
+  color: var(--prof-text);
+}
+
+.inicio-mini-sub-prof {
+  font-size: 12px;
+  color: var(--prof-text-2);
+  margin: 0 0 6px;
+}
+
+.card-title-prof {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--prof-text);
+  margin: 0;
+}
+
+.card-prof {
+  background: var(--prof-card);
+  border-radius: 18px;
+  padding: 24px 26px;
+  box-shadow: var(--prof-shadow);
+  border: 1px solid var(--prof-border);
+  margin-bottom: 20px;
+}
+
+.side-card-prof {
+  padding: 18px;
+}
+
+.side-card-prof h3 {
+  margin-bottom: 13px;
+}
+
+.btn-hero-primario-prof {
+  padding: 11px 20px;
+  border-radius: 12px;
+  border: none;
+  background: var(--prof-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--prof-primary) 25%, transparent);
+  transition: box-shadow .15s, background .15s;
+}
+
+.btn-hero-primario-prof:hover {
+  background: var(--prof-primary-hover);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--prof-primary) 32%, transparent);
+}
+
+.ayuda-layout-prof {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+}
+
+.ayuda-banner-prof {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--prof-auto7);
+  border: none;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.ayuda-banner-icono-prof {
+  font-size: 34px;
+  flex-shrink: 0;
+}
+
+.ayuda-banner-texto-prof {
+  flex: 1;
+}
+
+.ayuda-banner-texto-prof h3 {
+  font-size: 15px;
+  color: var(--prof-text);
+  margin-bottom: 4px;
+}
+
+.ayuda-banner-texto-prof p {
+  font-size: 12.5px;
+  color: var(--prof-text-2);
+  line-height: 1.5;
+  max-width: 560px;
+}
+
+.ayuda-banner-btn-prof {
+  flex-shrink: 0;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ayuda-banner-cerrar-prof {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--prof-text-2);
+  font-size: 13px;
+}
+
+.ayuda-temas-grid-prof {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.ayuda-tema-card-prof {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  background: var(--prof-inset);
+  border: 1px solid var(--prof-border);
+  border-radius: 16px;
+  padding: 18px;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+  transition: box-shadow .15s, transform .15s;
+}
+
+.ayuda-tema-card-prof:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.ayuda-tema-icono-prof {
+  font-size: 17px;
+  margin-bottom: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ayuda-tema-card-prof strong {
+  font-size: 13px;
+  color: var(--prof-text);
+}
+
+.ayuda-tema-card-prof span {
+  font-size: 11px;
+  color: var(--prof-muted);
+}
+
+.ayuda-tema-card-prof.morado .ayuda-tema-icono-prof {
+  color: var(--prof-purple);
+  background: var(--prof-purple-tint);
+}
+
+.ayuda-tema-card-prof.azul .ayuda-tema-icono-prof {
+  color: var(--prof-info);
+  background: var(--prof-info-tint);
+}
+
+.ayuda-tema-card-prof.verde .ayuda-tema-icono-prof {
+  color: var(--prof-primary);
+  background: var(--prof-primary-tint);
+}
+
+.ayuda-tema-card-prof.naranjo .ayuda-tema-icono-prof {
+  color: var(--prof-warn);
+  background: var(--prof-warn-tint);
+}
+
+.ayuda-tema-card-prof.rojo .ayuda-tema-icono-prof {
+  color: var(--prof-danger);
+  background: var(--prof-danger-tint);
+}
+
+.ayuda-tema-card-prof.lila .ayuda-tema-icono-prof {
+  color: var(--prof-purple);
+  background: var(--prof-purple-tint);
+}
+
+.ayuda-guia-item-prof {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--prof-border);
+  text-decoration: none;
+}
+
+.ayuda-guia-item-prof:last-child {
+  border-bottom: none;
+}
+
+.ayuda-guia-icono-prof {
+  font-size: 17px;
+}
+
+.ayuda-guia-item-prof div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ayuda-guia-item-prof strong {
+  font-size: 12.5px;
+  color: var(--prof-text);
+}
+
+.ayuda-guia-item-prof span {
+  font-size: 11.5px;
+  color: var(--prof-muted);
+}
+
+.ayuda-guia-flecha-prof {
+  color: var(--prof-muted);
+  font-size: 16px;
+}
+
+.ayuda-personalizada-prof {
+  text-align: left;
+}
+
+.ayuda-personalizada-prof > .ayuda-guia-icono-prof {
+  font-size: 26px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.ayuda-personalizada-prof .inicio-mini-sub-prof {
+  margin-bottom: 12px;
+}
+
+.ayuda-contacto-item-prof {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--prof-border);
+  text-decoration: none;
+}
+
+.ayuda-contacto-item-prof div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ayuda-contacto-item-prof strong {
+  font-size: 12px;
+  color: var(--prof-text);
+}
+
+.ayuda-contacto-item-prof span {
+  font-size: 11.5px;
+  color: var(--prof-text-2);
+}
+
+.ayuda-enlace-item-prof {
+  display: block;
+  padding: 9px 0;
+  font-size: 12px;
+  color: var(--prof-accent-text);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid var(--prof-border);
+}
+
+.ayuda-enlace-item-prof:last-child {
+  border-bottom: none;
+}
+
+.ayuda-enlace-item-prof:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .ayuda-layout-prof {
+    grid-template-columns: 1fr;
+  }
+
+  .ayuda-temas-grid-prof {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ayuda-banner-prof {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .card-prof {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 560px) {
+  .ayuda-temas-grid-prof {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Iconos Material Symbols ── */
+.icono-inline { font-size: 16px; vertical-align: middle; }
+.ayuda-banner-icono-prof .material-symbols-outlined,
+.ayuda-tema-icono-prof .material-symbols-outlined,
+.ayuda-guia-icono-prof .material-symbols-outlined { font-size: 24px; }
+.ayuda-banner-cerrar-prof .material-symbols-outlined { font-size: 18px; }
+.ayuda-banner-btn-prof,
+.ayuda-enlace-item-prof { display: inline-flex; align-items: center; gap: 6px; }
+

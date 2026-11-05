@@ -1,0 +1,76 @@
+<div class="vd-page">
+
+  <header class="vd-header">
+    <span class="vd-logo">SESAES</span>
+    <a class="vd-login-link" routerLink="/login">Iniciar sesión</a>
+  </header>
+
+  <main class="vd-main">
+
+    <section class="vd-card">
+      <h1>Validar documento</h1>
+      <p class="vd-sub">
+        Ingresa el código impreso en tu receta o justificativo, o escanea su código QR,
+        para comprobar que es auténtico.
+      </p>
+
+      <label class="vd-label" for="vd-codigo">Código del documento</label>
+      <input
+        id="vd-codigo"
+        class="vd-input"
+        type="text"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        placeholder="SES-XXXX-XXXX-XXXX"
+        [ngModel]="codigo"
+        (ngModelChange)="onCodigoChange($event)"
+        (keyup.enter)="validar()">
+
+      <button class="vd-btn vd-btn-primario" (click)="validar()" [disabled]="!codigo.trim() || cargando">
+        {{ cargando ? 'Validando…' : 'Validar' }}
+      </button>
+
+      <button class="vd-btn vd-btn-secundario" (click)="escaneando ? detenerEscaner() : iniciarEscaner()" [disabled]="cargando">
+        {{ escaneando ? 'Cerrar cámara' : 'Escanear código QR' }}
+      </button>
+
+      <p class="vd-aviso" *ngIf="errorCamara">{{ errorCamara }}</p>
+
+      <div class="vd-camara" *ngIf="escaneando">
+        <video #video playsinline muted></video>
+        <span>Apunta la cámara al código QR del documento.</span>
+      </div>
+    </section>
+
+    <section class="vd-card vd-resultado" *ngIf="resultado || errorRed || cargando" aria-live="polite">
+
+      <p *ngIf="cargando" class="vd-cargando">Consultando…</p>
+
+      <p *ngIf="errorRed" class="vd-error">{{ errorRed }}</p>
+
+      <ng-container *ngIf="resultado">
+        <div class="vd-estado" [ngClass]="'estado-' + resultado.estado">
+          <span class="vd-icono" aria-hidden="true">{{ resultado.valido ? '✓' : '!' }}</span>
+          <h2>{{ titulo }}</h2>
+        </div>
+
+        <dl *ngIf="resultado.tipo" class="vd-datos">
+          <div><dt>Tipo</dt><dd>{{ resultado.tipo }}</dd></div>
+          <div><dt>Emitido por</dt><dd>{{ resultado.emitido_por }}</dd></div>
+          <div><dt>Fecha de emisión</dt><dd>{{ fechaLegible(resultado.fecha_emision) }}</dd></div>
+          <div><dt>Estudiante</dt><dd>{{ resultado.estudiante }}</dd></div>
+        </dl>
+
+        <p class="vd-mensaje" *ngIf="mensaje">{{ mensaje }}</p>
+
+        <p class="vd-nota">
+          Solo se muestran datos de verificación. Si el documento fue anulado o modificado,
+          aparecerá como no válido.
+        </p>
+      </ng-container>
+
+    </section>
+
+  </main>
+</div>

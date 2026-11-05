@@ -1,0 +1,481 @@
+<div class="reportes">
+
+
+  <div class="reportes-layout">
+    <main class="reportes-main">
+
+      <div class="reportes-estado reportes-estado-carga" *ngIf="reportesCargando" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        Cargando reporte…
+      </div>
+
+      <div class="reportes-estado reportes-estado-error" *ngIf="reportesError && !reportesCargando" role="alert">
+        <span class="material-symbols-outlined">error</span>
+        <p>{{ reportesError }}</p>
+        <button type="button" class="btn-reporte btn-reporte-primario" (click)="reintentar.emit()">
+          <span class="material-symbols-outlined">refresh</span> Reintentar
+        </button>
+      </div>
+
+      <ng-container *ngIf="!reportesCargando && !reportesError && reportesResumen">
+
+        <!-- VISTA GENERAL (los canvas de Chart.js viven en el DOM mientras haya
+             resumen: se oculta con [hidden], no con *ngIf, para no destruir y
+             recrear los gráficos al cambiar de pestaña) -->
+        <section class="vista-general" [hidden]="reportesTabActiva !== 'general'">
+          <div class="kpi-grid">
+            <div class="kpi-card" *ngFor="let k of kpisFilas">
+              <span class="kpi-icono" [ngClass]="tonosKpi[k.clave]">
+                <span class="material-symbols-outlined">{{ iconosKpi[k.clave] }}</span>
+              </span>
+              <div class="kpi-cuerpo">
+                <div class="kpi-etiqueta">{{ k.etiqueta }}</div>
+                <div class="kpi-valor">{{ fmt(k.valor) }}</div>
+                <div class="kpi-variacion" *ngIf="k.variacion !== null"
+                  [class.positiva]="k.clave !== 'canceladas' ? k.variacion >= 0 : k.variacion <= 0"
+                  [class.negativa]="k.clave !== 'canceladas' ? k.variacion < 0 : k.variacion > 0">
+                  <span class="material-symbols-outlined">{{ k.variacion >= 0 ? 'arrow_upward' : 'arrow_downward' }}</span>
+                  {{ k.variacion > 0 ? '+' : '' }}{{ k.variacion }}% vs. período anterior
+                </div>
+                <div class="kpi-variacion sin-datos" *ngIf="k.variacion === null">Sin datos comparables</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="reportes-estado reportes-estado-vacio" *ngIf="sinDatosGeneral">
+            <span class="material-symbols-outlined">inbox</span>
+            No hay datos para los filtros seleccionados.
+          </div>
+
+          <div class="graficos-grid" [hidden]="sinDatosGeneral">
+
+            <!-- Fila 1 -->
+            <div class="grafico-card col-5">
+              <h3>Evolución de atenciones</h3>
+              <p class="grafico-descripcion">Cantidad de atenciones por semana en el período seleccionado.</p>
+              <div class="chart-wrap"><canvas #chartEvolucionRef></canvas></div>
+            </div>
+
+            <div class="grafico-card col-3">
+              <h3>Atenciones por especialidad</h3>
+              <p class="grafico-descripcion">Solo citas completadas (cita ≠ atención).</p>
+              <ng-container *ngIf="especialidadesDona.length; else sinBarras">
+                <div class="dona-wrap">
+                  <canvas #chartEspecialidadRef></canvas>
+                  <div class="dona-centro"><strong>{{ fmt(totalEspecialidades) }}</strong><span>Total</span></div>
+                </div>
+                <ul class="dona-leyenda">
+                  <li *ngFor="let f of especialidadesDona">
+                    <span class="punto" [style.background]="f.color"></span>
+                    <span class="dona-nombre">{{ f.nombre }}</span>
+                    <span class="dona-valor">{{ fmt(f.cantidad) }} <em>({{ f.pct }}%)</em></span>
+                  </li>
+                </ul>
+              </ng-container>
+            </div>
+
+            <div class="grafico-card col-4">
+              <h3>Demanda por carrera</h3>
+              <p class="grafico-descripcion">Total de citas del período (todos los estados).</p>
+              <ng-container *ngIf="porCarrera.length; else sinBarras">
+                <div class="barra-fila" *ngFor="let c of porCarrera">
+                  <span class="barra-etiqueta" [title]="c.carrera">{{ c.carrera }}</span>
+                  <div class="barra-track"><div class="barra-fill barra-fill-alt" [style.width.%]="anchoBarra(c.cantidad, porCarrera)"></div></div>
+                  <span class="barra-valor">{{ fmt(c.cantidad) }}</span>
+                </div>
+              </ng-container>
+            </div>
+
+            <!-- Fila 2 -->
+            <div class="grafico-card col-5">
+              <h3>Sobrecupos por especialidad</h3>
+              <p class="grafico-descripcion">Cantidad de sobrecupos registrados en el período.</p>
+              <div class="chart-wrap chart-wrap-bajo" [hidden]="!sobrecuposPorEspecialidad.length"><canvas #chartSobrecuposRef></canvas></div>
+              <p class="reportes-estado reportes-estado-vacio reportes-estado-vacio-mini" *ngIf="!sobrecuposPorEspecialidad.length">
+                <span class="material-symbols-outlined">inbox</span> Sin sobrecupos en el período.
+              </p>
+            </div>
+
+            <div class="grafico-card col-3">
+              <h3>Cancelaciones por origen</h3>
+              <p class="grafico-descripcion">Quién canceló la cita.</p>
+              <ng-container *ngIf="cancelacionesDona.length; else sinBarras">
+                <div class="dona-wrap">
+                  <canvas #chartCancelacionesRef></canvas>
+                  <div class="dona-centro"><strong>{{ fmt(cancelaciones.total) }}</strong><span>Total</span></div>
+                </div>
+                <ul class="dona-leyenda">
+                  <li *ngFor="let f of cancelacionesDona">
+                    <span class="punto" [style.background]="f.color"></span>
+                    <span class="dona-nombre">{{ f.nombre }}</span>
+                    <span class="dona-valor">{{ fmt(f.cantidad) }} <em>({{ f.pct }}%)</em></span>
+                  </li>
+                </ul>
+              </ng-container>
+            </div>
+
+            <div class="grafico-card col-4">
+              <h3>Profesionales más solicitados</h3>
+              <p class="grafico-descripcion">Top 5 según número de atenciones.</p>
+              <ol class="ranking" *ngIf="topProfesionales.length; else sinBarras">
+                <li *ngFor="let p of topProfesionales; let i = index">
+                  <span class="ranking-pos">{{ i + 1 }}</span>
+                  <span class="ranking-avatar"
+                    [style.background]="colorProfesional(p.profesional_id) + '26'"
+                    [style.color]="colorProfesional(p.profesional_id)">{{ inicialesProfesional(p.profesional) }}</span>
+                  <span class="ranking-datos">
+                    <strong>{{ p.profesional }}</strong>
+                    <small>{{ p.especialidad }}</small>
+                  </span>
+                  <span class="ranking-valor">{{ fmt(p.atenciones) }}</span>
+                </li>
+              </ol>
+            </div>
+
+          </div>
+
+          <div class="tabla-card" [hidden]="sinDatosGeneral">
+            <div class="tabla-cabecera">
+              <div>
+                <h3>Últimas atenciones</h3>
+                <p class="grafico-descripcion">Información administrativa autorizada — sin datos clínicos.</p>
+              </div>
+              <button type="button" class="enlace-ver-todas" (click)="irAHistorial.emit()">
+                Ver todas <span class="material-symbols-outlined">arrow_forward</span>
+              </button>
+            </div>
+            <ng-container *ngTemplateOutlet="tablaAtenciones; context: { $implicit: ultimasAtenciones }"></ng-container>
+          </div>
+        </section>
+
+        <!-- CITAS -->
+        <section *ngIf="reportesTabActiva === 'citas'">
+          <div class="kpi-grid kpi-grid-citas" *ngIf="!sinDatosCitas">
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ citasPorEstado.pendiente }}</div><div class="kpi-etiqueta">Pendientes</div></div></div>
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ citasPorEstado.completada }}</div><div class="kpi-etiqueta">Completadas (atenciones)</div></div></div>
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ citasPorEstado.cancelada }}</div><div class="kpi-etiqueta">Canceladas</div></div></div>
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ citasPorEstado.inasistencia }}</div><div class="kpi-etiqueta">Inasistencias</div></div></div>
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ reportesResumen.kpis.urgentes.valor }}</div><div class="kpi-etiqueta">Urgentes</div></div></div>
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ reportesResumen.kpis.sobrecupos.valor }}</div><div class="kpi-etiqueta">Sobrecupos</div></div></div>
+          </div>
+          <div class="reportes-estado reportes-estado-vacio" *ngIf="sinDatosCitas">
+            <span class="material-symbols-outlined">inbox</span> No hay datos para los filtros seleccionados.
+          </div>
+          <div class="grafico-card" *ngIf="!sinDatosCitas">
+            <h3>Citas por estado</h3>
+            <p class="grafico-descripcion">Cómo se reparten las {{ fmt(totalCitas) }} citas del período.</p>
+            <div class="barra-fila" *ngFor="let f of citasEstadoFilas">
+              <span class="barra-etiqueta" [title]="f.nombre + ' (' + f.pct + '%)'">{{ f.nombre }} · {{ f.pct }}%</span>
+              <div class="barra-track"><div class="barra-fill" [ngClass]="f.clase" [style.width.%]="anchoBarra(f.cantidad, citasEstadoFilas)"></div></div>
+              <span class="barra-valor">{{ fmt(f.cantidad) }}</span>
+            </div>
+          </div>
+          <div class="tabla-card" *ngIf="!sinDatosCitas">
+            <h3>Atenciones completadas del período</h3>
+            <p class="grafico-descripcion">
+              El filtro "Estado" solo aplica a esta tabla: los KPI de arriba usan siempre la
+              definición fija de cada estado (una cita solo es atención cuando está completada).
+            </p>
+            <ng-container *ngTemplateOutlet="tablaAtenciones; context: { $implicit: ultimasAtenciones }"></ng-container>
+          </div>
+        </section>
+
+        <!-- SOBRECUPOS -->
+        <section *ngIf="reportesTabActiva === 'sobrecupos'">
+          <div class="kpi-grid kpi-grid-1" *ngIf="!sinDatosSobrecupos">
+            <div class="kpi-card">
+              <span class="kpi-icono tono-violeta"><span class="material-symbols-outlined">groups</span></span>
+              <div class="kpi-cuerpo">
+                <div class="kpi-etiqueta">Sobrecupos en el período</div>
+                <div class="kpi-valor">{{ reportesResumen.kpis.sobrecupos.valor }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="reportes-estado reportes-estado-vacio" *ngIf="sinDatosSobrecupos">
+            <span class="material-symbols-outlined">inbox</span> No hay datos para los filtros seleccionados.
+          </div>
+          <div class="grafico-card" *ngIf="!sinDatosSobrecupos">
+            <h3>Sobrecupos por profesional</h3>
+            <p class="grafico-descripcion">Entre los 10 profesionales con más atenciones del período.</p>
+            <ng-container *ngIf="sobrecuposPorProfesional.length; else sinBarras">
+              <div class="barra-fila" *ngFor="let e of sobrecuposPorProfesional">
+                <span class="barra-etiqueta" [title]="e.nombre">{{ e.nombre }}</span>
+                <div class="barra-track"><div class="barra-fill" [style.width.%]="anchoBarra(e.cantidad, sobrecuposPorProfesional)"></div></div>
+                <span class="barra-valor">{{ e.cantidad }}</span>
+              </div>
+            </ng-container>
+          </div>
+          <div class="tabla-card" *ngIf="!sinDatosSobrecupos">
+            <h3>Últimos sobrecupos</h3>
+            <p class="grafico-descripcion">Entre las últimas atenciones del período.</p>
+            <ng-container *ngTemplateOutlet="tablaAtenciones; context: { $implicit: sobrecuposRecientes }"></ng-container>
+          </div>
+        </section>
+
+        <!-- CANCELACIONES -->
+        <section *ngIf="reportesTabActiva === 'cancelaciones'">
+          <div class="kpi-grid kpi-grid-citas" *ngIf="!sinDatosCancelaciones">
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ cancelaciones.total }}</div><div class="kpi-etiqueta">Cancelaciones en el período</div></div></div>
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ tasaCancelacion }}%</div><div class="kpi-etiqueta">De las citas del período</div></div></div>
+            <div class="kpi-card kpi-card-simple" *ngFor="let o of cancelaciones.por_origen"><div class="kpi-cuerpo"><div class="kpi-valor">{{ o.cantidad }}</div><div class="kpi-etiqueta">{{ etiquetaOrigenCancelacion(o.origen) }}</div></div></div>
+          </div>
+          <div class="reportes-estado reportes-estado-vacio" *ngIf="sinDatosCancelaciones">
+            <span class="material-symbols-outlined">inbox</span> No hay datos para los filtros seleccionados.
+          </div>
+          <div class="grafico-card" *ngIf="!sinDatosCancelaciones">
+            <h3>Cancelaciones por profesional</h3>
+            <p class="grafico-descripcion">Entre los 10 profesionales con más atenciones del período.</p>
+            <ng-container *ngIf="cancelacionesPorProfesional.length; else sinBarras">
+              <div class="barra-fila" *ngFor="let e of cancelacionesPorProfesional">
+                <span class="barra-etiqueta" [title]="e.nombre">{{ e.nombre }}</span>
+                <div class="barra-track"><div class="barra-fill barra-fill-alerta" [style.width.%]="anchoBarra(e.cantidad, cancelacionesPorProfesional)"></div></div>
+                <span class="barra-valor">{{ e.cantidad }}</span>
+              </div>
+            </ng-container>
+          </div>
+          <div class="tabla-card" *ngIf="!sinDatosCancelaciones">
+            <h3>Últimas cancelaciones</h3>
+            <p class="grafico-descripcion">Entre las últimas atenciones del período.</p>
+            <ng-container *ngTemplateOutlet="tablaAtenciones; context: { $implicit: canceladasRecientes }"></ng-container>
+          </div>
+        </section>
+
+        <!-- DEMANDA -->
+        <section *ngIf="reportesTabActiva === 'demanda'">
+          <div class="reportes-estado reportes-estado-vacio" *ngIf="sinDatosDemanda">
+            <span class="material-symbols-outlined">inbox</span> No hay datos para los filtros seleccionados.
+          </div>
+          <div class="graficos-grid" *ngIf="!sinDatosDemanda">
+            <div class="grafico-card col-6">
+              <h3>Demanda por especialidad</h3>
+              <p class="grafico-descripcion">Todas las especialidades (solo citas completadas).</p>
+              <ng-container *ngIf="demandaPorEspecialidad.length; else sinBarras">
+                <div class="barra-fila" *ngFor="let e of demandaPorEspecialidad">
+                  <span class="barra-etiqueta" [title]="e.nombre + ' (' + e.pct + '%)'">{{ e.nombre }}</span>
+                  <div class="barra-track"><div class="barra-fill" [style.width.%]="anchoBarra(e.cantidad, demandaPorEspecialidad)"></div></div>
+                  <span class="barra-valor">{{ fmt(e.cantidad) }}</span>
+                </div>
+              </ng-container>
+            </div>
+            <div class="grafico-card col-6">
+              <h3>Demanda por franja horaria</h3>
+              <p class="grafico-descripcion">Citas del período según la hora.</p>
+              <ng-container *ngIf="jornadaPorHora.length; else sinBarras">
+                <div class="barra-fila" *ngFor="let h of jornadaPorHora">
+                  <span class="barra-etiqueta">{{ h.hora }}</span>
+                  <div class="barra-track"><div class="barra-fill barra-fill-alt" [style.width.%]="anchoBarra(h.cantidad, jornadaPorHora)"></div></div>
+                  <span class="barra-valor">{{ fmt(h.cantidad) }}</span>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+        </section>
+
+        <!-- PROFESIONALES -->
+        <section *ngIf="reportesTabActiva === 'profesionales'">
+          <div class="reportes-estado reportes-estado-vacio" *ngIf="sinDatosProfesionales">
+            <span class="material-symbols-outlined">inbox</span> No hay datos para los filtros seleccionados.
+          </div>
+          <div class="tabla-card" *ngIf="!sinDatosProfesionales">
+            <h3>Indicadores por profesional (top 10 por atenciones)</h3>
+            <div class="tabla-scroll">
+              <table class="tabla-reporte">
+                <thead>
+                  <tr>
+                    <th>Profesional</th><th>Especialidad</th><th>Atenciones</th><th>Citas</th>
+                    <th>Canceladas</th><th>Inasistencias</th><th>Sobrecupos</th><th>Urgentes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let p of profesionalesResumen">
+                    <td>{{ p.profesional }}</td><td>{{ p.especialidad }}</td>
+                    <td>{{ p.atenciones }}</td><td>{{ p.citas }}</td>
+                    <td>{{ p.canceladas }}</td><td>{{ p.inasistencias }}</td>
+                    <td>{{ p.sobrecupos }}</td><td>{{ p.urgentes }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- JORNADA Y ASISTENCIA -->
+        <section *ngIf="reportesTabActiva === 'jornada'">
+          <div class="reportes-estado reportes-estado-vacio" *ngIf="sinDatosJornada">
+            <span class="material-symbols-outlined">inbox</span> No hay datos para los filtros seleccionados.
+          </div>
+          <div class="kpi-grid kpi-grid-citas" *ngIf="!sinDatosJornada">
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ fmt(totalInasistencias) }}</div><div class="kpi-etiqueta">Inasistencias</div></div></div>
+            <div class="kpi-card kpi-card-simple"><div class="kpi-cuerpo"><div class="kpi-valor">{{ tasaInasistencia }}%</div><div class="kpi-etiqueta">De las citas del período</div></div></div>
+          </div>
+          <div class="graficos-grid" *ngIf="!sinDatosJornada">
+            <div class="grafico-card col-6">
+              <h3>Atenciones por día de la semana</h3>
+              <div class="barra-fila" *ngFor="let d of jornadaPorDia">
+                <span class="barra-etiqueta">{{ d.dia }}</span>
+                <div class="barra-track"><div class="barra-fill" [style.width.%]="anchoBarra(d.cantidad, jornadaPorDia)"></div></div>
+                <span class="barra-valor">{{ fmt(d.cantidad) }}</span>
+              </div>
+            </div>
+            <div class="grafico-card col-6">
+              <h3>Evolución de inasistencias</h3>
+              <ng-container *ngIf="jornadaInasistencias.length; else sinBarras">
+                <div class="barra-fila" *ngFor="let f of jornadaInasistencias">
+                  <span class="barra-etiqueta">{{ f.fecha }}</span>
+                  <div class="barra-track"><div class="barra-fill barra-fill-alerta" [style.width.%]="anchoBarra(f.cantidad, jornadaInasistencias)"></div></div>
+                  <span class="barra-valor">{{ fmt(f.cantidad) }}</span>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+          <p class="reportes-pendiente" *ngIf="!sinDatosJornada">
+            <span class="material-symbols-outlined">info</span>
+            Pendiente: atrasos, salidas anticipadas y horas de jornada trabajadas. SESAES no
+            registra hoy esa información, por lo que no se muestra (no se inventa).
+          </p>
+        </section>
+
+      </ng-container>
+    </main>
+
+    <aside class="reportes-panel">
+      <div class="panel-bloque">
+        <h4>Tipo de análisis</h4>
+        <div class="panel-tipos">
+          <button type="button" *ngFor="let tab of tabs" class="panel-tipo"
+            [class.activo]="reportesTabActiva === tab.id" (click)="seleccionarTab(tab.id)">
+            <span class="material-symbols-outlined">{{ iconosTab[tab.id] }}</span>
+            {{ tab.id === 'general' ? 'Todos' : tab.etiqueta }}
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-bloque">
+        <h4>Filtros</h4>
+        <div class="panel-campo">
+          Período
+          <div class="panel-rango">
+            <input type="date" aria-label="Desde" [ngModel]="reportesFiltroFechaInicio" (ngModelChange)="reportesFiltroFechaInicioChange.emit($event)">
+            <input type="date" aria-label="Hasta" [ngModel]="reportesFiltroFechaFin" (ngModelChange)="reportesFiltroFechaFinChange.emit($event)">
+          </div>
+        </div>
+        <label class="panel-campo">
+          Especialidad
+          <select [ngModel]="reportesFiltroEspecialidad" (ngModelChange)="reportesFiltroEspecialidadChange.emit($event)">
+            <option value="">Todas</option>
+            <option *ngFor="let esp of especialidades" [value]="esp">{{ esp }}</option>
+          </select>
+        </label>
+        <label class="panel-campo">
+          Carrera
+          <input type="text" placeholder="Todas" [ngModel]="reportesFiltroCarrera" (ngModelChange)="reportesFiltroCarreraChange.emit($event)">
+        </label>
+        <label class="panel-campo">
+          Profesional
+          <select [ngModel]="reportesFiltroProfesionalId" (ngModelChange)="reportesFiltroProfesionalIdChange.emit($event)">
+            <option [ngValue]="''">Todos</option>
+            <option *ngFor="let p of listaProfesionales" [ngValue]="p.id">{{ p.nombre }}</option>
+          </select>
+        </label>
+        <label class="panel-campo">
+          Estado de cita
+          <select [ngModel]="reportesFiltroEstado" (ngModelChange)="reportesFiltroEstadoChange.emit($event)">
+            <option *ngFor="let o of opcionesEstado" [value]="o.value">{{ o.label }}</option>
+          </select>
+        </label>
+        <label class="panel-campo">
+          Prioridad
+          <select [ngModel]="reportesFiltroPrioridad" (ngModelChange)="reportesFiltroPrioridadChange.emit($event)">
+            <option *ngFor="let o of opcionesPrioridad" [value]="o.value">{{ o.label }}</option>
+          </select>
+        </label>
+        <div class="panel-acciones">
+          <button type="button" class="btn-reporte btn-reporte-primario" (click)="aplicarFiltros.emit()">
+            <span class="material-symbols-outlined">filter_alt</span> Aplicar
+          </button>
+          <button type="button" class="btn-reporte btn-reporte-secundario" (click)="limpiarFiltros.emit()">
+            <span class="material-symbols-outlined">restart_alt</span> Limpiar
+          </button>
+        </div>
+      </div>
+
+      <div class="panel-bloque">
+        <h4>Descargar reporte</h4>
+        <p class="panel-nota panel-nota-inicial">Selección: <strong>{{ etiquetaTabActiva }}</strong></p>
+        <div class="panel-descargas">
+          <button type="button" class="btn-reporte btn-reporte-secundario btn-descarga" (click)="descargarExcel()">
+            <span class="material-symbols-outlined">table_view</span> Excel
+          </button>
+          <button type="button" class="btn-reporte btn-reporte-secundario btn-descarga" (click)="descargarPdf()">
+            <span class="material-symbols-outlined">picture_as_pdf</span> PDF
+          </button>
+        </div>
+        <button type="button" class="btn-reporte btn-reporte-secundario btn-descarga btn-descarga-ancho" (click)="imprimirSeccion()">
+          <span class="material-symbols-outlined">print</span> Imprimir
+        </button>
+        <p class="panel-nota">
+          {{ reportesTabActiva === 'general'
+              ? 'Todos: descarga el reporte completo con los filtros aplicados.'
+              : 'Solo «' + etiquetaTabActiva + '». El PDF abre la vista de impresión: elige «Guardar como PDF».' }}
+        </p>
+
+        <ng-container *ngIf="puedeExportarCgr">
+          <div class="panel-separador"></div>
+          <p class="panel-nota">CGR: solo atenciones completadas y campos autorizados.</p>
+          <label class="panel-campo">
+            Año
+            <select [ngModel]="cgrAnio" (ngModelChange)="cgrAnioChange.emit($event)">
+              <option *ngFor="let a of cgrAniosDisponibles" [ngValue]="a">{{ a }}</option>
+            </select>
+          </label>
+          <label class="panel-campo">
+            Fecha fin
+            <input type="date" [ngModel]="cgrFechaFin" (ngModelChange)="cgrFechaFinChange.emit($event)">
+          </label>
+          <button type="button" class="btn-reporte btn-reporte-secundario btn-descarga btn-descarga-ancho" (click)="exportarCgr.emit()">
+            <span class="material-symbols-outlined">verified</span> Exportar CGR
+          </button>
+          <button type="button" class="btn-reporte btn-reporte-secundario btn-descarga btn-descarga-ancho" (click)="exportarAlumnos.emit()">
+            <span class="material-symbols-outlined">group</span> Listado alumnos CGR
+          </button>
+        </ng-container>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<ng-template #sinBarras>
+  <p class="reportes-estado reportes-estado-vacio reportes-estado-vacio-mini">
+    <span class="material-symbols-outlined">inbox</span> No hay datos para los filtros seleccionados.
+  </p>
+</ng-template>
+
+<ng-template #tablaAtenciones let-filas>
+  <div class="tabla-scroll" *ngIf="filas.length; else sinFilasTabla">
+    <table class="tabla-reporte">
+      <thead>
+        <tr><th>Fecha</th><th>Hora</th><th>Estudiante</th><th>Profesional</th><th>Especialidad</th><th>Prioridad</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let a of filas">
+          <td>{{ a.fecha }}</td>
+          <td>{{ a.hora }}</td>
+          <td>{{ a.estudiante }}</td>
+          <td>{{ a.profesional }}</td>
+          <td>{{ a.especialidad }}</td>
+          <td>
+            <span class="chip chip-urgente" *ngIf="a.urgente">Urgente</span>
+            <span class="chip chip-sobrecupo" *ngIf="a.sobrecupo">Sobrecupo</span>
+            <span *ngIf="!a.urgente && !a.sobrecupo">—</span>
+          </td>
+          <td><span class="estado-badge" [ngClass]="a.estado">{{ etiquetaEstadoCita(a.estado) }}</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ng-template #sinFilasTabla>
+    <p class="reportes-estado reportes-estado-vacio reportes-estado-vacio-mini">
+      <span class="material-symbols-outlined">inbox</span> No hay datos para los filtros seleccionados.
+    </p>
+  </ng-template>
+</ng-template>

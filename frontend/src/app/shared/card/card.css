@@ -1,0 +1,48 @@
+/**
+ * SESAES — Card (Fase 2.2)
+ *
+ * Todo color/borde/radio/sombra viene de tokens.css; dark mode es
+ * automático porque esas variables ya cambian bajo `.tema-oscuro`
+ * (definido globalmente en tokens.css, sin lógica propia aquí).
+ *
+ * Padding: la auditoría real encontró paddings entre ~16px y ~26px en
+ * `.card` / `.card-prof` y variantes (`.stat-card-prof`, etc.). No existe
+ * un token de padding específico de "card" en tokens.css, así que se
+ * usan los tokens de espaciado ya existentes más cercanos a lo auditado
+ * en vez de inventar uno nuevo: sm = --space-md (16px), que cubre el
+ * extremo inferior real; md = --space-lg (24px), que es el valor por
+ * defecto real más común (24px en `.card-prof`); lg = --space-xl (32px)
+ * queda como variante más generosa para composiciones futuras.
+ */
+
+:host {
+  display: block;
+}
+
+.card {
+  box-sizing: border-box;
+  width: auto;
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.card--padding-sm {
+  padding: var(--space-md);
+}
+
+.card--padding-md {
+  padding: var(--space-lg);
+}
+
+.card--padding-lg {
+  padding: var(--space-xl);
+}
+
+.card--default {
+  box-shadow: var(--shadow-sm);
+}
+
+.card--elevated {
+  box-shadow: var(--shadow-md);
+}

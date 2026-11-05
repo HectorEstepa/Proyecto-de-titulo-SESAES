@@ -1,0 +1,24 @@
+.cc-estado { color: var(--admin-text-secondary, #64748b); font-size: 14px; margin: 12px 0; }
+.cc-ok { color: #047857; font-size: 13px; font-weight: 600; margin: 10px 0 0; }
+.cc-error { color: #b91c1c; font-size: 13px; font-weight: 600; margin: 10px 0 0; }
+.cc-link { background: none; border: none; color: var(--admin-primary, #0d9488); font-weight: 700; text-decoration: underline; cursor: pointer; }
+
+.cc-fila { border: 1px solid var(--admin-border, #e2e8f0); border-radius: 12px; padding: 16px 18px; margin-top: 14px; background: var(--admin-surface, #fff); }
+.cc-fila-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cc-fila-cab h4 { margin: 0; font-size: 16px; color: var(--admin-text, #0f172a); }
+.cc-fila-cab span { font-size: 12px; color: var(--admin-text-secondary, #64748b); }
+
+.cc-guardar { background: var(--admin-primary, #0d9488); color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-weight: 600; cursor: pointer; }
+.cc-guardar:hover:not(:disabled) { background: var(--admin-primary-hover, #0f766e); }
+.cc-guardar:disabled { opacity: .5; cursor: not-allowed; }
+
+.cc-lista { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px 16px; }
+.cc-lista label { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.cc-lista label:hover { background: var(--admin-background, #f8fafc); }
+.cc-lista input { margin-top: 3px; accent-color: var(--admin-primary, #0d9488); width: 16px; height: 16px; }
+.cc-texto { display: flex; flex-direction: column; flex: 1; }
+.cc-texto strong { font-size: 14px; color: var(--admin-text, #0f172a); }
+.cc-texto small { font-size: 12px; color: var(--admin-text-secondary, #64748b); }
+.cc-inactiva label { cursor: not-allowed; opacity: .6; }
+.cc-pronto { font-size: 11px; font-weight: 600; color: var(--admin-text-secondary, #64748b); background: var(--admin-background, #f1f5f9); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.cc-fabrica { font-size: 11px; font-weight: 600; color: var(--admin-primary, #0f766e); background: rgba(13,148,136,.12); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }

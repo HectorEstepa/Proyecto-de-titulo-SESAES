@@ -1,0 +1,69 @@
+/**
+ * SESAES — Tabs (Fase 2.4)
+ *
+ * Reproduce el patrón visual real ya usado en los 3 dashboards
+ * (`.tabs-ayuda`/`.tab-ayuda`, `.tabs-prof`/`.tab-prof`,
+ * `.config-tabs`/`.config-tab`): fila con borde inferior sutil y un
+ * indicador activo también con borde inferior, ahora con tokens en vez
+ * de hex. Todo color/borde viene de tokens.css, así que dark mode es
+ * automático.
+ */
+
+:host {
+  display: block;
+}
+
+.app-tabs {
+  display: flex;
+  gap: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app-tabs__tab {
+  box-sizing: border-box;
+  position: relative;
+  padding: var(--space-sm) var(--space-2xs);
+  border: none;
+  background: none;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.app-tabs__tab:hover {
+  color: var(--text-primary);
+}
+
+.app-tabs__tab:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.app-tabs__tab--active {
+  color: var(--text-primary);
+}
+
+.app-tabs__tab--active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-brand);
+}
+
+@media (max-width: 640px) {
+  .app-tabs {
+    gap: var(--space-sm);
+    overflow-x: auto;
+  }
+
+  .app-tabs__tab {
+    flex-shrink: 0;
+  }
+}

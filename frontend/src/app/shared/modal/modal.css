@@ -1,0 +1,131 @@
+/**
+ * SESAES — Modal (Fase 2.4)
+ *
+ * El `<dialog>` nativo centra su propio contenido y provee `::backdrop`
+ * automáticamente; no se recrea overlay manual. Todo color/borde/radio/
+ * sombra viene de tokens.css, así que dark mode es automático (mismas
+ * variables cambian bajo `.tema-oscuro`, sin lógica propia aquí).
+ *
+ * Tamaños (auditoría real Fase 2.4): los modales existentes usan
+ * mayormente ~460px (`.modal-acciones`) y ~480-520px
+ * (`.modal`, `.modal-prof`, `.modal-est`). Por eso `sm` y `md` cubren
+ * ese rango real. Un único caso auditado usa 620px inline
+ * (`gestionarPlantillaAbierto` en dashboard-profesional); es un outlier
+ * aislado entre ~14 modales reales y no evidencia un tercer tamaño de
+ * sistema, así que no se agrega `lg`: ese contenido debe adaptarse a
+ * `md` (que ya maneja overflow-y si el contenido excede el alto).
+ */
+
+.modal-dialog {
+  box-sizing: border-box;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-card);
+  box-shadow: var(--shadow-lg);
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
+
+  width: 100%;
+  max-width: 90vw;
+  max-height: 90vh;
+  margin: auto;
+}
+
+.modal-dialog::backdrop {
+  background-color: var(--surface-overlay);
+}
+
+.modal-dialog--sm {
+  max-width: min(460px, 90vw);
+}
+
+.modal-dialog--md {
+  max-width: min(520px, 90vw);
+}
+
+.modal-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  padding: var(--space-lg);
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  line-height: var(--line-height-tight);
+}
+
+.modal-close {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background-color: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.modal-close:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.modal-close svg {
+  width: var(--icon-size-button);
+  height: var(--icon-size-button);
+  stroke-width: var(--icon-stroke-width);
+}
+
+.modal-body {
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.modal-footer:empty {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .modal-dialog {
+    max-width: 100vw;
+    width: 100%;
+  }
+
+  .modal-panel {
+    padding: var(--space-md);
+  }
+}
