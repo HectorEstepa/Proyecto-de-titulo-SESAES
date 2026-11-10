@@ -83,9 +83,12 @@ export class AdminHorarioComponent implements DoCheck {
   // siendo la autoridad final (ownership + permisos).
   @Input() modoProfesional = false;
 
-  // La agenda del Profesional de Salud solo muestra de lunes a viernes:
-  // el centro no atiende fines de semana y su horario semanal se solicita
-  // únicamente para esos cinco días. El panel Admin conserva los 7 días.
+  // La agenda solo muestra de lunes a viernes: el centro no atiende fines
+  // de semana, así que ni el panel Admin ni la agenda del Profesional de
+  // Salud pintan columnas de sábado/domingo. El padre lo activa
+  // explícitamente (dashboard-admin.html y dashboard-profesional.html);
+  // el valor por defecto se mantiene en false para no alterar a otros
+  // consumidores del componente.
   @Input() soloDiasLaborables = false;
 
   // Etiqueta corta del horario vigente ("Horario predeterminado",

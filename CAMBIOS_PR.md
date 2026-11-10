@@ -11,6 +11,14 @@ Sobre el `main` actual. No cambia ninguna tabla existente y no necesita migracio
 - La agenda semanal del profesional muestra los bloques (colacion y horas fuera de bloque aparecen bloqueadas; una cita ya agendada se sigue viendo).
 - Se quito del dashboard del profesional la solicitud de jornada y la de horario de almuerzo; quedan solo los bloques. Los endpoints del backend para jornada y colacion se mantienen, asi las solicitudes antiguas siguen pudiendo aprobarse.
 
+## Ajustes de la agenda del Administrador (ago-2026)
+Tres correcciones sobre la grilla semanal del panel Admin, sin tocar backend ni la agenda del Profesional:
+- **Fines de semana ocultos**: `dashboard-admin.html` activa `[soloDiasLaborables]="true"` en `app-admin-horario`. El input ya existía y el Profesional ya lo usaba; su valor por defecto sigue en `false`, así que ningún otro consumidor del componente cambia.
+- **Horario real de atención**: `horasGrilla` en `dashboard-admin.ts` se genera desde el horario institucional (Lun-Jue 09:00-17:30, Vie 09:00-16:30, el mismo de `backend/app/reglas_horario.py`) en vez del rango fijo 08:00-18:00, respetando la duración de atención del profesional. El rótulo del período (`semanaLabel`) termina el viernes. La semana interna sigue siendo de lunes a domingo: es el ancla de la vista Día y lo que se consulta a backend (sábado y domingo vuelven como `fin_de_semana` y no se pintan).
+- **Bloque fantasma de un sobrecupo cancelado**: al cancelar una cita (y también al marcar inasistencia) se vuelve a llamar a `cargarHorarioProfesional()`, que recarga citas y disponibilidad. Antes solo se cambiaba el estado de la cita en memoria, así que la celda conservaba el aspecto de ocupada sin ninguna cita encima; ahora recupera el estado real de backend (disponible, colación o fuera de jornada).
+
+Verificación: `ng build` compila. Las 4 pruebas nuevas viven en `frontend/src/app/dashboard-admin/dashboard-admin-agenda-dias-habiles.spec.ts` (archivo aparte, porque `dashboard-admin.spec.ts` sigue sin compilar por el fallo preexistente de `opcionesHoraSobrecupo`); se ejecutaron con el bloque S1-S7 de ese spec desactivado temporalmente y se dejó tal cual estaba.
+
 ## Base de datos
 Dos tablas nuevas, creadas solas por `init_db()` (`create_all`) al arrancar el backend:
 - `bloque_horario_semanal`: la agenda aprobada.

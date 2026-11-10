@@ -828,6 +828,10 @@ toggleSidebarMovil(): void {
         this.proximasCitas = this.proximasCitas.filter(c => c.id !== cita.id);
         const citaH = this.citasHorario.find(c => c.id === cita.id);
         if (citaH) citaH.estado = 'inasistencia';
+        // La inasistencia libera el slot igual que una cancelación: se
+        // recarga la agenda para que la celda no conserve el estado de
+        // disponibilidad calculado cuando la cita todavía ocupaba la hora.
+        this.cargarHorarioProfesional();
         this.mensajeExito = 'Inasistencia registrada.';
         setTimeout(() => this.mensajeExito = '', 3000);
         this.cdr.detectChanges();
@@ -850,6 +854,18 @@ toggleSidebarMovil(): void {
         // de Horario siga mostrando la cita con su estado real en vez de hacerla desaparecer.
         const citaH = this.citasHorario.find(c => c.id === cita.id);
         if (citaH) citaH.estado = 'cancelada';
+
+        // Un sobrecupo cancelado deja de existir como reserva. La grilla
+        // no puede quedarse con la disponibilidad que se calculó mientras
+        // el sobrecupo ocupaba la hora: esa celda conservaría el aspecto
+        // de bloque ocupado aunque ya no tenga ninguna cita (bloque
+        // fantasma). Se vuelve a consultar citas + disponibilidad, la
+        // misma fuente de verdad que se usa al crear una cita, para que
+        // el slot recupere su estado real (disponible, colación o fuera
+        // de horario) o deje de existir si la hora ya no está en la
+        // grilla.
+        this.cargarHorarioProfesional();
+
         this.mensajeExito = 'Cita cancelada. El estudiante fue notificado.';
         setTimeout(() => this.mensajeExito = '', 3000);
         // AdminCitasComponent ya no recalcula en cada ciclo de detección de
@@ -1058,22 +1074,34 @@ toggleSidebarMovil(): void {
     this.getResumenDia(fecha);
   modalCitaAbierto               = false;
 
-  // Horario general de atención del centro — la grilla siempre muestra el
-  // día completo, sin importar el horario particular de cada profesional.
-  // Las horas fuera del horario propio del profesional se muestran en gris
-  // (ver getBloqueEstado) pero el admin puede forzar una cita ahí igual,
-  // quedando marcada como "sobrecupo".
-  private readonly CENTRO_HORA_INICIO = '08:00';
-  private readonly CENTRO_HORA_FIN    = '18:00';
+  // Horario institucional de atención del centro, por día de la semana
+  // (0 = lunes … 4 = viernes). Es el mismo rango que valida backend en
+  // app/reglas_horario.py y que ya muestra la agenda del Profesional de
+  // Salud: lunes a jueves 09:00–17:30 y viernes 09:00–16:30; sábado y
+  // domingo no tienen atención. Antes la grilla estaba fija a 08:00–18:00,
+  // un rango que ya no corresponde a la atención real del centro.
+  private readonly HORARIO_INSTITUCIONAL: Record<number, [string, string]> = {
+    0: ['09:00', '17:30'],
+    1: ['09:00', '17:30'],
+    2: ['09:00', '17:30'],
+    3: ['09:00', '17:30'],
+    4: ['09:00', '16:30']
+  };
 
+  // La grilla es UNA sola para toda la semana, así que abarca desde la
+  // apertura más temprana hasta el cierre más tardío del horario
+  // institucional. Los tramos que en un día puntual quedan fuera de su
+  // jornada (p. ej. el viernes después de las 16:30) los informa backend
+  // como 'fuera_de_jornada' y se pintan en gris; el admin puede forzar
+  // ahí una cita igual, que queda marcada como sobrecupo.
   get horasGrilla(): string[] {
     const prof = this.profesionales.find(p => String(p.id) === String(this.filtroProfesionalId));
     const duracion = prof?.duracion_min || 60;
-    const [hIni, mIni] = this.CENTRO_HORA_INICIO.split(':').map(Number);
-    const [hFin, mFin] = this.CENTRO_HORA_FIN.split(':').map(Number);
+    const rangos = Object.values(this.HORARIO_INSTITUCIONAL);
+    const inicioMin = Math.min(...rangos.map(([inicio]) => this.minutosDeHora(inicio)));
+    const finMin = Math.max(...rangos.map(([, fin]) => this.minutosDeHora(fin)));
     const horas: string[] = [];
-    let minutos = hIni * 60 + mIni;
-    const finMin = hFin * 60 + mFin;
+    let minutos = inicioMin;
     while (minutos < finMin) {
       const h = Math.floor(minutos / 60).toString().padStart(2,'0');
       const m = (minutos % 60).toString().padStart(2,'0');
@@ -1081,6 +1109,11 @@ toggleSidebarMovil(): void {
       minutos += duracion;
     }
     return horas;
+  }
+
+  private minutosDeHora(hora: string): number {
+    const [h, m] = String(hora ?? '').split(':').map(Number);
+    return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
   }
 
   // Profesional actualmente seleccionado en el filtro de Horario
@@ -1257,8 +1290,10 @@ toggleSidebarMovil(): void {
     }
 
     const mesesN = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    // La grilla solo pinta lunes a viernes: el rótulo del período termina
+    // el viernes, no el domingo.
     const inicio = this.parseDateStrLocal(this.semanaActual[0].fecha);
-    const fin = this.parseDateStrLocal(this.semanaActual[6].fecha);
+    const fin = this.parseDateStrLocal(this.semanaActual[4].fecha);
     const mesInicio = mesesN[inicio.getMonth()];
     const mesFin = mesesN[fin.getMonth()];
 
@@ -1311,6 +1346,12 @@ toggleSidebarMovil(): void {
     if (this.vistaAgenda === 'mes') {
       return { inicio: this.mesInicioAgenda, fin: this.mesFinAgenda };
     }
+    // La semana interna sigue siendo de lunes a domingo: es lo que usan
+    // el ancla de la vista Día y la navegación al volver a Semana. La
+    // grilla oculta sábado y domingo (ver soloDiasLaborables) y el rótulo
+    // del período termina el viernes, pero el rango consultado a backend
+    // no cambia: esos dos días vuelven como 'fin_de_semana' y simplemente
+    // no se pintan.
     return {
       inicio: String(this.semanaActual[0]?.fecha ?? ''),
       fin: String(this.semanaActual[this.semanaActual.length - 1]?.fecha ?? '')
@@ -1496,13 +1537,15 @@ toggleSidebarMovil(): void {
   }
 
   // ¿La hora indicada cae fuera del horario declarado por el profesional?
-  // (pero SÍ dentro del horario general del centro, por eso igual aparece
-  // en la grilla — solo que en gris, y solo agendable por el admin como sobrecupo)
+  // (pero SÍ dentro del horario institucional del centro, por eso igual
+  // aparece en la grilla — solo que en gris, y solo agendable por el admin
+  // como sobrecupo). Sin jornada propia aprobada rige el horario
+  // institucional más amplio (09:00–17:30).
   private esFueraDeHorarioProfesional(hora: string): boolean {
     const prof = this.profesionalActual;
     if (!prof) return false;
-    const inicio = prof.horario_inicio || this.CENTRO_HORA_INICIO;
-    const fin    = prof.horario_fin    || this.CENTRO_HORA_FIN;
+    const inicio = prof.horario_inicio || '09:00';
+    const fin    = prof.horario_fin    || '17:30';
     const h = hora.substring(0, 5);
     return h < inicio || h >= fin;
   }
@@ -2383,6 +2426,10 @@ toggleSidebarMovil(): void {
         if (this.estudianteFichaIdActual) {
           this.cargarFichaEstudiante(this.estudianteFichaIdActual, this.fichaEstudianteSeleccionado?.historial_pagina || 1);
         }
+        // Misma razón que en cancelarCitaAdmin(): si la cita cancelada era
+        // un sobrecupo, la grilla debe descartar la disponibilidad que se
+        // calculó con él para no dejar un bloque ocupado sin cita.
+        this.cargarHorarioProfesional();
         this.mensajeExito = 'Cita cancelada. El estudiante fue notificado.';
         setTimeout(() => this.mensajeExito = '', 3000);
         this.cdr.detectChanges();

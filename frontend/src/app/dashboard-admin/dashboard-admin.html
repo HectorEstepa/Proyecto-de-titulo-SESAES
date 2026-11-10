@@ -232,6 +232,7 @@
 <!-- ══ HORARIO ══ -->
       <app-admin-horario
         *ngIf="seccionActiva==='horario' && puedeAccederSeccion('horario')"
+        [soloDiasLaborables]="true"
         [puedeGestionarAgenda]="hasPermission('agenda.gestionar')"
         [solicitudesHorarioAdmin]="solicitudesHorarioAdmin"
         [especialidades]="especialidades"
