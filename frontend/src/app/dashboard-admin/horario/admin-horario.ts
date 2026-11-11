@@ -171,6 +171,16 @@ export class AdminHorarioComponent implements DoCheck {
     const estado = this.bloqueEstadoFn(fecha, hora);
     if (estado === 'sin-datos') return 'Disponibilidad aún no disponible';
     if (estado === 'cerrado-centro') return 'El centro no atiende este día';
+    if (estado === 'bloqueado-horario') {
+      // Horario semanal aprobado del profesional: día no trabajado o fuera
+      // de sus bloques. Bloqueo estricto — no ofrece sobrecupo.
+      return 'Fuera del horario semanal aprobado del profesional — no se puede agendar';
+    }
+    if (estado === 'colacion-aprobada') {
+      // Colación del horario aprobado: también es bloqueo estricto, pero
+      // se informa como colación para que se entienda el motivo.
+      return 'Hora de colación aprobada del profesional — no se puede agendar';
+    }
     if (estado === 'fuera-horario') {
       return this.bloqueSobrecupoDisponibleFn(fecha, hora)
         ? 'Fuera del horario habitual — clic para solicitar sobrecupo'
@@ -223,30 +233,118 @@ export class AdminHorarioComponent implements DoCheck {
   // infiere nada más: un día sin datos NO se muestra como cerrado.
   diaCerrado(fecha: string): boolean {
     if ((this.diasCerrados ?? []).some(d => d?.fecha === fecha)) return true;
-    return this.horasGrilla.length > 0
-      && this.horasGrilla.every(h => this.bloqueEstadoFn(fecha, h) === 'cerrado-centro');
+    return this.horasGrilla.length > 0 && this.horasGrilla.every(h => {
+      const estado = this.bloqueEstadoFn(fecha, h);
+      return estado === 'cerrado-centro'
+        || estado === 'bloqueado-horario'
+        || estado === 'colacion-aprobada';
+    });
+  }
+
+  // ¿El día completo está fuera del horario semanal aprobado del
+  // profesional? Se evalúa aparte del cierre del centro para no confundir
+  // "el centro no atiende" con "este profesional no trabaja ese día".
+  private diaFueraDelHorarioAprobado(fecha: string): boolean {
+    if ((this.diasCerrados ?? []).some(d => d?.fecha === fecha)) return false;
+    return this.horasGrilla.length > 0 && this.horasGrilla.every(h => {
+      const estado = this.bloqueEstadoFn(fecha, h);
+      return estado === 'bloqueado-horario' || estado === 'colacion-aprobada';
+    });
   }
 
   // Motivo visible de un día sin atención: primero el motivo del cierre
-  // registrado, luego el nombre del feriado y, si no hay ninguno, el texto
-  // genérico.
+  // registrado, luego el horario aprobado del profesional, el feriado y, si
+  // no hay ninguno, el texto genérico.
   motivoCierre(fecha: string): string {
     const cierre = (this.diasCerrados ?? []).find(d => d?.fecha === fecha);
     const motivo = String(cierre?.motivo ?? '').trim();
     if (motivo) return motivo;
+    if (this.diaFueraDelHorarioAprobado(fecha)) {
+      return 'El profesional no atiende este día según su horario semanal aprobado';
+    }
     if (this.esFeriadoFn(fecha)) return this.nombreFeriadoFn(fecha) || 'Feriado';
     return 'Centro cerrado';
   }
 
-  // Horas VIGENTES del profesional seleccionado (las que dejó aprobadas el
-  // administrador). Si falta alguna, se dice y no se inventa un valor.
-  get colacionTexto(): string {
+  // Colación VIGENTE del profesional seleccionado.
+  //
+  // No es un valor estático: con agenda semanal por bloques aprobada, la
+  // ÚNICA fuente es lo que el profesional dejó aprobado en sus bloques
+  // tipo 'colacion'. Si no marcó ninguna, NO hay colación (aunque el
+  // registro conserve un hora_almuerzo_* de una jornada simple anterior:
+  // ese campo ya no lo representa). Solo la jornada simple —profesional
+  // sin bloques— usa hora_almuerzo_inicio/fin.
+  private get colacionRango(): { inicio: string; fin: string } | null {
+    const bloques: any[] = this.profesionalActual?.bloques_semanales ?? [];
+    if (bloques.length > 0) {
+      const colaciones = bloques.filter(b =>
+        b?.tipo === 'colacion' && b.hora_inicio && b.hora_fin
+      );
+      if (colaciones.length === 0) return null;
+      // Cada día puede tener su propia colación; se muestra la más
+      // repetida en la semana (la geometría de la franja es una sola) y
+      // solo se dibuja en los días que realmente la tienen
+      // (ver diaTieneColacion()).
+      const conteo = new Map<string, { inicio: string; fin: string; veces: number }>();
+      for (const b of colaciones) {
+        const clave = `${String(b.hora_inicio).substring(0, 5)}-${String(b.hora_fin).substring(0, 5)}`;
+        const actual = conteo.get(clave);
+        if (actual) actual.veces += 1;
+        else conteo.set(clave, {
+          inicio: String(b.hora_inicio).substring(0, 5),
+          fin: String(b.hora_fin).substring(0, 5),
+          veces: 1
+        });
+      }
+      let elegida: { inicio: string; fin: string; veces: number } | null = null;
+      for (const candidata of conteo.values()) {
+        if (!elegida || candidata.veces > elegida.veces) elegida = candidata;
+      }
+      return elegida ? { inicio: elegida.inicio, fin: elegida.fin } : null;
+    }
+
     const ini = this.profesionalActual?.hora_almuerzo_inicio;
     const fin = this.profesionalActual?.hora_almuerzo_fin;
-    return ini && fin ? `${ini} – ${fin}` : '';
+    return ini && fin ? { inicio: ini, fin } : null;
   }
 
+  // ¿Este día tiene colación vigente? Con agenda por bloques, solo si el
+  // profesional dejó un bloque de colación ese día. Con jornada simple, la
+  // colación aplica a todos los días con atención.
+  private diaTieneColacion(fecha: string): boolean {
+    const bloques: any[] = this.profesionalActual?.bloques_semanales ?? [];
+    if (bloques.length === 0) return true;
+    const dia = this.diaSemana(fecha);
+    return bloques.some(b => b?.dia_semana === dia && b?.tipo === 'colacion');
+  }
+
+  // Día de semana con la MISMA convención que BloqueHorarioSemanal:
+  // 0=Lunes ... 6=Domingo (no la de Date.getDay(), que parte en domingo).
+  private diaSemana(fecha: string): number {
+    const [anio, mes, dia] = String(fecha ?? '').split('-').map(Number);
+    if (!anio || !mes || !dia) return -1;
+    return (new Date(anio, mes - 1, dia).getDay() + 6) % 7;
+  }
+
+  // Horas VIGENTES del profesional seleccionado (las que dejó aprobadas el
+  // administrador). Si no hay, se dice y no se inventa un valor.
+  get colacionTexto(): string {
+    const rango = this.colacionRango;
+    return rango ? `${rango.inicio} – ${rango.fin}` : '';
+  }
+
+  // Salida vigente: con agenda por bloques, el término más tardío de sus
+  // bloques disponibles (horario_fin describe la jornada simple, no los
+  // bloques). Sin bloques, la jornada simple de siempre.
   get salidaTexto(): string {
+    const bloques: any[] = this.profesionalActual?.bloques_semanales ?? [];
+    if (bloques.length > 0) {
+      const fines = bloques
+        .filter(b => b?.tipo === 'disponible' && b.hora_fin)
+        .map(b => String(b.hora_fin).substring(0, 5));
+      if (fines.length === 0) return '';
+      return fines.sort().at(-1) as string;
+    }
     return this.profesionalActual?.horario_fin || '';
   }
 
@@ -509,10 +607,12 @@ export class AdminHorarioComponent implements DoCheck {
     let fin = 0;
     let filasTapadas: number[] = [];
 
-    // 1) Posición exacta según la hora de colación sobre la grilla real,
+    // 1) Posición exacta según la hora de colación VIGENTE (bloques
+    //    aprobados o, sin ellos, jornada simple) sobre la grilla real,
     //    sea cual sea su duración de bloque (30, 45, 60 min...).
-    const ini = minutosDeHora(this.profesionalActual?.hora_almuerzo_inicio);
-    const finMin = minutosDeHora(this.profesionalActual?.hora_almuerzo_fin);
+    const rangoColacion = this.colacionRango;
+    const ini = minutosDeHora(rangoColacion?.inicio);
+    const finMin = minutosDeHora(rangoColacion?.fin);
     const starts = horas.map(h => minutosDeHora(h));
     const legible = ini !== null && finMin !== null && finMin > ini
       && starts.every((m, i) => m !== null && (i === 0 || m > (starts[i - 1] as number)));
@@ -565,8 +665,11 @@ export class AdminHorarioComponent implements DoCheck {
     this.bandaColacion = { top, alto: fin - top };
 
     // Un día con una cita dentro de la colación (p. ej. un sobrecupo) no
-    // dibuja el recuadro, para no taparla.
+    // dibuja el recuadro, para no taparla. Un día cuyo horario aprobado no
+    // tiene colación tampoco lo dibuja: la colación no es una franja fija
+    // de la semana, es la que cada profesional dejó aprobada.
     for (const d of abiertos) {
+      if (!this.diaTieneColacion(d.fecha)) continue;
       const hayCita = filasTapadas.some(i => this.bloqueCitasFn(d.fecha, horas[i]).length > 0);
       if (!hayCita) this.fechasBandaColacion.add(d.fecha);
     }

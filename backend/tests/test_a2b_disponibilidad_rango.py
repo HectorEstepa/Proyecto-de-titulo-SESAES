@@ -271,8 +271,12 @@ def test_rango_contrato_shape_exacto(db_session):
     for dia in resultado["dias"]:
         assert set(dia.keys()) == {"fecha", "slots"}
         for slot in dia["slots"]:
+            # `bloqueado_por_horario_aprobado` es el flag que usan las 3
+            # agendas para pintar/deshabilitar los bloques del horario
+            # semanal aprobado (bloqueo estricto, no overridable).
             assert set(slot.keys()) == {
                 "hora", "disponible", "motivo", "overridable_con_sobrecupo",
+                "bloqueado_por_horario_aprobado",
             }
             # Nunca datos clínicos ni de paciente en este contrato.
             assert "estudiante" not in slot

@@ -4,7 +4,8 @@
  * Valores reales verificados en
  * frontend/src/app/dashboard-admin/dashboard-admin.ts → getBloqueEstado():
  * 'bloqueado' | 'cerrado-centro' | 'urgente' | 'sobrecupo' | 'ocupado' |
- * 'colacion' | 'fuera-horario' | 'disponible'.
+ * 'colacion' | 'colacion-aprobada' | 'fuera-horario' | 'bloqueado-horario' |
+ * 'disponible'.
  *
  * Esta fase cubre únicamente el subconjunto especificado
  * (disponible, bloqueado, colacion, fuera-horario, cerrado-centro).
@@ -31,14 +32,20 @@ export type AgendaSlotEstado =
   | 'disponible'
   | 'bloqueado'
   | 'colacion'
+  | 'colacion-aprobada'
   | 'fuera-horario'
+  | 'bloqueado-horario'
   | 'cerrado-centro';
 
 export const AGENDA_SLOT_STATUS_MAP: Record<AgendaSlotEstado, StatusPresentation> = {
   disponible: { label: 'Disponible', tone: 'success', icon: LucideCircleCheck },
   bloqueado: { label: 'Bloqueado', tone: 'warning', icon: LucideLock },
   colacion: { label: 'Colación', tone: 'lavender', icon: LucideUtensils },
+  // Horario semanal por bloques APROBADO (bloqueo estricto): no admite
+  // sobrecupo y no abre el formulario de nueva cita.
+  'colacion-aprobada': { label: 'Colación aprobada', tone: 'lavender', icon: LucideUtensils },
   'fuera-horario': { label: 'Fuera de horario', tone: 'neutral', icon: LucideMoon },
+  'bloqueado-horario': { label: 'Fuera de horario aprobado', tone: 'neutral', icon: LucideMoon },
   'cerrado-centro': { label: 'Centro cerrado', tone: 'neutral', icon: LucideDoorClosed },
 };
 

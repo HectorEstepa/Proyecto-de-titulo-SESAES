@@ -15,6 +15,14 @@ class FakeQuery:
     def __init__(self, results):
         self._results = list(results)
 
+    # El listado real encadena .filter(...) / .order_by(...) para traer los
+    # bloques semanales aprobados; el doble devuelve lo mismo que ya tiene.
+    def filter(self, *args, **kwargs):
+        return self
+
+    def order_by(self, *args, **kwargs):
+        return self
+
     def all(self):
         return list(self._results)
 

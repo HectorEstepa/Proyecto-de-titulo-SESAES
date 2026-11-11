@@ -301,6 +301,16 @@
 .agenda-dot.urgencia { background: var(--agenda-urgencia); }
 .agenda-dot.cerrado { background: var(--agenda-bloqueado); }
 .agenda-dot.feriado { background: var(--agenda-feriado); }
+/* Horario semanal aprobado: mismo patrón que la celda, para que la
+   leyenda explique el rayado gris oscuro de la grilla. */
+.agenda-dot.bloqueado-horario {
+  background: repeating-linear-gradient(135deg, #E9ECEF, #E9ECEF 3px, #D5DAE1 3px, #D5DAE1 6px);
+  box-shadow: inset 0 0 0 1px #8C99AB;
+}
+.agenda-dot.colacion-aprobada {
+  background: repeating-linear-gradient(135deg, #F4EFE6, #F4EFE6 3px, #E5DAC6 3px, #E5DAC6 6px);
+  box-shadow: inset 0 0 0 1px #B39A6B;
+}
 
 .agenda-kpi-grid {
   display: grid;
@@ -479,6 +489,26 @@
 .agenda-week-grid .bloque-celda.urgente-bloque { background: var(--agenda-urgencia-bg); border-left: 2px solid var(--agenda-urgencia); }
 .agenda-week-grid .bloque-celda.cerrado-centro-bloque,
 .agenda-week-grid .bloque-celda.bloqueado { background: repeating-linear-gradient(135deg, #F3F5F8, #F3F5F8 7px, #E8EDF2 7px, #E8EDF2 14px); border-left: 2px solid var(--agenda-bloqueado); }
+
+/* Horario semanal APROBADO del profesional: día no trabajado, fuera de sus
+   bloques o colación. Patrón propio (rayas más cerradas y tono más oscuro)
+   para distinguirlo del "bloqueado" genérico y del cierre del centro, y
+   cursor not-allowed porque NO admite clic ni sobrecupo. */
+.agenda-week-grid .bloque-celda.bloqueado-horario-bloque {
+  background: repeating-linear-gradient(135deg, #E9ECEF, #E9ECEF 6px, #D5DAE1 6px, #D5DAE1 12px);
+  border-left: 2px solid #8C99AB;
+  cursor: not-allowed;
+}
+.agenda-week-grid .bloque-celda.bloqueado-horario-bloque:hover { background: repeating-linear-gradient(135deg, #E9ECEF, #E9ECEF 6px, #D5DAE1 6px, #D5DAE1 12px); }
+
+/* Colación del horario semanal APROBADO: mismo bloqueo estricto, tono
+   cálido propio para que se distinga del resto de los bloques cerrados. */
+.agenda-week-grid .bloque-celda.colacion-aprobada-bloque {
+  background: repeating-linear-gradient(135deg, #F4EFE6, #F4EFE6 6px, #E5DAC6 6px, #E5DAC6 12px);
+  border-left: 2px solid #B39A6B;
+  cursor: not-allowed;
+}
+.agenda-week-grid .bloque-celda.colacion-aprobada-bloque:hover { background: repeating-linear-gradient(135deg, #F4EFE6, #F4EFE6 6px, #E5DAC6 6px, #E5DAC6 12px); }
 .agenda-week-grid .bloque-celda.sin-datos-bloque {
   background: var(--admin-background);
   box-shadow: inset 0 0 0 1px var(--admin-border);
@@ -878,6 +908,20 @@
     var(--prof-border) 14px
   );
 }
+:host-context(.dashboard-prof.tema-oscuro) .agenda-week-grid .bloque-celda.bloqueado-horario-bloque {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--prof-inset),
+    var(--prof-inset) 6px,
+    var(--prof-border) 6px,
+    var(--prof-border) 12px
+  );
+  border-left-color: var(--prof-border);
+}
+:host-context(.dashboard-prof.tema-oscuro) .agenda-week-grid .bloque-celda.colacion-aprobada-bloque {
+  background: repeating-linear-gradient(135deg, #2b2519, #2b2519 6px, #3d3423 6px, #3d3423 12px);
+  border-left-color: #7a6844;
+}
 :host-context(.dashboard-prof.tema-oscuro) .agenda-week-grid .bloque-celda .cita-tarjeta {
   background: var(--prof-surface);
 }
@@ -971,6 +1015,17 @@
 :host-context(.admin-shell.tema-oscuro) .agenda-week-grid .banda-colacion-titulo { color: #9fb0c8; }
 :host-context(.admin-shell.tema-oscuro) .agenda-week-grid .banda-colacion-hora { color: #e6edf3; }
 :host-context(.admin-shell.tema-oscuro) .agenda-week-grid .bloque-celda.colacion-bloque { background: #1d2636; }
+:host-context(.admin-shell.tema-oscuro) .agenda-week-grid .bloque-celda.bloqueado-horario-bloque {
+  background: repeating-linear-gradient(135deg, #1a2331, #1a2331 6px, #243146 6px, #243146 12px);
+  border-left-color: #4a5c78;
+}
+:host-context(.admin-shell.tema-oscuro) .agenda-week-grid .bloque-celda.bloqueado-horario-bloque:hover {
+  background: repeating-linear-gradient(135deg, #1a2331, #1a2331 6px, #243146 6px, #243146 12px);
+}
+:host-context(.admin-shell.tema-oscuro) .agenda-week-grid .bloque-celda.colacion-aprobada-bloque {
+  background: repeating-linear-gradient(135deg, #241f16, #241f16 6px, #342c1f 6px, #342c1f 12px);
+  border-left-color: #7a6844;
+}
 :host-context(.admin-shell.tema-oscuro) .agenda-week-grid .pie-etq,
 :host-context(.admin-shell.tema-oscuro) .agenda-week-grid .dia-cerrado-aviso strong { color: #e6edf3; }
 

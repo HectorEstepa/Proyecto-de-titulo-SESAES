@@ -17,17 +17,20 @@ import app.models.init  # noqa: F401
 from app import reglas_horario
 from app.database import Base
 from app.models.bloque_horario_semanal import BloqueHorarioSemanal
+from app.models.cita import Cita
 from app.models.notificacion import Notificacion
 from app.models.profesional import Profesional
 from app.models.solicitud_bloques import SolicitudBloques
 from app.models.solicitud_horario import SolicitudHorario
 from app.models.usuario import Usuario
 from app.rbac.admin_authorization import AlcanceAdministrativoEfectivo
-from app.routers import profesionales, solicitudes_horario
+from app.routers import admin, profesionales, solicitudes_horario
+from app.schemas import CitaCreate
 from app.services.agenda_disponibilidad_service import (
     evaluar_disponibilidad_slot,
     listar_disponibilidad_rango,
     listar_horas_disponibles,
+    validar_horario_aprobado_slot,
 )
 
 
@@ -171,10 +174,14 @@ def test_la_colacion_dentro_de_un_bloque_no_se_ofrece(db):
     assert "13:00" not in horas and "13:30" not in horas
     r = evaluar_disponibilidad_slot(db, profesional_id=prof.id, fecha=fecha, hora="13:00")
     assert r.disponible is False and r.motivo == "en_colacion"
-    assert r.overridable_con_sobrecupo is True
+    # El acuerdo por bloques aprobado es bloqueo estricto: ni el
+    # sobrecupo lo puede forzar (antes era True y el admin podia
+    # agendar encima de la colacion aprobada).
+    assert r.overridable_con_sobrecupo is False
+    assert "colación aprobada" in r.mensaje and "13:00" in r.mensaje
 
 
-def test_hora_fuera_de_los_bloques_es_fuera_de_jornada_y_overridable(db):
+def test_hora_fuera_de_los_bloques_es_bloqueo_absoluto(db):
     prof = _profesional(db)
     dia = _lunes_a_jueves_futuro().weekday()
     _bloque(db, prof, dia, "09:00", "12:00")
@@ -183,7 +190,24 @@ def test_hora_fuera_de_los_bloques_es_fuera_de_jornada_y_overridable(db):
         db, profesional_id=prof.id, fecha=_lunes_a_jueves_futuro().isoformat(), hora="15:00",
     )
     assert r.disponible is False and r.motivo == "fuera_de_jornada"
-    assert r.overridable_con_sobrecupo is True
+    assert r.overridable_con_sobrecupo is False
+    assert "horario semanal aprobado" in r.mensaje
+
+
+def test_dia_sin_atencion_se_distingue_de_hora_fuera_del_bloque(db):
+    """El mensaje del 400 debe detallar el motivo: no es lo mismo "no
+    trabaja ese día" que "esa hora queda fuera de sus bloques"."""
+    prof = _profesional(db)
+    fecha = _lunes_a_jueves_futuro()
+    otro_dia = (fecha.weekday() + 1) % 4
+    _bloque(db, prof, otro_dia, "09:00", "17:00")
+    db.commit()
+    r = evaluar_disponibilidad_slot(
+        db, profesional_id=prof.id, fecha=fecha.isoformat(), hora="10:00",
+    )
+    assert r.disponible is False and r.motivo == "fuera_de_jornada"
+    assert r.overridable_con_sobrecupo is False
+    assert "no trabaja ese día" in r.mensaje
 
 
 def test_un_dia_sin_bloques_dentro_de_una_agenda_por_bloques_no_atiende(db):
@@ -207,8 +231,84 @@ def test_el_rango_de_la_agenda_admin_refleja_los_bloques(db):
     )
     slots = {s["hora"]: s for s in res["dias"][0]["slots"]}
     assert slots["09:00"]["disponible"] is True
+    assert slots["09:00"]["bloqueado_por_horario_aprobado"] is False
     assert slots["11:00"]["disponible"] is False
     assert slots["11:00"]["motivo"] == "fuera_de_jornada"
+    # Las 3 agendas pintan y deshabilitan a partir de este flag.
+    assert slots["11:00"]["bloqueado_por_horario_aprobado"] is True
+
+
+def test_el_rango_marca_la_colacion_aprobada_como_bloqueada(db):
+    prof = _profesional(db)
+    fecha = _lunes_a_jueves_futuro()
+    _bloque(db, prof, fecha.weekday(), "09:00", "13:00")
+    _bloque(db, prof, fecha.weekday(), "13:00", "14:00", tipo="colacion")
+    _bloque(db, prof, fecha.weekday(), "14:00", "17:00")
+    db.commit()
+    res = listar_disponibilidad_rango(
+        db, profesional_id=prof.id,
+        fecha_inicio=fecha.isoformat(), fecha_fin=fecha.isoformat(),
+    )
+    slots = {s["hora"]: s for s in res["dias"][0]["slots"]}
+    assert slots["13:00"]["motivo"] == "en_colacion"
+    assert slots["13:00"]["bloqueado_por_horario_aprobado"] is True
+    assert slots["14:00"]["bloqueado_por_horario_aprobado"] is False
+
+
+def _proximo_dia_semana(dia: int) -> date:
+    f = date.today() + timedelta(days=1)
+    while f.weekday() != dia:
+        f += timedelta(days=1)
+    return f
+
+
+def test_el_flag_no_marca_el_fin_de_semana_como_bloqueo_del_profesional(db):
+    """El analizador agrega un conflicto de bloques también un sábado (día
+    sin atención), pero la celda debe seguir siendo 'centro cerrado'."""
+    prof = _profesional(db)
+    _bloque(db, prof, 0, "09:00", "17:00")
+    sabado = _proximo_dia_semana(5)
+    db.commit()
+    res = listar_disponibilidad_rango(
+        db, profesional_id=prof.id,
+        fecha_inicio=sabado.isoformat(), fecha_fin=sabado.isoformat(),
+    )
+    slots = res["dias"][0]["slots"]
+    assert slots and all(s["motivo"] == "fin_de_semana" for s in slots)
+    assert all(s["bloqueado_por_horario_aprobado"] is False for s in slots)
+
+
+def test_el_flag_no_marca_un_dia_cerrado_del_centro(db):
+    from app.models.dia_cerrado import DiaCerrado
+
+    prof = _profesional(db)
+    fecha = _lunes_a_jueves_futuro()
+    _bloque(db, prof, fecha.weekday(), "09:00", "17:00")
+    db.add(DiaCerrado(fecha=fecha.isoformat(), motivo="Feriado"))
+    db.commit()
+    res = listar_disponibilidad_rango(
+        db, profesional_id=prof.id,
+        fecha_inicio=fecha.isoformat(), fecha_fin=fecha.isoformat(),
+    )
+    slots = res["dias"][0]["slots"]
+    assert slots and all(s["motivo"] == "dia_cerrado" for s in slots)
+    assert all(s["bloqueado_por_horario_aprobado"] is False for s in slots)
+
+
+def test_sin_bloques_el_flag_no_marca_la_jornada_simple_como_bloqueada(db):
+    """La jornada simple conserva su política (overridable con sobrecupo):
+    el flag es exclusivo del acuerdo por bloques aprobado."""
+    prof = _profesional(db, horario_inicio="09:00", horario_fin="12:00")
+    db.commit()
+    fecha = _lunes_a_jueves_futuro()
+    res = listar_disponibilidad_rango(
+        db, profesional_id=prof.id,
+        fecha_inicio=fecha.isoformat(), fecha_fin=fecha.isoformat(),
+    )
+    slots = {s["hora"]: s for s in res["dias"][0]["slots"]}
+    assert slots["15:00"]["disponible"] is False
+    assert slots["15:00"]["bloqueado_por_horario_aprobado"] is False
+    assert slots["15:00"]["overridable_con_sobrecupo"] is True
 
 
 # ---------------------------------------------------- solicitud y aprobacion
@@ -352,3 +452,197 @@ def test_el_perfil_del_profesional_trae_sus_bloques_aprobados(db):
     db.commit()
     perfil = profesionales.get_perfil(prof.id, db=db, current_user=_usuario_prof(prof))
     assert [b["tipo"] for b in perfil["bloques_semanales"]] == ["disponible", "colacion"]
+
+
+# ════════════════════════════════════════════════════════════
+# Horario aprobado = bloqueo estricto (400 con motivo concreto)
+# ════════════════════════════════════════════════════════════
+#
+# validar_horario_aprobado_slot() es la regla que aplica
+# POST /admin/citas/urgente, el único canal que no pasa por
+# evaluar_disponibilidad_slot(). La jornada simple queda fuera:
+# mantiene su política anterior (overridable con sobrecupo).
+
+def test_validar_horario_sin_bloques_no_impone_nada(db):
+    prof = _profesional(db, horario_inicio="09:00", horario_fin="17:00")
+    db.commit()
+    fecha = _lunes_a_jueves_futuro().isoformat()
+    assert validar_horario_aprobado_slot(db, profesional=prof, fecha=fecha, hora="08:00") is None
+    assert validar_horario_aprobado_slot(db, profesional=prof, fecha=fecha, hora="12:00") is None
+
+
+def test_validar_horario_dentro_de_un_bloque_es_valido(db):
+    prof = _profesional(db)
+    dia = _lunes_a_jueves_futuro().weekday()
+    _bloque(db, prof, dia, "09:00", "13:00")
+    db.commit()
+    fecha = _lunes_a_jueves_futuro().isoformat()
+    # 12:30 + 30 min termina justo al borde del bloque: válido.
+    assert validar_horario_aprobado_slot(db, profesional=prof, fecha=fecha, hora="12:30") is None
+
+
+def test_validar_horario_dia_sin_atencion_detalla_el_motivo(db):
+    prof = _profesional(db)
+    fecha = _lunes_a_jueves_futuro()
+    otro_dia = (fecha.weekday() + 1) % 4
+    _bloque(db, prof, otro_dia, "09:00", "17:00")
+    db.commit()
+    mensaje = validar_horario_aprobado_slot(
+        db, profesional=prof, fecha=fecha.isoformat(), hora="10:00",
+    )
+    assert mensaje == "El profesional no trabaja ese día según su horario semanal aprobado."
+
+
+def test_validar_horario_fuera_de_bloque_detalla_el_motivo(db):
+    prof = _profesional(db)
+    dia = _lunes_a_jueves_futuro().weekday()
+    _bloque(db, prof, dia, "09:00", "12:00")
+    db.commit()
+    mensaje = validar_horario_aprobado_slot(
+        db, profesional=prof, fecha=_lunes_a_jueves_futuro().isoformat(), hora="15:00",
+    )
+    assert mensaje == "La hora solicitada está fuera del horario semanal aprobado del profesional."
+
+
+def test_validar_horario_en_colacion_incluye_el_rango_aprobado(db):
+    prof = _profesional(db)
+    dia = _lunes_a_jueves_futuro().weekday()
+    _bloque(db, prof, dia, "09:00", "17:00")
+    _bloque(db, prof, dia, "13:00", "14:00", tipo="colacion")
+    db.commit()
+    mensaje = validar_horario_aprobado_slot(
+        db, profesional=prof, fecha=_lunes_a_jueves_futuro().isoformat(), hora="13:00",
+    )
+    assert mensaje == (
+        "La hora solicitada se superpone con la colación aprobada "
+        "del profesional (13:00–14:00)."
+    )
+
+
+def test_validar_horario_ignora_entradas_no_interpretables(db):
+    """Formato inválido no es responsabilidad de esta regla: la cita
+    urgente ya lo rechaza con 400 vía hay_solapamiento_con_cita_activa."""
+    prof = _profesional(db)
+    _bloque(db, prof, _lunes_a_jueves_futuro().weekday(), "09:00", "17:00")
+    db.commit()
+    assert validar_horario_aprobado_slot(
+        db, profesional=prof, fecha="no-es-fecha", hora="10:00",
+    ) is None
+    assert validar_horario_aprobado_slot(
+        db, profesional=prof, fecha=_lunes_a_jueves_futuro().isoformat(), hora="xx",
+    ) is None
+
+
+# ----------------------------------------- POST /admin/citas/urgente
+
+def _estudiante_urgente(db, correo="urg-bloques@sesaes.cl"):
+    u = Usuario(correo=correo, password="x", rol="estudiante",
+                nombre="Estudiante Urgente", rut="urg-1", activo=True)
+    db.add(u)
+    db.flush()
+    return u
+
+
+def _alcance_institucional(monkeypatch):
+    monkeypatch.setattr(
+        admin, "obtener_alcance_administrativo_efectivo",
+        lambda db, u: AlcanceAdministrativoEfectivo(
+            institucional=True, especialidades_normalizadas=frozenset(),
+        ),
+    )
+
+
+def test_urgente_rechaza_con_400_un_dia_sin_atencion_aprobado(db, monkeypatch):
+    fecha = _lunes_a_jueves_futuro()
+    prof = _profesional(db)
+    otro_dia = (fecha.weekday() + 1) % 4
+    _bloque(db, prof, otro_dia, "09:00", "17:00")
+    est = _estudiante_urgente(db)
+    db.commit()
+    _alcance_institucional(monkeypatch)
+
+    payload = CitaCreate(
+        estudiante_id=est.id, profesional_id=prof.id,
+        fecha=fecha.isoformat(), hora="10:00",
+    )
+    with pytest.raises(HTTPException) as exc:
+        admin.crear_cita_urgente(cita=payload, db=db, current_user={"id": 999, "rol": "admin"})
+
+    assert exc.value.status_code == 400
+    assert "no trabaja ese día" in exc.value.detail
+    assert db.query(Cita).count() == 0
+
+
+def test_urgente_rechaza_con_400_la_colacion_aprobada_aunque_sea_admin(db, monkeypatch):
+    """Ni Admin ni Super Admin pueden forzar la colación con una
+    urgencia: es un bloqueo absoluto, no un sobrecupo."""
+    fecha = _lunes_a_jueves_futuro()
+    prof = _profesional(db)
+    dia = fecha.weekday()
+    _bloque(db, prof, dia, "09:00", "17:00")
+    _bloque(db, prof, dia, "13:00", "14:00", tipo="colacion")
+    est = _estudiante_urgente(db, correo="urg-colacion@sesaes.cl")
+    db.commit()
+    _alcance_institucional(monkeypatch)
+
+    payload = CitaCreate(
+        estudiante_id=est.id, profesional_id=prof.id,
+        fecha=fecha.isoformat(), hora="13:00",
+    )
+    with pytest.raises(HTTPException) as exc:
+        admin.crear_cita_urgente(cita=payload, db=db, current_user={"id": 999, "rol": "admin"})
+
+    assert exc.value.status_code == 400
+    assert "colación aprobada" in exc.value.detail
+    assert "13:00–14:00" in exc.value.detail
+    assert db.query(Cita).count() == 0
+
+
+def test_urgente_sigue_funcionando_dentro_del_bloque_aprobado(db, monkeypatch):
+    fecha = _lunes_a_jueves_futuro()
+    prof = _profesional(db)
+    _bloque(db, prof, fecha.weekday(), "09:00", "17:00")
+    est = _estudiante_urgente(db, correo="urg-ok@sesaes.cl")
+    db.commit()
+    _alcance_institucional(monkeypatch)
+
+    payload = CitaCreate(
+        estudiante_id=est.id, profesional_id=prof.id,
+        fecha=fecha.isoformat(), hora="10:00",
+    )
+    resultado = admin.crear_cita_urgente(
+        cita=payload, db=db, current_user={"id": 999, "rol": "admin"},
+    )
+    assert resultado["urgente"] is True and resultado["hora"] == "10:00"
+    assert db.query(Cita).count() == 1
+
+
+# --------------------------------- GET /admin/profesionales (agenda admin)
+
+def test_profesionales_admin_expone_los_bloques_aprobados(db, monkeypatch):
+    """La agenda administrativa dibuja la colación y los días de atención con
+    los bloques aprobados del profesional: si el endpoint no los entrega, la
+    pantalla solo puede caer en hora_almuerzo_*, que es la colación de la
+    jornada simple y no la de la agenda por bloques."""
+    prof = _profesional(db)
+    prof.hora_almuerzo_inicio = "13:00"
+    prof.hora_almuerzo_fin = "14:00"
+    _bloque(db, prof, 0, "09:00", "12:00")
+    _bloque(db, prof, 0, "12:00", "13:00", tipo="colacion")
+    _bloque(db, prof, 0, "13:00", "17:30")
+    sin_bloques = _profesional(db, horario_inicio="10:00", horario_fin="12:00")
+    db.commit()
+    _alcance_institucional(monkeypatch)
+
+    filas = admin.get_profesionales_admin(
+        db=db, current_user={"id": 999, "rol": "admin"},
+    )
+    por_id = {fila["id"]: fila for fila in filas}
+
+    assert por_id[prof.id]["bloques_semanales"] == [
+        {"dia_semana": 0, "hora_inicio": "09:00", "hora_fin": "12:00", "tipo": "disponible"},
+        {"dia_semana": 0, "hora_inicio": "12:00", "hora_fin": "13:00", "tipo": "colacion"},
+        {"dia_semana": 0, "hora_inicio": "13:00", "hora_fin": "17:30", "tipo": "disponible"},
+    ]
+    # Sin bloques aprobados la lista va vacía: la agenda usa la jornada simple.
+    assert por_id[sin_bloques.id]["bloques_semanales"] == []

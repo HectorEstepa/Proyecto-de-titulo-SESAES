@@ -139,6 +139,8 @@
       <span class="agenda-legend-item"><span class="agenda-dot sobrecupo"></span>Sobrecupo</span>
       <span class="agenda-legend-item"><span class="agenda-dot urgencia"></span>Urgencia</span>
       <span class="agenda-legend-item"><span class="agenda-dot cerrado"></span>Centro cerrado</span>
+      <span class="agenda-legend-item"><span class="agenda-dot bloqueado-horario"></span>Fuera de horario aprobado</span>
+      <span class="agenda-legend-item"><span class="agenda-dot colacion-aprobada"></span>Colación aprobada</span>
       <span class="agenda-legend-item"><span class="agenda-dot feriado"></span>Feriado</span>
     </div>
   </div>
@@ -252,10 +254,12 @@
             [class.colacion-bloque]="bloqueEstadoFn(dia.fecha, h) === 'colacion'"
             [class.fuera-horario-bloque]="bloqueEstadoFn(dia.fecha, h) === 'fuera-horario'"
             [class.bloqueado]="bloqueEstadoFn(dia.fecha, h) === 'bloqueado'"
+            [class.bloqueado-horario-bloque]="bloqueEstadoFn(dia.fecha, h) === 'bloqueado-horario'"
+            [class.colacion-aprobada-bloque]="bloqueEstadoFn(dia.fecha, h) === 'colacion-aprobada'"
             [class.cerrado-centro-bloque]="bloqueEstadoFn(dia.fecha, h) === 'cerrado-centro'"
             [class.sin-datos-bloque]="bloqueEstadoFn(dia.fecha, h) === 'sin-datos'"
             [class.multi-cita]="bloqueCitasFn(dia.fecha, h).length > 1"
-            [attr.aria-disabled]="bloqueEstadoFn(dia.fecha, h) === 'sin-datos' ? 'true' : null"
+            [attr.aria-disabled]="(bloqueEstadoFn(dia.fecha, h) === 'sin-datos' || bloqueEstadoFn(dia.fecha, h) === 'bloqueado-horario' || bloqueEstadoFn(dia.fecha, h) === 'colacion-aprobada') ? 'true' : null"
             [title]="bloqueTitulo(dia.fecha, h)"
             (click)="bloqueClick.emit({ fecha: dia.fecha, hora: h })"
           >

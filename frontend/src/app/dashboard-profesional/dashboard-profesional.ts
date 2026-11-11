@@ -1035,8 +1035,13 @@ convertirA24h(hora: string): string {
     if (citas.length > 0) return 'ocupado';
 
     const porBloques = this.estadoPorBloques(fecha, hora);
-    if (porBloques === 'colacion') return 'colacion';
-    if (porBloques === 'fuera') return 'fuera-horario';
+    // Horario semanal aprobado: la colación y las horas fuera de los
+    // bloques (o un día sin bloques) son bloqueo estricto, con estados
+    // visuales propios — NO el 'colacion'/'fuera-horario' de la jornada
+    // simple, que sí admite sobrecupo del administrador. Así las 3
+    // agendas (Super Admin, Admin, Profesional) pintan lo mismo.
+    if (porBloques === 'colacion') return 'colacion-aprobada';
+    if (porBloques === 'fuera') return 'bloqueado-horario';
     if (porBloques === 'disponible') return 'disponible';
 
     // Sin agenda por bloques aprobada: se usa la jornada simple o, si
@@ -1375,7 +1380,11 @@ limpiarFiltrosAtenciones(): void {
     0: ['09:00', '17:30'], 1: ['09:00', '17:30'], 2: ['09:00', '17:30'],
     3: ['09:00', '17:30'], 4: ['09:00', '16:30'],
   };
-  private readonly HORA_COLACION_DEFECTO: [string, string] = ['13:00', '14:00'];
+  // Colación del horario PREDETERMINADO. Es solo el punto de partida del
+  // botón "usar horario por defecto": no es una franja fija del sistema.
+  // La colación que respeta la agenda es la que el profesional deja en sus
+  // bloques al enviarlos (puede ser cualquier rango, o ninguna).
+  private readonly HORA_COLACION_DEFECTO: [string, string] = ['12:00', '13:00'];
 
   bloquesSeleccion: Record<string, 'disponible' | 'colacion'> = {};
   bloquesModoPincel: 'disponible' | 'colacion' = 'disponible';

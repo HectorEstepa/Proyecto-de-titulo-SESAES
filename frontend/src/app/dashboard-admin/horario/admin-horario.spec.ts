@@ -1243,4 +1243,81 @@ describe('AdminHorarioComponent', () => {
     });
   });
 
+  // La colación NO es una franja fija del sistema: sale del horario semanal
+  // por bloques que el profesional dejó aprobado. Si no marcó colación, no
+  // se dibuja ninguna, aunque el registro conserve hora_almuerzo_* de una
+  // jornada simple anterior.
+  describe('colación según los bloques aprobados (no estática)', () => {
+    const LUNES = '2026-11-02';
+    const MARTES = '2026-11-03';
+
+    const montar = (bloques: any[], restantes: Record<string, any> = {}) => {
+      fixture.componentRef.setInput('filtroProfesionalId', 10);
+      fixture.componentRef.setInput('vista', 'semana');
+      fixture.componentRef.setInput('semanaActual', [
+        { nombre: 'Lun', num: 2, fecha: LUNES, esHoy: false },
+        { nombre: 'Mar', num: 3, fecha: MARTES, esHoy: false },
+      ]);
+      fixture.componentRef.setInput('horasGrilla', ['09:00', '10:00', '11:00', '12:00', '13:00']);
+      fixture.componentRef.setInput('profesionalActual', {
+        nombre: 'Dra. Ana',
+        // Campos de la jornada SIMPLE: ya no representan la agenda si hay
+        // bloques aprobados.
+        hora_almuerzo_inicio: '13:00',
+        hora_almuerzo_fin: '14:00',
+        horario_fin: '18:00',
+        bloques_semanales: bloques,
+        ...restantes
+      });
+      fixture.detectChanges();
+    };
+
+    it('usa el rango de colación que el profesional aprobó, no hora_almuerzo_*', () => {
+      montar([
+        { dia_semana: 1, hora_inicio: '09:00', hora_fin: '10:30', tipo: 'disponible' },
+        { dia_semana: 1, hora_inicio: '10:30', hora_fin: '11:00', tipo: 'colacion' },
+        { dia_semana: 1, hora_inicio: '11:00', hora_fin: '17:30', tipo: 'disponible' },
+      ]);
+
+      expect(component.colacionTexto).toBe('10:30 – 11:00');
+      expect(fixture.nativeElement.textContent).not.toContain('13:00 – 14:00');
+    });
+
+    it('sin bloque de colación aprobado NO se dibuja ninguna colación', () => {
+      montar([
+        { dia_semana: 1, hora_inicio: '09:00', hora_fin: '17:30', tipo: 'disponible' },
+      ]);
+
+      expect(component.colacionTexto).toBe('');
+      expect(component.bandaColacion).toBeNull();
+      expect(fixture.nativeElement.querySelector('.banda-colacion')).toBeNull();
+    });
+
+    it('la franja solo aparece en los días que tienen colación aprobada', () => {
+      montar([
+        { dia_semana: 1, hora_inicio: '09:00', hora_fin: '10:00', tipo: 'disponible' },
+        { dia_semana: 1, hora_inicio: '10:00', hora_fin: '11:00', tipo: 'colacion' },
+        { dia_semana: 1, hora_inicio: '11:00', hora_fin: '17:30', tipo: 'disponible' },
+        // Lunes sin colación
+        { dia_semana: 0, hora_inicio: '09:00', hora_fin: '17:30', tipo: 'disponible' },
+      ]);
+
+      expect(component.fechasBandaColacion.has(MARTES)).toBe(true);
+      expect(component.fechasBandaColacion.has(LUNES)).toBe(false);
+    });
+
+    it('sin bloques (jornada simple) la colación sigue saliendo de hora_almuerzo_*', () => {
+      montar([]);
+
+      expect(component.colacionTexto).toBe('13:00 – 14:00');
+    });
+
+    it('la salida vigente sale de los bloques disponibles, no de horario_fin', () => {
+      montar([
+        { dia_semana: 1, hora_inicio: '09:00', hora_fin: '16:30', tipo: 'disponible' },
+      ]);
+      expect(component.salidaTexto).toBe('16:30');
+    });
+  });
+
 });

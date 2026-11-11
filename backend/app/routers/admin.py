@@ -23,6 +23,7 @@ from app.auditoria import (
 from app.models.historial_estado_profesional import HistorialEstadoProfesional
 from app.models.correo_log import CorreoLog
 from app.models.dia_cerrado import DiaCerrado
+from app.models.bloque_horario_semanal import BloqueHorarioSemanal
 from app.routers.correos import simular_envio_correo
 from app.schemas import (
     ProfesionalCreate, ProfesionalUpdate, ProfesionalOut,
@@ -45,6 +46,7 @@ from app.services.agenda_disponibilidad_service import (
     hay_solapamiento_con_cita_activa,
     SlotInvalidoError,
     canonicalizar_fecha_valida,
+    validar_horario_aprobado_slot,
 )
 from app.services.cita_origen_service import resolver_origen_cita
 from app.services import reportes_resumen_service as reportes_svc
@@ -866,6 +868,34 @@ def get_profesionales_admin(db: Session = Depends(get_db), current_user: dict = 
         )
     ]
 
+    # Agenda semanal por bloques aprobada, en UNA sola consulta para todos
+    # los profesionales del alcance (no una por profesional). La agenda
+    # administrativa la necesita para dibujar la colación donde el
+    # profesional realmente la dejó aprobada: un profesional puede no tener
+    # ningún bloque de colación (entonces NO se dibuja ninguna), y el rango
+    # tampoco tiene por qué coincidir con hora_almuerzo_* (que es la
+    # colación de la jornada simple, no la de la agenda por bloques).
+    ids = [p.id for p in profesionales]
+    bloques_por_profesional: dict[int, list[dict]] = {pid: [] for pid in ids}
+    if ids:
+        filas_bloques = (
+            db.query(BloqueHorarioSemanal)
+            .filter(BloqueHorarioSemanal.profesional_id.in_(ids))
+            .order_by(
+                BloqueHorarioSemanal.profesional_id,
+                BloqueHorarioSemanal.dia_semana,
+                BloqueHorarioSemanal.hora_inicio,
+            )
+            .all()
+        )
+        for b in filas_bloques:
+            bloques_por_profesional.setdefault(b.profesional_id, []).append({
+                "dia_semana": b.dia_semana,
+                "hora_inicio": b.hora_inicio,
+                "hora_fin": b.hora_fin,
+                "tipo": b.tipo,
+            })
+
     return [
         {
             "id": p.id, "nombre": p.nombre, "tratamiento": p.tratamiento,
@@ -880,6 +910,10 @@ def get_profesionales_admin(db: Session = Depends(get_db), current_user: dict = 
             "horario_inicio": p.horario_inicio, "horario_fin": p.horario_fin,
             "hora_almuerzo_inicio": p.hora_almuerzo_inicio,
             "hora_almuerzo_fin": p.hora_almuerzo_fin,
+            # Agenda semanal por bloques aprobada (vacía si el profesional
+            # usa su jornada simple). Fuente real de la colación y de los
+            # días de atención en la agenda administrativa.
+            "bloques_semanales": bloques_por_profesional.get(p.id, []),
         }
         for p in profesionales
     ]
@@ -1635,6 +1669,23 @@ def crear_cita_urgente(cita: CitaCreate, db: Session = Depends(get_db), current_
         profesional_id=cita.profesional_id,
         fecha=fecha_canon,
     )
+    # Horario semanal por bloques APROBADO — bloqueo estricto: este
+    # endpoint no pasa por evaluar_disponibilidad_slot() (decisión
+    # histórica de A.2), así que sin esta comprobación una urgencia
+    # podía caer en un día que el profesional no trabaja, fuera de sus
+    # bloques o durante su colación aprobada. validar_horario_aprobado_slot()
+    # aplica SOLO esa regla (no la grilla, ni cierres, ni jornada simple),
+    # sin ampliar el resto de la semántica de urgencias, y devuelve el
+    # motivo concreto para que el 400 lo detalle. Es un bloqueo absoluto:
+    # ni Admin ni Super Admin lo pueden forzar con sobrecupo.
+    mensaje_horario = validar_horario_aprobado_slot(
+        db,
+        profesional=prof,
+        fecha=fecha_canon,
+        hora=cita.hora,
+    )
+    if mensaje_horario:
+        raise HTTPException(status_code=400, detail=mensaje_horario)
     # A.3 (v2) — fecha/hora no interpretables deben rechazarse con 400
     # ANTES de decidir si hay solapamiento: nunca "no hay solapamiento"
     # por defecto (fail-open), porque este endpoint no pasa por

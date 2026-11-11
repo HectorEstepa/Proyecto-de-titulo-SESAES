@@ -33,19 +33,19 @@ describe('DashboardProfesionalComponent: agenda semanal por bloques', () => {
     expect(c.slotsDelDia(4).at(-1)).toBe('16:00');   // el viernes termina 16:30
   });
 
-  it('rellenar horario por defecto: Lun-Jue 09:00-17:30, Vie 09:00-16:30 y colacion 13:00-14:00', () => {
+  it('rellenar horario por defecto: Lun-Jue 09:00-17:30, Vie 09:00-16:30 y colacion 12:00-13:00', () => {
     c.aplicarHorarioPorDefecto();
     for (const dia of [0, 1, 2, 3]) {
       expect(c.estadoCelda(dia, '09:00')).toBe('disponible');
       expect(c.estadoCelda(dia, '17:00')).toBe('disponible');
       expect(c.estadoCelda(dia, '17:30')).toBeNull();
-      expect(c.estadoCelda(dia, '13:00')).toBe('colacion');
-      expect(c.estadoCelda(dia, '13:30')).toBe('colacion');
-      expect(c.estadoCelda(dia, '14:00')).toBe('disponible');
+      expect(c.estadoCelda(dia, '12:00')).toBe('colacion');
+      expect(c.estadoCelda(dia, '12:30')).toBe('colacion');
+      expect(c.estadoCelda(dia, '13:00')).toBe('disponible');
     }
     expect(c.estadoCelda(4, '16:00')).toBe('disponible');
     expect(c.estadoCelda(4, '16:30')).toBeNull();
-    expect(c.estadoCelda(4, '13:00')).toBe('colacion');
+    expect(c.estadoCelda(4, '12:00')).toBe('colacion');
   });
 
   it('el pincel pinta y despinta una celda', () => {
@@ -70,12 +70,12 @@ describe('DashboardProfesionalComponent: agenda semanal por bloques', () => {
     expect(req.request.method).toBe('POST');
     const bloques = req.request.body.bloques;
     expect(bloques.filter((b: any) => b.dia_semana === 0)).toEqual([
-      { dia_semana: 0, hora_inicio: '09:00', hora_fin: '13:00', tipo: 'disponible' },
-      { dia_semana: 0, hora_inicio: '13:00', hora_fin: '14:00', tipo: 'colacion' },
-      { dia_semana: 0, hora_inicio: '14:00', hora_fin: '17:30', tipo: 'disponible' },
+      { dia_semana: 0, hora_inicio: '09:00', hora_fin: '12:00', tipo: 'disponible' },
+      { dia_semana: 0, hora_inicio: '12:00', hora_fin: '13:00', tipo: 'colacion' },
+      { dia_semana: 0, hora_inicio: '13:00', hora_fin: '17:30', tipo: 'disponible' },
     ]);
     expect(bloques.filter((b: any) => b.dia_semana === 4).at(-1))
-      .toEqual({ dia_semana: 4, hora_inicio: '14:00', hora_fin: '16:30', tipo: 'disponible' });
+      .toEqual({ dia_semana: 4, hora_inicio: '13:00', hora_fin: '16:30', tipo: 'disponible' });
     expect(bloques.length).toBe(15);
     req.flush({ message: 'ok' });
     http.expectOne(r => r.url.endsWith('/profesional/7/solicitudes-horario')).flush([]);
@@ -206,6 +206,33 @@ describe('DashboardProfesionalComponent: agenda semanal por bloques', () => {
       c.generarHorasGrilla();
       expect(c.horasGrilla[0]).toBe('10:00');
       expect(c.horasGrilla.at(-1)).toBe('15:00');
+    });
+  });
+
+  describe('agenda compartida: horario aprobado como bloqueo estricto', () => {
+    const LUNES = '2026-10-19';   // lunes
+
+    beforeEach(() => {
+      c.perfil.bloques_semanales = [
+        { dia_semana: 0, hora_inicio: '09:00', hora_fin: '13:00', tipo: 'disponible' },
+        { dia_semana: 0, hora_inicio: '13:00', hora_fin: '14:00', tipo: 'colacion' },
+        { dia_semana: 0, hora_inicio: '14:00', hora_fin: '17:30', tipo: 'disponible' },
+      ];
+    });
+
+    it('usa estados de bloqueo estricto, no los de la jornada simple', () => {
+      expect(c.agendaBloqueEstadoFn(LUNES, '10:00')).toBe('disponible');
+      expect(c.agendaBloqueEstadoFn(LUNES, '13:00')).toBe('colacion-aprobada');
+      // Fuera de los bloques: no cae en el 'fuera-horario' de la jornada
+      // simple, que sí admite sobrecupo del administrador.
+      expect(c.agendaBloqueEstadoFn(LUNES, '08:00')).toBe('bloqueado-horario');
+      expect(c.agendaBloqueEstadoFn(LUNES, '15:00')).toBe('disponible');
+    });
+
+    it('el fin de semana y los días cerrados siguen siendo del centro', () => {
+      expect(c.agendaBloqueEstadoFn('2026-10-24', '10:00')).toBe('cerrado-centro');
+      c.diasCerrados = [{ fecha: LUNES, motivo: 'Feriado' }];
+      expect(c.agendaBloqueEstadoFn(LUNES, '10:00')).toBe('cerrado-centro');
     });
   });
 });

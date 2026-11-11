@@ -923,7 +923,14 @@ def test_listar_disponibilidad_rango_no_gana_campo_conflictos(db_session):
     dia = resultado["dias"][0]
     assert set(dia.keys()) == {"fecha", "slots"}
     for slot in dia["slots"]:
-        assert set(slot.keys()) == {"hora", "disponible", "motivo", "overridable_con_sobrecupo"}
+        # El rango sigue SIN exponer `conflictos` (objetos internos): el
+        # flag booleano que consumen las agendas es la forma pública de
+        # esa información.
+        assert set(slot.keys()) == {
+            "hora", "disponible", "motivo", "overridable_con_sobrecupo",
+            "bloqueado_por_horario_aprobado",
+        }
+        assert isinstance(slot["bloqueado_por_horario_aprobado"], bool)
 
 
 # ══════════════════════════════════════════════════════════

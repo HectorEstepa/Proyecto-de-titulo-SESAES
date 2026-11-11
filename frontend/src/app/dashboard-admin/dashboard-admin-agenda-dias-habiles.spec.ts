@@ -99,16 +99,25 @@ describe('DashboardAdminComponent — agenda de lunes a viernes y horario instit
     expect(horas[horas.length - 1]).toBe('17:00');
   });
 
-  it('respeta la duración de atención del profesional dentro del horario institucional', () => {
+  it('respeta la duración y la MISMA grilla que evalúa backend dentro del horario institucional', () => {
     fijarHoy(new Date(2026, 8, 16, 10, 0, 0));
     const { component } = crearAgendaAdmin(45);
 
     const horas = component.horasGrilla;
 
-    expect(horas[0]).toBe('09:00');
-    expect(horas[1]).toBe('09:45');
-    expect(horas[horas.length - 1]).toBe('17:15');
+    // Backend genera sus candidatos desde 08:00 en pasos de 45 min
+    // (08:00, 08:45, 09:30, 10:15, ...). La grilla administrativa tiene que
+    // ser esa misma serie, solo recortada al horario institucional: con
+    // pasos de 45 desde las 09:00 no coincidiría ninguna hora y todos los
+    // bloques quedarían sin datos.
+    expect(horas[0]).toBe('09:30');
+    expect(horas[1]).toBe('10:15');
+    expect(horas[horas.length - 1]).toBe('17:00');
     expect(horas.every(hora => hora >= '09:00' && hora < '17:30')).toBe(true);
+    expect(horas.every(hora => {
+      const [h, m] = hora.split(':').map(Number);
+      return (h * 60 + m - 8 * 60) % 45 === 0;
+    })).toBe(true);
   });
 
   it('el rótulo del período termina el viernes, pero la semana interna sigue siendo lunes a domingo', () => {
