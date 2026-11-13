@@ -489,6 +489,202 @@
 .agenda-week-grid .bloque-celda.urgente-bloque { background: var(--agenda-urgencia-bg); border-left: 2px solid var(--agenda-urgencia); }
 .agenda-week-grid .bloque-celda.cerrado-centro-bloque,
 .agenda-week-grid .bloque-celda.bloqueado { background: repeating-linear-gradient(135deg, #F3F5F8, #F3F5F8 7px, #E8EDF2 7px, #E8EDF2 14px); border-left: 2px solid var(--agenda-bloqueado); }
+.agenda-week-grid .bloque-celda.sin-datos-bloque {
+  background: var(--admin-background);
+  box-shadow: inset 0 0 0 1px var(--admin-border);
+  cursor: not-allowed;
+  opacity: .7;
+}
+.agenda-week-grid .bloque-celda.sin-datos-bloque:hover { background: var(--admin-background); }
+
+/* ══════════════════════════════════════════════════════════════
+   Día sin atención y fila al pie (colación / salida)
+   ══════════════════════════════════════════════════════════════ */
+.agenda-week-grid { --pie-alto: 62px; }
+.agenda-week-grid .dia-col { position: relative; }
+
+.agenda-week-grid .dia-cerrado-aviso {
+  position: absolute;
+  top: 62px;
+  bottom: var(--pie-alto);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+  text-align: center;
+  pointer-events: none;
+}
+.agenda-week-grid .dia-cerrado-aviso .material-symbols-outlined { font-size: 24px; color: var(--admin-text-secondary); }
+.agenda-week-grid .dia-cerrado-aviso strong { color: var(--admin-text); font-size: 12px; }
+.agenda-week-grid .dia-cerrado-motivo {
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--admin-text-secondary);
+  font-size: 11px;
+}
+
+.agenda-week-grid .dia-pie,
+.agenda-week-grid .pie-hora-celda {
+  height: var(--pie-alto);
+  box-sizing: border-box;
+}
+.agenda-week-grid .pie-hora-celda { border-top: 1px solid var(--admin-border); background: var(--admin-background); }
+.agenda-week-grid .dia-pie {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-top: 1px solid var(--admin-border);
+  background: var(--admin-background);
+  color: var(--admin-text-secondary);
+  font-size: 10px;
+  overflow: hidden;
+}
+/* Colación: recuadro con el estilo de una cita, en la hora real de colación.
+   No captura clics (las filas de abajo siguen permitiendo solicitar sobrecupo). */
+.agenda-week-grid .banda-colacion {
+  position: absolute;
+  left: 3px;
+  right: 5px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #EEF1F6;
+  border-left: 3px solid #8A97AB;
+  color: var(--admin-text);
+  pointer-events: none;
+  overflow: hidden;
+}
+.agenda-week-grid .banda-colacion-titulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--admin-text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.agenda-week-grid .banda-colacion-titulo .material-symbols-outlined { font-size: 13px; }
+/* Colación corta (poco alto): título y hora en una sola línea. */
+.agenda-week-grid .banda-colacion.compacta { flex-direction: row; align-items: center; justify-content: flex-start; gap: 6px; }
+.agenda-week-grid .banda-colacion-hora { color: var(--admin-text); font-size: 11px; font-weight: 600; white-space: nowrap; }
+/* Las filas de colación quedan sin relleno propio: el recuadro es el que marca la colación. */
+.agenda-week-grid .bloque-celda.colacion-bloque { background: #fff; }
+.agenda-week-grid .pie-linea { display: flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; }
+.agenda-week-grid .pie-linea .material-symbols-outlined { font-size: 14px; color: var(--admin-text-secondary); }
+.agenda-week-grid .pie-etq { font-weight: 600; color: var(--admin-text); }
+.agenda-week-grid .pie-hora { overflow: hidden; text-overflow: ellipsis; }
+
+/* ══════════════════════════════════════════════════════════════
+   Vista Día — reutiliza la grilla horaria con una sola columna.
+   ══════════════════════════════════════════════════════════════ */
+.agenda-day-sindatos {
+  margin: 12px 16px 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-background);
+  color: var(--admin-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.agenda-day-grid .dia-col { min-width: 0; }
+.agenda-day-grid .bloque-celda { padding: 0 16px; }
+.agenda-day-grid .bloque-celda .bloque-info { font-size: 12px; }
+
+/* ══════════════════════════════════════════════════════════════
+   Vista Mes — resumen por día (citas + cupos reales de backend).
+   ══════════════════════════════════════════════════════════════ */
+.agenda-month { padding: 12px; overflow-x: auto; }
+.agenda-month-weekdays,
+.agenda-month-body {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+.agenda-month-weekdays { padding-bottom: 8px; }
+.agenda-month-weekdays span {
+  text-align: center;
+  color: var(--admin-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.agenda-month-cell {
+  min-height: 98px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--admin-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.agenda-month-cell:hover:not(:disabled) { border-color: var(--admin-primary); background: var(--admin-surface); }
+.agenda-month-cell:focus-visible { outline: 2px solid var(--admin-primary); outline-offset: 1px; }
+.agenda-month-cell.seleccionado { border-color: var(--admin-primary); box-shadow: 0 0 0 2px rgba(94, 133, 125, .25); }
+.agenda-month-cell.feriado { border-color: #F8D58A; background: var(--agenda-feriado-bg); }
+.agenda-month-cell.fuera-mes { background: var(--admin-background); opacity: .5; cursor: default; }
+
+.agenda-month-num {
+  min-width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.agenda-month-cell.hoy .agenda-month-num { background: var(--admin-primary); color: #fff; }
+.agenda-month-feriado { color: #8A4B08; font-size: 8px; font-weight: 700; text-transform: uppercase; }
+
+.agenda-month-chips { display: flex; flex-direction: column; gap: 3px; width: 100%; }
+.agenda-month-chip {
+  display: block;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agenda-month-chip.reservada { background: var(--agenda-reservada-bg); color: var(--agenda-reservada); }
+.agenda-month-chip.sobrecupo { background: var(--agenda-sobrecupo-bg); color: var(--agenda-sobrecupo); }
+.agenda-month-chip.urgencia { background: var(--agenda-urgencia-bg); color: var(--agenda-urgencia); }
+.agenda-month-chip.multicita { border: 1px dashed var(--agenda-reservada); color: var(--agenda-reservada); background: #fff; white-space: normal; }
+
+.agenda-month-estado { margin-top: auto; color: var(--admin-text-secondary); font-size: 10px; font-weight: 600; }
+.agenda-month-estado.estado-con-cupos { color: var(--agenda-disponible); }
+.agenda-month-estado.estado-cerrado,
+.agenda-month-estado.estado-bloqueado { color: var(--agenda-bloqueado); }
+.agenda-month-estado.estado-sin-datos { opacity: .7; }
+
+.agenda-ver-dia { margin: 12px 12px 0; width: calc(100% - 24px); min-height: 36px; }
 
 /* Horario semanal APROBADO del profesional: día no trabajado, fuera de sus
    bloques o colación. Patrón propio (rayas más cerradas y tono más oscuro)
